@@ -30,6 +30,19 @@ const START_POINT: u64 = 0x1000;
 
 const BOOT_INFO: &'static BootInfo  = &BootInfo { physical_memory_offset: 0 };
 
+pub struct Framebuffer<'a> {
+    data: &'a mut [u8],
+    w: i32,
+    h: i32,
+}
+
+#[repr(C)]
+pub struct Oshandle<'a> {
+    fb: Framebuffer<'a>,
+    cursor_x: i32,
+    cursor_y: i32,
+}
+
 #[entry]
 fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
@@ -112,30 +125,47 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     let (w, h) = virtio_gpu.get_dims();
     let (w, h) = (w as i32, h as i32);
-    let mut x: i32 = 0;
-    let mut y: i32 = 0;
+    let (mut x, mut y) = (0, 0);
 
     loop {
-        for event in virtio_input.poll() {
-            if event._type == 0x2 {
-                if event.code == 0 {  // X axis
-                    let dx = event.value as i32;
-                    x = i32::max(0, i32::min(w-1, x + dx));
-                } else {  // Y axis
-                    let dy = event.value as i32;
-                    y = i32::max(0, i32::min(h-1, y + dy));
-                }
-                serial_println!("({} {})", x, y);
-                virtio_gpu.framebuffer.fill(0x0);
-                set_pixel(&mut virtio_gpu, (x, y));
-                virtio_gpu.flush();
-            }
-        }
+
+        (x, y) = update_cursor(&mut virtio_input, (w, h), (x, y));
+
+        virtio_gpu.framebuffer.fill(0x00);
+
+        let mut handle = Oshandle {
+            fb: Framebuffer { data: &mut virtio_gpu.framebuffer[..], w, h },
+            cursor_x: x, cursor_y: y
+        };
+        call_executable(&mut handle);
+
+        set_pixel(&mut virtio_gpu, (x, y));
+        virtio_gpu.flush();
     }
 
 
     //loop { x86_64::instructions::hlt(); }
 
+}
+
+fn update_cursor(virtio_input: &mut VirtioInput, dims: (i32, i32), pos: (i32, i32)) -> (i32, i32) {
+
+    let (w, h) = dims;
+    let (mut x, mut y) = pos;
+
+    for event in virtio_input.poll() {
+        if event._type == 0x2 {
+            if event.code == 0 {  // X axis
+                let dx = event.value as i32;
+                x = i32::max(0, i32::min(w-1, x + dx));
+            } else {  // Y axis
+                let dy = event.value as i32;
+                y = i32::max(0, i32::min(h-1, y + dy));
+            }
+        }
+    }
+
+    (x, y)
 }
 
 fn set_pixel(virtio_gpu: &mut VirtioGPU, pos: (i32, i32)) {
@@ -154,19 +184,16 @@ fn set_pixel(virtio_gpu: &mut VirtioGPU, pos: (i32, i32)) {
 
 }
 
-fn test_jump_to_program() -> () {
+fn call_executable(handle: &mut Oshandle) -> () {
 
     let code_ptr =  TEST_CODE.as_ptr();
-    serial_println!("{:?}", VirtAddr::from_ptr(code_ptr));
-
     let entrypoint_ptr = unsafe { code_ptr.offset(START_POINT as isize)};
-    serial_println!("{:?}", VirtAddr::from_ptr(entrypoint_ptr));
 
-    let exec_data: extern "C" fn (usize) -> *const u8 = unsafe {  
+    let exec_data: extern "C" fn (&mut Oshandle) = unsafe {  
         core::mem::transmute(entrypoint_ptr)
     };
-    let p = exec_data(0);
-    serial_println!("p={:?}", p);
+
+    exec_data(handle);
 }
 
 

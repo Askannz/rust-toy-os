@@ -4,6 +4,7 @@
 #![feature(abi_x86_interrupt)]
 
 use core::panic::PanicInfo;
+use alloc::vec::Vec;
 use uefi::prelude::*;
 use uefi::table::boot::{MemoryDescriptor, MemoryType};
 use linked_list_allocator::LockedHeap;
@@ -24,11 +25,47 @@ use virtio::{VirtioDevice, BootInfo};
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
-const TEST_CODE: &'static [u8] = include_bytes!("pedump");
-//const START_POINT: u64 = 0x201120;
-const START_POINT: u64 = 0x1000;
+struct Color(u8, u8, u8);
+struct Rect { x0: i32, y0: i32, w: i32, h: i32 }
+
+impl Rect {
+    fn check_in(&self, x: i32, y: i32) -> bool {
+        return 
+            x >= self.x0 && x < self.x0 + self.w &&
+            y >= self.y0 && y < self.y0 + self.h
+    }
+}
+
+struct Application {
+    data: &'static [u8],
+    entrypoint: u64,
+    launcher: Rect
+}
+
+const APPLICATIONS: [Application; 1] = [
+    Application {
+        data: include_bytes!("pedump"),
+        entrypoint: 0x1000,
+        launcher: Rect { x0: 10, y0: 10, w: 40, h: 40 }
+    }
+];
+
+struct MouseStatus {
+    x: i32,
+    y: i32,
+    clicked: bool
+}
+
+const FONT_BYTES: &'static [u8] = include_bytes!("font.bin");
+const FONT_NB_CHARS: usize = 95;
+const FONT_CHAR_H: usize = 64;
+const FONT_CHAR_W: usize = 32;
+
+const WALLPAPER: &'static [u8] = include_bytes!("wallpaper.bin");
 
 const BOOT_INFO: &'static BootInfo  = &BootInfo { physical_memory_offset: 0 };
+
+
 
 pub struct Framebuffer<'a> {
     data: &'a mut [u8],
@@ -125,21 +162,27 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     let (w, h) = virtio_gpu.get_dims();
     let (w, h) = (w as i32, h as i32);
-    let (mut x, mut y) = (0, 0);
+    let mut mouse_status = MouseStatus { x: 0, y: 0, clicked: false };
+    let mut active_apps = [false; APPLICATIONS.len()];
 
     loop {
 
-        (x, y) = update_cursor(&mut virtio_input, (w, h), (x, y));
+        mouse_status = update_cursor(&mut virtio_input, (w, h), mouse_status);
 
-        virtio_gpu.framebuffer.fill(0x00);
+        virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
+
+        let mut framebuffer = Framebuffer { data: &mut virtio_gpu.framebuffer[..], w, h };
+
+        //draw_icons(&mut framebuffer, &mouse_status);
 
         let mut handle = Oshandle {
-            fb: Framebuffer { data: &mut virtio_gpu.framebuffer[..], w, h },
-            cursor_x: x, cursor_y: y
+            fb: framebuffer,
+            cursor_x: mouse_status.x, cursor_y: mouse_status.y
         };
-        call_executable(&mut handle);
+        call_app(&mut handle, &APPLICATIONS[0]);
+        //draw_str(&mut handle.fb, 20, 20, "Babouya", &Color(0xff, 0x0, 0x0));
 
-        set_pixel(&mut virtio_gpu, (x, y));
+        set_pixel(&mut virtio_gpu, (mouse_status.x, mouse_status.y));
         virtio_gpu.flush();
     }
 
@@ -148,24 +191,43 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
 }
 
-fn update_cursor(virtio_input: &mut VirtioInput, dims: (i32, i32), pos: (i32, i32)) -> (i32, i32) {
+fn draw_icons(fb: &mut Framebuffer, mouse_status: &MouseStatus) {
+
+    let COLOR_IDLE = Color(0x44, 0x44, 0x44);
+    let COLOR_HOVER = Color(0x88, 0x88, 0x88);
+
+    for app in APPLICATIONS {
+
+        let color = match app.launcher.check_in(mouse_status.x, mouse_status.y) {
+            true => &COLOR_HOVER,
+            false => &COLOR_IDLE
+        };
+
+        draw_rect(fb, &app.launcher, color);
+    }
+}
+
+fn update_cursor(virtio_input: &mut VirtioInput, dims: (i32, i32), status: MouseStatus) -> MouseStatus {
 
     let (w, h) = dims;
-    let (mut x, mut y) = pos;
+
+    let mut status = status;
 
     for event in virtio_input.poll() {
         if event._type == 0x2 {
             if event.code == 0 {  // X axis
                 let dx = event.value as i32;
-                x = i32::max(0, i32::min(w-1, x + dx));
+                status.x = i32::max(0, i32::min(w-1, status.x + dx));
             } else {  // Y axis
                 let dy = event.value as i32;
-                y = i32::max(0, i32::min(h-1, y + dy));
+                status.y = i32::max(0, i32::min(h-1, status.y + dy));
             }
+        } else if event._type == 0x1 {
+            status.clicked = event.value == 1
         }
     }
 
-    (x, y)
+    status
 }
 
 fn set_pixel(virtio_gpu: &mut VirtioGPU, pos: (i32, i32)) {
@@ -184,10 +246,58 @@ fn set_pixel(virtio_gpu: &mut VirtioGPU, pos: (i32, i32)) {
 
 }
 
-fn call_executable(handle: &mut Oshandle) -> () {
 
-    let code_ptr =  TEST_CODE.as_ptr();
-    let entrypoint_ptr = unsafe { code_ptr.offset(START_POINT as isize)};
+fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: &Color) {
+    let Color(r, g, b) = *color;
+    for x in rect.x0..rect.x0+rect.w {
+        for y in rect.y0..rect.y0+rect.h {
+            let i = ((y * fb.w + x) * 4) as usize;
+            fb.data[i] = r;
+            fb.data[i+1] = g;
+            fb.data[i+2] = b;
+            fb.data[i+3] = 0xff;
+        }
+    }
+}
+
+
+fn draw_str(fb: &mut Framebuffer, x0: i32, y0: i32, s: &str, color: &Color) {
+    let mut x = x0;
+    for c in s.as_bytes() {
+        draw_char(fb, x, y0, *c, color);
+        x += FONT_CHAR_W as i32;
+    }
+}
+
+fn draw_char(fb: &mut Framebuffer, x0: i32, y0: i32, c: u8, color: &Color) {
+
+    assert!(c >= 32 && c <= 126);
+
+    let c_index = (c - 32) as i32;
+    let Color(r, g, b) = *color;
+    let cw = FONT_CHAR_W as i32;
+    let ch = FONT_CHAR_H as i32;
+    let n_chars = FONT_NB_CHARS as i32;
+
+    for x in 0..cw {
+        for y in 0..ch {
+            let i_font = (y * cw * n_chars + x + c_index * cw) as usize;
+            if FONT_BYTES[i_font] > 0 {
+                let i = (((y0 + y) * fb.w + x + x0) * 4) as usize;
+                fb.data[i]   = r;
+                fb.data[i+1] = g;
+                fb.data[i+2] = b;
+                fb.data[i+3] = 0xff;
+            }
+        }
+    }
+
+}
+
+fn call_app(handle: &mut Oshandle, app: &Application) -> () {
+
+    let code_ptr =  app.data.as_ptr();
+    let entrypoint_ptr = unsafe { code_ptr.offset(app.entrypoint as isize)};
 
     let exec_data: extern "C" fn (&mut Oshandle) = unsafe {  
         core::mem::transmute(entrypoint_ptr)

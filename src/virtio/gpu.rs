@@ -8,8 +8,8 @@ use crate::get_phys_addr;
 
 use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable, to_bytes, from_bytes};
 
-pub const W: usize = 1920;
-pub const H: usize = 1080;
+pub const W: usize = 1366;
+pub const H: usize = 768;
 
 pub struct VirtioGPU {
     pub virtio_dev: VirtioDevice,

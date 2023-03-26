@@ -25,17 +25,6 @@ use virtio::{VirtioDevice, BootInfo};
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
-struct Color(u8, u8, u8);
-struct Rect { x0: i32, y0: i32, w: i32, h: i32 }
-
-impl Rect {
-    fn check_in(&self, x: i32, y: i32) -> bool {
-        return 
-            x >= self.x0 && x < self.x0 + self.w &&
-            y >= self.y0 && y < self.y0 + self.h
-    }
-}
-
 struct Application {
     data: &'static [u8],
     entrypoint: u64,
@@ -66,6 +55,20 @@ const WALLPAPER: &'static [u8] = include_bytes!("wallpaper.bin");
 const BOOT_INFO: &'static BootInfo  = &BootInfo { physical_memory_offset: 0 };
 
 
+// ---- SHARED ----
+
+#[derive(Clone)]
+struct Color(u8, u8, u8);
+#[derive(Clone)]
+struct Rect { x0: i32, y0: i32, w: i32, h: i32 }
+
+impl Rect {
+    fn check_in(&self, x: i32, y: i32) -> bool {
+        return 
+            x >= self.x0 && x < self.x0 + self.w &&
+            y >= self.y0 && y < self.y0 + self.h
+    }
+}
 
 pub struct Framebuffer<'a> {
     data: &'a mut [u8],
@@ -73,12 +76,30 @@ pub struct Framebuffer<'a> {
     h: i32,
 }
 
+pub struct FrameBufSlice<'a, 'b> {
+    fb: &'b mut Framebuffer<'a>,
+    rect: Rect
+}
+
+impl<'a, 'b> FrameBufSlice<'a, 'b> {
+    fn set_pixel(&mut self, x: i32, y: i32, color: &Color) {
+        let Color(r, g, b) = *color;
+        let i = (((y+self.rect.y0) * self.fb.w + x + self.rect.x0) * 4) as usize;
+        self.fb.data[i] = r;
+        self.fb.data[i+1] = g;
+        self.fb.data[i+2] = b;
+        self.fb.data[i+3] = 0xff;
+    }
+}
+
 #[repr(C)]
-pub struct Oshandle<'a> {
-    fb: Framebuffer<'a>,
+pub struct Oshandle<'a, 'b> {
+    fb: FrameBufSlice<'a, 'b>,
     cursor_x: i32,
     cursor_y: i32,
 }
+
+// ---- END SHARED ----
 
 #[entry]
 fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
@@ -172,11 +193,15 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 
         let mut framebuffer = Framebuffer { data: &mut virtio_gpu.framebuffer[..], w, h };
+        let framebuf_slice = FrameBufSlice {
+            fb: &mut framebuffer,
+            rect: Rect { x0: 100, y0: 100, w: 200, h: 200 }
+        };
 
         //draw_icons(&mut framebuffer, &mouse_status);
 
         let mut handle = Oshandle {
-            fb: framebuffer,
+            fb: framebuf_slice,
             cursor_x: mouse_status.x, cursor_y: mouse_status.y
         };
         call_app(&mut handle, &APPLICATIONS[0]);

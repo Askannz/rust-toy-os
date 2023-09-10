@@ -2,13 +2,44 @@
 
 set -e
 
+#
+# Building kernel
 
 cd kernel/
 cargo build --release
+cd ../
+
+#
+# Building apps
+
+cd apps/
+
+cd cube_3d/
+cargo build --release
+cd ../
+
+cd chronometer/
+cargo build --release
+cd ../
 
 cd ../
+
+
+#
+# Embedding binary data
+
+mkdir -p embedded_data/apps/
+python dump_pe.py apps/cube_3d/target/x86_64-unknown-uefi/release/cube_3d.efi embedded_data/apps/cube
+python dump_pe.py apps/chronometer/target/x86_64-unknown-uefi/release/chronometer.efi embedded_data/apps/chronometer
+python dump_image_bytes.py fontmap.png embedded_data/fontmap.bin
+python dump_image_bytes.py wallpaper.png embedded_data/wallpaper.bin
+
+
+#
+# Running QEMU
+
 mkdir -p esp/efi/boot/
-cp kernel/target/x86_64-unknown-uefi/release/toy-os-kernel.efi esp/efi/boot/bootx64.efi
+cp kernel/target/x86_64-unknown-uefi/release/kernel.efi esp/efi/boot/bootx64.efi
 
 qemu-system-x86_64 -enable-kvm \
     -m 4G \

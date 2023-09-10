@@ -43,7 +43,7 @@ struct App {
 
 const APPLICATIONS: [AppDescriptor; 2] = [
     AppDescriptor {
-        data: include_bytes!("../../embedded_data/apps/cube"),
+        data: include_bytes!("../../embedded_data/apps/cube_3d"),
         entrypoint: 0x1000,
         launch_rect: Rect { x0: 100, y0: 100, w: 200, h: 40 },
         name: "3D Cube",

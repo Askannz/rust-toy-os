@@ -1,2 +1,4 @@
 /target/
 /esp/ 
+/embedded_data/
+/uefi_firmware/

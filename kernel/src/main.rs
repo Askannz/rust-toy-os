@@ -43,14 +43,14 @@ struct App {
 
 const APPLICATIONS: [AppDescriptor; 2] = [
     AppDescriptor {
-        data: include_bytes!("apps/cube"),
+        data: include_bytes!("../../embedded_data/apps/cube"),
         entrypoint: 0x1000,
         launch_rect: Rect { x0: 100, y0: 100, w: 200, h: 40 },
         name: "3D Cube",
         init_win_rect: Rect { x0: 200, y0: 200, w: 400, h: 400 }
     },
     AppDescriptor {
-        data: include_bytes!("apps/chrono"),
+        data: include_bytes!("../../embedded_data/apps/chrono"),
         entrypoint: 0x1000,
         launch_rect: Rect { x0: 100, y0: 150, w: 200, h: 40 },
         name: "Chronometer",
@@ -64,12 +64,12 @@ struct MouseStatus {
     clicked: bool
 }
 
-const FONT_BYTES: &'static [u8] = include_bytes!("font_map.bin");
+const FONT_BYTES: &'static [u8] = include_bytes!("../../embedded_data/font_map.bin");
 const FONT_NB_CHARS: usize = 95;
 const FONT_CHAR_H: usize = 24;
 const FONT_CHAR_W: usize = 12;
 
-const WALLPAPER: &'static [u8] = include_bytes!("wallpaper.bin");
+const WALLPAPER: &'static [u8] = include_bytes!("../../embedded_data/wallpaper.bin");
 
 const BOOT_INFO: &'static BootInfo  = &BootInfo { physical_memory_offset: 0 };
 

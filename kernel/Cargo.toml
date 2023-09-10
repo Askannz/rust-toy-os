@@ -1,11 +1,10 @@
 [package]
-name = "os-playground-uefi"
+name = "toy-os-kernel"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 uefi = { version = "0.15.0", default-features = false }
-#uefi-services = "0.12.0"
 log = { version = "0.4.11", default-features = false }
 uart_16550 = "0.2.0"
 spin = "0.5.2"

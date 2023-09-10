@@ -30,7 +30,8 @@ struct AppDescriptor {
     data: &'static [u8],
     entrypoint: u64,
     launch_rect: Rect,
-    name: &'static str
+    name: &'static str,
+    init_win_rect: Rect,
 }
 
 struct App {
@@ -42,16 +43,18 @@ struct App {
 
 const APPLICATIONS: [AppDescriptor; 2] = [
     AppDescriptor {
-        data: include_bytes!("pedump"),
+        data: include_bytes!("apps/cube"),
         entrypoint: 0x1000,
         launch_rect: Rect { x0: 100, y0: 100, w: 200, h: 40 },
-        name: "3D Cube"
+        name: "3D Cube",
+        init_win_rect: Rect { x0: 200, y0: 200, w: 400, h: 400 }
     },
     AppDescriptor {
-        data: include_bytes!("pedump"),
+        data: include_bytes!("apps/chrono"),
         entrypoint: 0x1000,
         launch_rect: Rect { x0: 100, y0: 150, w: 200, h: 40 },
-        name: "App 2"
+        name: "Chronometer",
+        init_win_rect: Rect { x0: 600, y0: 200, w: 200, h: 200 }
     },
 ];
 
@@ -203,7 +206,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
     let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
         descriptor: app_desc.clone(),
         is_open: false,
-        rect: Rect { x0: 200, y0: 200, w: 400, h: 400 },
+        rect: app_desc.init_win_rect.clone(),
         grab_pos: None
     }).collect();
 

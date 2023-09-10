@@ -50,7 +50,7 @@ const APPLICATIONS: [AppDescriptor; 2] = [
         init_win_rect: Rect { x0: 200, y0: 200, w: 400, h: 400 }
     },
     AppDescriptor {
-        data: include_bytes!("../../embedded_data/apps/chrono"),
+        data: include_bytes!("../../embedded_data/apps/chronometer"),
         entrypoint: 0x1000,
         launch_rect: Rect { x0: 100, y0: 150, w: 200, h: 40 },
         name: "Chronometer",
@@ -64,7 +64,7 @@ struct MouseStatus {
     clicked: bool
 }
 
-const FONT_BYTES: &'static [u8] = include_bytes!("../../embedded_data/font_map.bin");
+const FONT_BYTES: &'static [u8] = include_bytes!("../../embedded_data/fontmap.bin");
 const FONT_NB_CHARS: usize = 95;
 const FONT_CHAR_H: usize = 24;
 const FONT_CHAR_W: usize = 12;

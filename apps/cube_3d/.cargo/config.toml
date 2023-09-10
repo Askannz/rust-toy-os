@@ -1,0 +1,8 @@
+[unstable]
+build-std = ["core", "compiler_builtins", "alloc"]
+build-std-features = ["compiler-builtins-mem"]
+
+[build]
+#target = "x86-unknown-baremetal.json"
+target = "x86_64-unknown-uefi"
+#target = "x86_64-pc-windows-gnu"

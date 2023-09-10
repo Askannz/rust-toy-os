@@ -44,8 +44,8 @@ cp kernel/target/x86_64-unknown-uefi/release/kernel.efi esp/efi/boot/bootx64.efi
 
 qemu-system-x86_64 -enable-kvm \
     -m 4G \
-    -drive if=pflash,format=raw,readonly=on,file=uefi_firmware/OVMF_CODE.fd \
-    -drive if=pflash,format=raw,readonly=on,file=uefi_firmware/OVMF_VARS.fd \
+    -drive if=pflash,format=raw,readonly=on,file=uefi_firmware/code.fd \
+    -drive if=pflash,format=raw,readonly=on,file=uefi_firmware/vars.fd \
     -drive format=raw,file=fat:rw:esp \
     -serial stdio \
     -device virtio-mouse \

@@ -1,5 +1,4 @@
 use core::convert::TryInto;
-use core::sync::atomic::{fence, Ordering};
 use alloc::collections::BTreeMap;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -17,8 +16,6 @@ use crate::{pci::{PciDevice, PciBar}, get_phys_addr};
 
 pub mod input;
 pub mod gpu;
-
-// TODO: figure out where exactly fences need to be
 
 pub const Q_SIZE: usize = 64;
 
@@ -61,14 +58,11 @@ pub struct VirtioQueue {
 
 trait VirtqSerializable: Copy {}
 
-fn to_bytes<T: VirtqSerializable>(obj: &T) -> Vec<u8> {
-    let mut buf = Vec::new();
+fn to_bytes<T: VirtqSerializable>(obj: T) -> Vec<u8> {
     unsafe {
-        let ptr = (obj as *const T) as *const u8;
-        let s = slice::from_raw_parts(ptr, size_of::<T>());
-        buf.extend_from_slice(s);
+        let ptr = (&obj as *const T) as *const u8;
+        slice::from_raw_parts(ptr, size_of::<T>()).to_vec()
     }
-    buf
 }
 
 fn from_bytes<T: VirtqSerializable>(bytes: &Vec<u8>) -> T {
@@ -183,10 +177,8 @@ impl VirtioQueue {
         let ring_index: usize = self.driver_area.idx.into();
         self.driver_area.ring[ring_index % Q_SIZE] = desc_indices[0] as u16;
 
-        //fence(Ordering::SeqCst);
         self.driver_area.idx += 1;
 
-        //fence(Ordering::SeqCst);
         let q_index: u8 = self.q_index.try_into().unwrap();
 
         let mut ptr = {
@@ -201,7 +193,6 @@ impl VirtioQueue {
 
     pub fn try_pop(&mut self) -> Option<Vec<Vec<u8>>> {
 
-        //fence(Ordering::SeqCst);
         let new_index: usize = self.device_area.idx.into();
         if new_index == self.pop_index {
             return None;
@@ -452,8 +443,6 @@ impl VirtioDevice {
         }
 
         let avail_desc = [true; Q_SIZE];
-
-        //fence(Ordering::SeqCst);
 
         let notify_ptr = self.get_queue_notify_ptr(boot_info, q_index);
 

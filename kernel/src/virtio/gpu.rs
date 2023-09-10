@@ -95,7 +95,7 @@ impl VirtioGPU {
         let controlq = self.virtio_dev.queues.get_mut(&0).unwrap();
 
         controlq.try_push(vec![
-            QueueMessage::DevReadOnly { buf: to_bytes(&input) },
+            QueueMessage::DevReadOnly { buf: to_bytes(input) },
             QueueMessage::DevWriteOnly { size: size_of::<V>() }
         ]).unwrap();
 

@@ -47,10 +47,12 @@ qemu-system-x86_64 -enable-kvm \
     -drive if=pflash,format=raw,readonly=on,file=uefi_firmware/code.fd \
     -drive if=pflash,format=raw,readonly=on,file=uefi_firmware/vars.fd \
     -drive format=raw,file=fat:rw:esp \
-    -serial stdio \
     -device virtio-mouse \
     -vga virtio \
-    -display gtk,zoom-to-fit=off
+    -display gtk,zoom-to-fit=off \
+    -nic user,model=virtio-net-pci \
+    -monitor stdio \
+    -serial file:log.txt
 
     #-device virtio-gpu,xres=1280,yres=720
     #-device virtio-mouse 

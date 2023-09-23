@@ -20,8 +20,10 @@ mod pci;
 mod virtio;
 //mod interrupts;
 
+use virtio::FeatureBits;
 use virtio::gpu::VirtioGPU;
-use virtio::input::{VirtioInput};
+use virtio::input::VirtioInput;
+use virtio::network::VirtioNetwork;
 use virtio::{VirtioDevice, BootInfo};
 
 #[global_allocator]
@@ -129,13 +131,15 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         OffsetPageTable::new(l4_table, phys_offset)
     };
 
+    pci::enumerate().for_each(|dev| serial_println!("Found PCI device, vendor={:#x} device={:#x}", dev.vendor_id, dev.device_id));
+
     let mut virtio_gpu = {
 
         let virtio_pci_dev = pci::enumerate()
-            .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1050)
+            .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1040 + 16)
             .expect("Cannot find VirtIO GPU device");
 
-        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev);
+        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, FeatureBits::VIRTIO_F_VERSION_1 as u32);
 
         VirtioGPU::new(BOOT_INFO, &mapper, virtio_dev)
     };
@@ -144,12 +148,23 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
     let mut virtio_input = {
 
         let virtio_pci_dev = pci::enumerate()
-            .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1052)
+            .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1040 + 18)
             .expect("Cannot find VirtIO input device");
 
-        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev);
+        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, FeatureBits::VIRTIO_F_VERSION_1 as u32);
 
         VirtioInput::new(BOOT_INFO, &mapper, virtio_dev)
+    };
+
+    let mut virtio_net = {
+
+        let virtio_pci_dev = pci::enumerate()
+            .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1000)  // Transitional device
+            .expect("Cannot find VirtIO network device");
+
+        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, FeatureBits::VIRTIO_F_VERSION_1 as u32);
+
+        //VirtioNetwork::new(BOOT_INFO, &mapper, virtio_dev)
     };
 
     virtio_gpu.init_framebuffer(&mapper);

@@ -16,6 +16,13 @@ use crate::{pci::{PciDevice, PciBar}, get_phys_addr};
 
 pub mod input;
 pub mod gpu;
+pub mod network;
+
+#[repr(u32)]
+#[allow(non_camel_case_types)]
+pub enum FeatureBits {
+    VIRTIO_F_VERSION_1 = 0x1
+}
 
 pub const Q_SIZE: usize = 64;
 
@@ -230,7 +237,8 @@ impl VirtioDevice {
 
    pub fn new(
         boot_info: &'static BootInfo,
-        pci_device: PciDevice
+        pci_device: PciDevice,
+        feature_bits: u32,
     ) -> Self {
 
         let virtio_capabilities = pci_device.capabilities.iter()
@@ -283,7 +291,7 @@ impl VirtioDevice {
             queues: BTreeMap::new()
         };
 
-        dev.initialize();
+        dev.initialize(feature_bits);
 
         dev
     }
@@ -315,7 +323,7 @@ impl VirtioDevice {
         }
     }
 
-    fn initialize(&mut self) {
+    fn initialize(&mut self, feature_bits: u32) {
 
         self.write_status(0x0);  // RESET
 
@@ -332,11 +340,7 @@ impl VirtioDevice {
         */
 
         let bits_0 = 0u32;
-        let bits_1 = {
-            let mut bits = BitVec::<u32, Lsb0>::from_element(0u32);
-            bits.set(0, true);  // Setting bit VIRTIO_F_VERSION_1
-            bits.load::<u32>()
-        };
+        let bits_1 = feature_bits;
 
         self.write_feature_bits(0x0, bits_0);
         self.write_feature_bits(0x1, bits_1);

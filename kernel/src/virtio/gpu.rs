@@ -95,16 +95,16 @@ impl VirtioGPU {
         let controlq = self.virtio_dev.queues.get_mut(&0).unwrap();
 
         controlq.try_push(vec![
-            QueueMessage::DevReadOnly { buf: to_bytes(input) },
+            QueueMessage::DevReadOnly { buf: unsafe { to_bytes(input) } },
             QueueMessage::DevWriteOnly { size: size_of::<V>() }
         ]).unwrap();
 
         loop {
            if let Some(resp_list) = controlq.try_pop() {
                 assert_eq!(resp_list.len(), 2);
-                let resp_buf = &resp_list[1];
+                let resp_buf = resp_list[1].clone();
                 // TODO: check response status code
-                break from_bytes(&resp_buf);
+                break unsafe { from_bytes(resp_buf) };
            }
         }
     }

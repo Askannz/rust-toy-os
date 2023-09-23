@@ -38,9 +38,9 @@ impl VirtioInput {
 
         while let Some(resp_list) = eventq.try_pop() {
             assert_eq!(resp_list.len(), 1);
-            let resp_buf = &resp_list[0];
+            let resp_buf = resp_list[0].clone();
             // TODO: check response status code
-            let event = from_bytes(&resp_buf);
+            let event = unsafe { from_bytes(resp_buf) };
             out.push(event);
 
             eventq.try_push(vec![

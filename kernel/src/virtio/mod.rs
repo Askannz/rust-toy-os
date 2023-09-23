@@ -58,23 +58,19 @@ pub struct VirtioQueue {
 
 trait VirtqSerializable: Copy {}
 
-fn to_bytes<T: VirtqSerializable>(obj: T) -> Vec<u8> {
-    unsafe {
-        let ptr = (&obj as *const T) as *const u8;
-        slice::from_raw_parts(ptr, size_of::<T>()).to_vec()
-    }
+unsafe fn to_bytes<T: VirtqSerializable>(obj: T) -> Vec<u8> {
+    let ptr = (&obj as *const T) as *const u8;
+    slice::from_raw_parts(ptr, size_of::<T>()).to_vec()
 }
 
-fn from_bytes<T: VirtqSerializable>(bytes: &Vec<u8>) -> T {
+unsafe fn from_bytes<T: VirtqSerializable>(bytes: Vec<u8>) -> T {
 
     let t_size = size_of::<T>();
     assert!(t_size <= bytes.len());
     let s = &bytes[0..t_size];
 
-    unsafe {
-        let ptr = s.as_ptr() as *const T;
-        *ptr
-    }
+    let ptr = s.as_ptr() as *const T;
+    *ptr
 }
 
 pub enum QueueMessage {

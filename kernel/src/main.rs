@@ -164,7 +164,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
         let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, FeatureBits::VIRTIO_F_VERSION_1 as u32);
 
-        //VirtioNetwork::new(BOOT_INFO, &mapper, virtio_dev)
+        VirtioNetwork::new(BOOT_INFO, &mapper, virtio_dev)
     };
 
     virtio_gpu.init_framebuffer(&mapper);

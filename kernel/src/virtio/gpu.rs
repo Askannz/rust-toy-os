@@ -11,13 +11,15 @@ use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable, to_bytes
 pub const W: usize = 1366;
 pub const H: usize = 768;
 
+const Q_SIZE: usize = 64;
+
 pub struct VirtioGPU {
-    pub virtio_dev: VirtioDevice,
+    pub virtio_dev: VirtioDevice<Q_SIZE>,
     pub framebuffer: Vec<u8>,
 }
 
 impl VirtioGPU {
-    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice<Q_SIZE>) -> Self {
 
         let virtio_dev_type = virtio_dev.get_virtio_device_type();
         if virtio_dev_type != 16 {

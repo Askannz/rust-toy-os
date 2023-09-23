@@ -24,8 +24,6 @@ pub enum FeatureBits {
     VIRTIO_F_VERSION_1 = 0x1
 }
 
-pub const Q_SIZE: usize = 64;
-
 pub struct BootInfo {
     pub physical_memory_offset: u64
 }
@@ -37,11 +35,11 @@ pub struct VirtioInterruptAck {
 
 unsafe impl Sync for VirtioInterruptAck {}
 
-pub struct VirtioDevice {
+pub struct VirtioDevice<const Q_SIZE: usize> {
     pub pci_device: PciDevice,
     capabilities: Vec<VirtioCapability>,
     pub common_config: RefCell<Volatile<&'static mut VirtioPciCommonCfg>>,
-    pub queues: BTreeMap<u16, VirtioQueue>
+    pub queues: BTreeMap<u16, VirtioQueue<Q_SIZE>>
 }
 
 struct VirtioCapability {
@@ -52,12 +50,12 @@ struct VirtioCapability {
     length: u32  // Length of the structure pointed to
 }
 
-pub struct VirtioQueue {
+pub struct VirtioQueue<const Q_SIZE: usize> {
     q_index: u16,
     buffers: Vec<Vec<u8>>,
-    descriptor_area: Box<VirtqDescTable>,
-    driver_area: Box<VirtqAvail>,
-    device_area: Box<VirtqUsed>,
+    descriptor_area: Box<VirtqDescTable<Q_SIZE>>,
+    driver_area: Box<VirtqAvail<Q_SIZE>>,
+    device_area: Box<VirtqUsed<Q_SIZE>>,
     avail_desc: [bool; Q_SIZE],
     pop_index: usize,
     notify_ptr: VirtAddr
@@ -129,7 +127,7 @@ impl VirtioInterruptAck {
     }
 }
 
-impl VirtioQueue {
+impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
     fn get_descriptor(&mut self) -> Option<usize> {
         for (desc_index, available) in self.avail_desc.iter_mut().enumerate() {
@@ -233,7 +231,7 @@ impl VirtioQueue {
     }
 }
 
-impl VirtioDevice {
+impl<const Q_SIZE: usize> VirtioDevice<Q_SIZE> {
 
    pub fn new(
         boot_info: &'static BootInfo,
@@ -396,13 +394,13 @@ impl VirtioDevice {
     
         let descr_area_addr = get_phys_addr(
             mapper,
-            desc_table.as_mut() as *mut VirtqDescTable);
+            desc_table.as_mut() as *mut VirtqDescTable<Q_SIZE>);
         let driver_area_addr = get_phys_addr(
             mapper,
-            available_ring.as_mut() as *mut VirtqAvail);
+            available_ring.as_mut() as *mut VirtqAvail<Q_SIZE>);
         let dev_area_addr = get_phys_addr(
             mapper,
-            used_ring.as_mut() as *mut VirtqUsed);
+            used_ring.as_mut() as *mut VirtqUsed<Q_SIZE>);
 
         serial_println!("descr_area_addr={:x}", descr_area_addr);
         serial_println!("driver_area_addr={:x}", driver_area_addr);
@@ -548,7 +546,7 @@ impl VirtioDevice {
 }
 
 
-type VirtqDescTable = [VirtqDesc; Q_SIZE];
+type VirtqDescTable<const Q_SIZE: usize> = [VirtqDesc; Q_SIZE];
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -560,7 +558,7 @@ pub struct VirtqDesc {
 }
 
 #[repr(C, align(2))]
-pub struct VirtqAvail {
+pub struct VirtqAvail<const Q_SIZE: usize> {
     flags: u16,
     pub idx: u16,
     ring: [u16; Q_SIZE],
@@ -568,7 +566,7 @@ pub struct VirtqAvail {
 }
 
 #[repr(C, align(4))]
-pub struct VirtqUsed {
+pub struct VirtqUsed<const Q_SIZE: usize> {
     flags: u16,
     pub idx: u16,
     ring: [VirtqUsedElem; Q_SIZE],

@@ -5,12 +5,14 @@ use x86_64::structures::paging::{OffsetPageTable};
 use crate::{virtio::BootInfo, serial_println};
 use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable, from_bytes, to_bytes};
 
+const Q_SIZE: usize = 256;
+
 pub struct VirtioNetwork {
-    pub virtio_dev: VirtioDevice,
+    pub virtio_dev: VirtioDevice<Q_SIZE>,
 }
 
 impl VirtioNetwork {
-    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice<Q_SIZE>) -> Self {
 
         let virtio_dev_type = virtio_dev.get_virtio_device_type();
         serial_println!("virtio_dev_type={}", virtio_dev_type);

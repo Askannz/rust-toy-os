@@ -1,5 +1,5 @@
 [package]
-name = "chronometer"
+name = "applib"
 version = "0.1.0"
 edition = "2021"
 
@@ -13,8 +13,3 @@ panic = "abort" # disable stack unwinding on panic
 lto = true
 strip = true 
 codegen-units = 1
-
-[dependencies]
-uart_16550 = "0.2.18"
-micromath = "2.0.0"
-applib = { path = "../../applib" }

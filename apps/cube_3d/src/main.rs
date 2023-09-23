@@ -1,62 +1,12 @@
 #![no_std]
 #![no_main]
 
-use core::arch::asm;
 use core::panic::PanicInfo;
-use core::fmt::Write;
-use uart_16550::SerialPort;
 
 use core::cmp::Ordering;
 use micromath::F32Ext;
 
-
-
-
-// ---- SHARED ----
-
-#[derive(Clone)]
-struct Color(u8, u8, u8);
-#[derive(Clone)]
-struct Rect { x0: i32, y0: i32, w: i32, h: i32 }
-
-impl Rect {
-    fn check_in(&self, x: i32, y: i32) -> bool {
-        return 
-            x >= self.x0 && x < self.x0 + self.w &&
-            y >= self.y0 && y < self.y0 + self.h
-    }
-}
-
-pub struct Framebuffer<'a> {
-    data: &'a mut [u8],
-    w: i32,
-    h: i32,
-}
-
-pub struct FrameBufSlice<'a, 'b> {
-    fb: &'b mut Framebuffer<'a>,
-    rect: Rect
-}
-
-impl<'a, 'b> FrameBufSlice<'a, 'b> {
-    fn set_pixel(&mut self, x: i32, y: i32, color: &Color) {
-        let Color(r, g, b) = *color;
-        let i = (((y+self.rect.y0) * self.fb.w + x + self.rect.x0) * 4) as usize;
-        self.fb.data[i] = r;
-        self.fb.data[i+1] = g;
-        self.fb.data[i+2] = b;
-        self.fb.data[i+3] = 0xff;
-    }
-}
-
-#[repr(C)]
-pub struct Oshandle<'a, 'b> {
-    fb: FrameBufSlice<'a, 'b>,
-    cursor_x: i32,
-    cursor_y: i32,
-}
-
-// ---- END SHARED ----
+use applib::{Oshandle, Color, FrameBufSlice};
 
 const COLORS: [Color; 6] = [
     Color(0xff, 0x00, 0x00),
@@ -70,7 +20,6 @@ const ZOOM: f32 = 0.2;
 const MOUSE_SENSITIVITY: f32 = 5.0;
 const PI: f32 = 3.14159265359;
 const NB_QUADS: usize = 6;
-const BACKGROUND: Color = Color(0x66, 0x66, 0x66);
 
 
 #[no_mangle]
@@ -241,4 +190,3 @@ type Matrix = [f32; 9];
 
 #[derive(Debug, Clone, Copy)]
 enum Axis { X, Y, Z }
- 

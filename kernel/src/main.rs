@@ -23,7 +23,7 @@ mod virtio;
 use virtio::FeatureBits;
 use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
-use virtio::network::VirtioNetwork;
+use virtio::network::{VirtioNetwork, NetworkFeatureBits};
 use virtio::{VirtioDevice, BootInfo};
 
 #[global_allocator]
@@ -139,7 +139,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
             .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1040 + 16)
             .expect("Cannot find VirtIO GPU device");
 
-        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, FeatureBits::VIRTIO_F_VERSION_1 as u32);
+        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, 0x0);
 
         VirtioGPU::new(BOOT_INFO, &mapper, virtio_dev)
     };
@@ -151,7 +151,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
             .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1040 + 18)
             .expect("Cannot find VirtIO input device");
 
-        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, FeatureBits::VIRTIO_F_VERSION_1 as u32);
+        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, 0x0);
 
         VirtioInput::new(BOOT_INFO, &mapper, virtio_dev)
     };
@@ -162,7 +162,9 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
             .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1000)  // Transitional device
             .expect("Cannot find VirtIO network device");
 
-        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, FeatureBits::VIRTIO_F_VERSION_1 as u32);
+        let feature_bits = NetworkFeatureBits::VIRTIO_NET_F_MAC as u32;
+
+        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, feature_bits);
 
         VirtioNetwork::new(BOOT_INFO, &mapper, virtio_dev)
     };
@@ -181,6 +183,8 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
     }).collect();
 
     loop {
+
+        virtio_net.poll();
 
         mouse_status = update_mouse(&mut virtio_input, (w, h), mouse_status);
 

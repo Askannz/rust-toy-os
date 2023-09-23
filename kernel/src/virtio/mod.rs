@@ -338,8 +338,8 @@ impl<const Q_SIZE: usize> VirtioDevice<Q_SIZE> {
             Device type, unsure about the others.
         */
 
-        let bits_0 = 0u32;
-        let bits_1 = feature_bits;
+        let bits_0 = feature_bits;
+        let bits_1 = FeatureBits::VIRTIO_F_VERSION_1 as u32;
 
         self.write_feature_bits(0x0, bits_0);
         self.write_feature_bits(0x1, bits_1);

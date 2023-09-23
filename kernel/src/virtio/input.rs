@@ -1,9 +1,9 @@
 use core::mem::size_of;
 use alloc::vec;
 use alloc::vec::Vec;
-use x86_64::structures::paging::{OffsetPageTable};
+use x86_64::structures::paging::OffsetPageTable;
 use crate::virtio::BootInfo;
-use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable, from_bytes, to_bytes};
+use super::{VirtioDevice, QueueMessage, VirtqSerializable, from_bytes};
 
 const Q_SIZE: usize = 64;
 
@@ -24,9 +24,9 @@ impl VirtioInput {
         virtio_dev.write_status(0x04);  // DRIVER_OK
     
         let eventq = virtio_dev.queues.get_mut(&0).unwrap();
-        while let Some(_) = eventq.try_push(vec![
-            QueueMessage::DevWriteOnly { size: max_buf_size }
-        ]) {}
+
+        let msg = vec![QueueMessage::DevWriteOnly { size: max_buf_size }];
+        while eventq.try_push(msg.clone()).is_some() {}
 
         VirtioInput {
             virtio_dev

@@ -95,7 +95,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         unsafe { core::slice::from_raw_parts_mut(ptr, max_mmap_size) }
     };
 
-    let (system_table, mut memory_map) = system_table
+    let (_system_table, memory_map) = system_table
         .exit_boot_services(image, mmap_storage)
         .expect("Failed to exit boot services");
 
@@ -292,22 +292,6 @@ fn update_mouse(virtio_input: &mut VirtioInput, dims: (i32, i32), status: MouseS
     status
 }
 
-fn set_pixel(virtio_gpu: &mut VirtioGPU, pos: (i32, i32)) {
-
-    let (w, h) = virtio_gpu.get_dims();
-    let (w, h) = (w as i32, h as i32);
-    let (x, y) = pos;
-
-    let i = ((y * w + x) * 4) as usize;
-    let fb = &mut virtio_gpu.framebuffer;
-
-    fb[i] = 0xff;
-    fb[i+1] = 0xff;
-    fb[i+2] = 0xff;
-    fb[i+3] = 0xff;
-
-}
-
 
 fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: &Color, alpha: f32) {
 
@@ -326,12 +310,6 @@ fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: &Color, alpha: f32) {
             fb.data[i+3] = 0xff;
         }
     }
-}
-
-fn clamp_in_rect(rect: &Rect, x: i32, y: i32) -> (i32, i32) {
-    let x = i32::min(rect.x0+rect.w-1, i32::max(0, x));
-    let y = i32::min(rect.y0+rect.h-1, i32::max(0, y));
-    (x, y)
 }
 
 fn blend(a: u8, b: u8, alpha: f32) -> u8 {

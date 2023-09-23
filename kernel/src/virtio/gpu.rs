@@ -1,12 +1,12 @@
 use alloc::vec;
 use alloc::vec::Vec;
 use core::{mem::{MaybeUninit, size_of}, sync::atomic::{fence, Ordering}};
-use x86_64::{structures::paging::{OffsetPageTable}, VirtAddr};
+use x86_64::{structures::paging::OffsetPageTable, VirtAddr};
 use crate::virtio::BootInfo;
 use crate::{serial_println, pci::PciBar};
 use crate::get_phys_addr;
 
-use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable, to_bytes, from_bytes};
+use super::{VirtioDevice, QueueMessage, VirtqSerializable, to_bytes, from_bytes};
 
 pub const W: usize = 1366;
 pub const H: usize = 768;

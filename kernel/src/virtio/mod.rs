@@ -7,7 +7,7 @@ use core::mem::size_of;
 use core::cell::RefCell;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::OffsetPageTable;
-use bitvec::prelude::{Lsb0, BitVec};
+use bitvec::prelude::Lsb0;
 use bitvec::view::BitView;
 use bitvec::field::BitField;
 use volatile::Volatile;
@@ -78,6 +78,7 @@ unsafe fn from_bytes<T: VirtqSerializable>(bytes: Vec<u8>) -> T {
     *ptr
 }
 
+#[derive(Clone)]
 pub enum QueueMessage {
     DevWriteOnly { size: usize },
     DevReadOnly { buf: Vec<u8> }

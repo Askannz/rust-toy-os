@@ -14,9 +14,6 @@ pub struct VirtioNetwork {
 impl VirtioNetwork {
     pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice<Q_SIZE>) -> Self {
 
-        let virtio_dev_type = virtio_dev.get_virtio_device_type();
-        serial_println!("virtio_dev_type={}", virtio_dev_type);
-
         // https://docs.oasis-open.org/virtio/virtio/v1.1/csprd01/virtio-v1.1-csprd01.html#x1-2050006
         let max_buf_size = 1526;
 
@@ -25,9 +22,9 @@ impl VirtioNetwork {
         virtio_dev.write_status(0x04);  // DRIVER_OK
     
         let receiveq = virtio_dev.queues.get_mut(&0).unwrap();
-        while let Some(_) = receiveq.try_push(vec![
-            QueueMessage::DevWriteOnly { size: max_buf_size }
-        ]) {}
+
+        let msg = vec![QueueMessage::DevWriteOnly { size: max_buf_size }];
+        while receiveq.try_push(msg.clone()).is_some() {}
 
         VirtioNetwork {
             virtio_dev

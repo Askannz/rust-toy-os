@@ -331,13 +331,6 @@ impl<const Q_SIZE: usize> VirtioDevice<Q_SIZE> {
         self.write_status(0x01);  // ACKNOWLEDGE
         self.write_status(0x02);  // DRIVER
 
-        /*
-            Very very basic feature bits negociation:
-            we only accept the VIRTIO_F_VERSION_1 bit
-            (minimum required). Should work for the Input
-            Device type, unsure about the others.
-        */
-
         let bits_0 = feature_bits;
         let bits_1 = FeatureBits::VIRTIO_F_VERSION_1 as u32;
 

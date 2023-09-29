@@ -19,6 +19,9 @@ mod serial;
 mod pci;
 mod virtio;
 //mod interrupts;
+mod smoltcp_demo;
+mod loopback;
+mod smoltcp_virtio;
 
 use virtio::FeatureBits;
 use virtio::gpu::VirtioGPU;
@@ -182,11 +185,20 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         grab_pos: None
     }).collect();
 
+    let mut virtio_net = Some(virtio_net);
+
+    let mut sent: bool = false;
+
     loop {
 
-        virtio_net.poll();
-
         mouse_status = update_mouse(&mut virtio_input, (w, h), mouse_status);
+
+        if mouse_status.clicked && !sent {
+            serial_println!("Sending packet");
+            let virtio_net = virtio_net.take().unwrap();
+            smoltcp_demo::test_smolltcp(virtio_net);
+            sent = true;
+        }
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 

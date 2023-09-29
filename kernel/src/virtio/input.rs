@@ -45,6 +45,7 @@ impl VirtioInput {
             let event = unsafe { from_bytes(resp_buf) };
             out.push(event);
 
+            // TODO: unwrap()
             eventq.try_push(vec![
                 QueueMessage::DevWriteOnly { size: size_of::<VirtioInputEvent>() }
             ]);

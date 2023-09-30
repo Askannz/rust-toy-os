@@ -23,7 +23,7 @@ mod smoltcp_demo;
 mod loopback;
 mod smoltcp_virtio;
 
-use virtio::FeatureBits;
+
 use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
 use virtio::network::{VirtioNetwork, NetworkFeatureBits};
@@ -159,7 +159,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         VirtioInput::new(BOOT_INFO, &mapper, virtio_dev)
     };
 
-    let mut virtio_net = {
+    let virtio_net = {
 
         let virtio_pci_dev = pci::enumerate()
             .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1000)  // Transitional device

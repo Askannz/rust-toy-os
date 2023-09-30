@@ -1,6 +1,6 @@
 use alloc::vec;
 use alloc::vec::Vec;
-use core::{mem::{MaybeUninit, size_of}, sync::atomic::{fence, Ordering}};
+use core::{mem::{MaybeUninit}, sync::atomic::{fence, Ordering}};
 use x86_64::{structures::paging::OffsetPageTable, VirtAddr};
 use crate::virtio::BootInfo;
 use crate::{serial_println, pci::PciBar};

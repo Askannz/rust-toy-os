@@ -1,4 +1,4 @@
-use core::str;
+
 
 use smoltcp::iface::{Config, Interface, SocketSet};
 use smoltcp::phy::{Device, Medium};

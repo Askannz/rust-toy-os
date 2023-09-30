@@ -1,8 +1,8 @@
 use core::convert::TryInto;
-use alloc::collections::BTreeMap;
+
 use alloc::boxed::Box;
-use alloc::{vec::Vec, vec};
-use alloc::slice;
+use alloc::{vec::Vec};
+
 use core::mem::size_of;
 use core::cell::RefCell;
 use x86_64::VirtAddr;

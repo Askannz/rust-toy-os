@@ -313,9 +313,7 @@ impl PciConfigSpace {
 
         let buf: Vec<u32> = (0..num_words).map(|i| {
             let i: u8 = i.try_into().unwrap();
-            let addr_word = Self::get_addr_word(addr, offset + 4 * i);
-            self.address_port.write(addr_word);
-            self.data_port.read()
+            self.read(addr, offset + 4 * i)
         }).collect();
 
         let ptr = buf.as_ptr() as *const T;

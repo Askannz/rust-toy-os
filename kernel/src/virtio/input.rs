@@ -25,7 +25,7 @@ impl VirtioInput {
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
 
-        let msg = vec![QueueMessage::DevWriteOnly { size: max_buf_size }];
+        let msg = vec![QueueMessage::DevWriteOnly];
         while eventq.try_push(msg.clone()).is_some() {}
 
         VirtioInput {
@@ -47,7 +47,7 @@ impl VirtioInput {
 
             // TODO: unwrap()
             self.eventq.try_push(vec![
-                QueueMessage::DevWriteOnly { size: size_of::<VirtioInputEvent>() }
+                QueueMessage::DevWriteOnly
             ]);
         }
 

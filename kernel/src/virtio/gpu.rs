@@ -111,7 +111,7 @@ impl VirtioGPU {
 
         self.controlq.try_push(vec![
             QueueMessage::DevReadOnly { buf: unsafe { to_bytes(input) } },
-            QueueMessage::DevWriteOnly { size: size_of::<GpuVirtioMsg>() }
+            QueueMessage::DevWriteOnly
         ]).unwrap();
 
         loop {

@@ -35,7 +35,7 @@ impl VirtioNetwork {
         let transmitq1 = virtio_dev.initialize_queue(boot_info, &mapper, 1, max_buf_size);  // queue 1 (transmitq1)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
-        let msg = vec![QueueMessage::DevWriteOnly { size: max_buf_size }];
+        let msg = vec![QueueMessage::DevWriteOnly];
         while receiveq1.try_push(msg.clone()).is_some() {}
 
         VirtioNetwork {
@@ -56,7 +56,7 @@ impl VirtioNetwork {
         let virtio_packet: VirtioNetPacket = unsafe { from_bytes(resp_buf) };
 
         self.receiveq1.try_push(vec![
-            QueueMessage::DevWriteOnly { size: size_of::<VirtioNetPacket>() }
+            QueueMessage::DevWriteOnly
         ]).unwrap();
 
         Some(virtio_packet.data.to_vec())

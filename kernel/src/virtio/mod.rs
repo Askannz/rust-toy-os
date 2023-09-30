@@ -80,7 +80,7 @@ unsafe fn from_bytes<T: VirtqSerializable>(bytes: Vec<u8>) -> T {
 
 #[derive(Clone)]
 pub enum QueueMessage {
-    DevWriteOnly { size: usize },
+    DevWriteOnly,
     DevReadOnly { buf: Vec<u8> }
 }
 
@@ -164,9 +164,9 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
                     descriptor.flags = 0x0;
                     descriptor.len = buf.len() as u32;
                 },
-                QueueMessage::DevWriteOnly { size } => {
+                QueueMessage::DevWriteOnly => {
                     descriptor.flags = 0x2;
-                    descriptor.len = size as u32;
+                    descriptor.len = size_of::<T>() as u32;
                 }
             }
 

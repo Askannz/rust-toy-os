@@ -4,7 +4,6 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use core::mem;
-use core::cell::RefCell;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::OffsetPageTable;
 use bitvec::prelude::Lsb0;
@@ -39,7 +38,7 @@ unsafe impl Sync for VirtioInterruptAck {}
 pub struct VirtioDevice {
     pub pci_device: PciDevice,
     capabilities: Vec<VirtioCapability>,
-    pub common_config: RefCell<Volatile<&'static mut VirtioPciCommonCfg>>,
+    pub common_config: Volatile<&'static mut VirtioPciCommonCfg>,
 }
 
 #[repr(u8)]
@@ -289,7 +288,7 @@ impl VirtioDevice {
         let mut dev = VirtioDevice {
             pci_device,
             capabilities: virtio_capabilities,
-            common_config: RefCell::new(common_config_ptr)
+            common_config: common_config_ptr
         };
 
         dev.initialize(feature_bits);
@@ -398,16 +397,15 @@ impl VirtioDevice {
         serial_println!("dev_area_addr={:x}", dev_area_addr);
 
         {
-            let mut common_config = self.common_config.borrow_mut();
 
-            common_config.map_mut(|c| &mut c.queue_select).update(|v| *v = q_index);
-            common_config.map_mut(|c| &mut c.queue_desc).update(|v| *v = descr_area_addr);
-            common_config.map_mut(|c| &mut c.queue_driver).update(|v| *v = driver_area_addr);
-            common_config.map_mut(|c| &mut c.queue_device).update(|v| *v = dev_area_addr);
-            common_config.map_mut(|c| &mut c.queue_enable).update(|v| *v = 1);
+            self.common_config.map_mut(|c| &mut c.queue_select).update(|v| *v = q_index);
+            self.common_config.map_mut(|c| &mut c.queue_desc).update(|v| *v = descr_area_addr);
+            self.common_config.map_mut(|c| &mut c.queue_driver).update(|v| *v = driver_area_addr);
+            self.common_config.map_mut(|c| &mut c.queue_device).update(|v| *v = dev_area_addr);
+            self.common_config.map_mut(|c| &mut c.queue_enable).update(|v| *v = 1);
 
             // Reading back queue size
-            let q_size: usize = common_config.map(|s| &s.queue_size).read().into();
+            let q_size: usize = self.common_config.map(|s| &s.queue_size).read().into();
             assert_eq!(q_size, Q_SIZE);
         }
 
@@ -441,7 +439,7 @@ impl VirtioDevice {
         }
     }
 
-    fn get_queue_notify_ptr(&self, boot_info: &'static BootInfo, q_index: u16) -> VirtAddr {
+    fn get_queue_notify_ptr(&mut self, boot_info: &'static BootInfo, q_index: u16) -> VirtAddr {
 
         let phys_offset = VirtAddr::new(boot_info.physical_memory_offset);
         let mut pci_config_space = PciConfigSpace::new();
@@ -458,13 +456,11 @@ impl VirtioDevice {
 
         let queue_notify_off: u64 = {
 
-            let mut common_config = self.common_config.borrow_mut();
-
-            common_config
+            self.common_config
                 .map_mut(|s| &mut s.queue_select)
                 .update(|queue_select| *queue_select = q_index);
 
-            common_config
+            self.common_config
                 .map(|s| &s.queue_notify_off)
                 .read()
                 .into()
@@ -484,16 +480,14 @@ impl VirtioDevice {
         addr
     }
 
-    pub fn write_status(&self, val: u8) {
-
-        self.common_config.borrow_mut()
+    pub fn write_status(&mut self, val: u8) {
+        self.common_config
             .map_mut(|s| &mut s.device_status)
             .write(val);
     }
 
     pub fn read_status(&self) -> u8 {
-
-        self.common_config.borrow_mut()
+        self.common_config
             .map(|s| &s.device_status)
             .read()
     }
@@ -502,28 +496,24 @@ impl VirtioDevice {
         self.pci_device.device_id - 0x1040
     }
 
-    fn write_feature_bits(&self, select: u32, val: u32) {
+    fn write_feature_bits(&mut self, select: u32, val: u32) {
 
-        let mut common_config = self.common_config.borrow_mut();
-
-        common_config
+        self.common_config
             .map_mut(|s| &mut s.driver_feature_select)
             .update(|sel_val| *sel_val = select);
 
-        common_config
+        self.common_config
             .map_mut(|s| &mut s.driver_feature)
             .update(|feat_val| *feat_val = val);
     }
 
-    fn read_feature_bits(&self, select: u32) -> u32 {
+    fn read_feature_bits(&mut self, select: u32) -> u32 {
 
-        let mut common_config = self.common_config.borrow_mut();
-
-        common_config
+        self.common_config
             .map_mut(|s| &mut s.device_feature_select)
             .update(|sel_val| *sel_val = select);
 
-        common_config
+        self.common_config
             .map(|s| &s.device_feature)
             .read()
     }

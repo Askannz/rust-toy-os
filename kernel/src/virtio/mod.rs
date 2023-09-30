@@ -3,7 +3,7 @@ use core::convert::TryInto;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-use core::mem::size_of;
+use core::mem;
 use core::cell::RefCell;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::OffsetPageTable;
@@ -13,6 +13,7 @@ use bitvec::field::BitField;
 use volatile::Volatile;
 use crate::serial_println;
 use crate::{pci::{PciDevice, PciBar}, get_phys_addr};
+
 
 pub mod input;
 pub mod gpu;
@@ -41,8 +42,19 @@ pub struct VirtioDevice {
     pub common_config: RefCell<Volatile<&'static mut VirtioPciCommonCfg>>,
 }
 
+#[repr(u8)]
+#[derive(PartialEq, enumn::N)]
+#[allow(non_camel_case_types)]
+pub enum CfgType {
+    VIRTIO_PCI_CAP_COMMON_CFG = 0x1,
+    VIRTIO_PCI_CAP_NOTIFY_CFG = 0x2,
+    VIRTIO_PCI_CAP_ISR_CFG = 0x3,
+    VIRTIO_PCI_CAP_DEVICE_CFG = 0x4,
+    VIRTIO_PCI_CAP_PCI_CFG = 0x5,
+}
+
 struct VirtioCapability {
-    cfg_type: u8,
+    cfg_type: CfgType,
     pci_config_space_offset: u8,
     bar: usize,
     bar_offset: u32,
@@ -144,11 +156,11 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
                     *buffer = data;
         
                     descriptor.flags = 0x0;
-                    descriptor.len = size_of::<T>() as u32;
+                    descriptor.len = mem::size_of::<T>() as u32;
                 },
                 QueueMessage::DevWriteOnly => {
                     descriptor.flags = 0x2;
-                    descriptor.len = size_of::<T>() as u32;
+                    descriptor.len = mem::size_of::<T>() as u32;
                 }
             }
 
@@ -234,7 +246,9 @@ impl VirtioDevice {
                 let bits_0 = word_0.view_bits::<Lsb0>();
                 let bits_1 = word_1.view_bits::<Lsb0>();
 
-                let cfg_type = bits_0[24..32].load();
+                let cfg_type: u8 = bits_0[24..32].load();
+                let cfg_type = CfgType::n(cfg_type).unwrap();
+
                 let bar = bits_1[..8].load();
                 let bar_offset = word_2;
                 let length = word_3;
@@ -251,7 +265,7 @@ impl VirtioDevice {
         let common_config_ptr = {
 
             let common_config_cap = virtio_capabilities.iter()
-                .find(|cap| cap.cfg_type == 0x01)
+                .find(|cap| cap.cfg_type == CfgType::VIRTIO_PCI_CAP_COMMON_CFG)
                 .expect("No VirtIO common config capability?");
 
             let bar_addr = match pci_device.bars[&common_config_cap.bar] {
@@ -283,7 +297,7 @@ impl VirtioDevice {
         let isr_status_ptr = {
 
             let isr_cap = self.capabilities.iter()
-                .find(|cap| cap.cfg_type == 0x03)
+                .find(|cap| cap.cfg_type == CfgType::VIRTIO_PCI_CAP_ISR_CFG)
                 .expect("No VirtIO ISR config capability?");
 
             let bar_addr = match self.pci_device.bars[&isr_cap.bar] {
@@ -425,7 +439,7 @@ impl VirtioDevice {
         let phys_offset = VirtAddr::new(boot_info.physical_memory_offset);
 
         let notify_config_cap = self.capabilities.iter()
-            .find(|cap| cap.cfg_type == 0x02)
+            .find(|cap| cap.cfg_type == CfgType::VIRTIO_PCI_CAP_NOTIFY_CFG)
             .expect("No VirtIO notify config capability?");
 
         let bar_addr = match self.pci_device.bars[&notify_config_cap.bar] {

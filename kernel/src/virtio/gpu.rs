@@ -6,7 +6,7 @@ use crate::virtio::BootInfo;
 use crate::{serial_println, pci::PciBar};
 use crate::get_phys_addr;
 
-use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
+use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue, CfgType};
 
 pub const W: usize = 1366;
 pub const H: usize = 768;
@@ -93,7 +93,7 @@ impl VirtioGPU {
         let phys_offset = VirtAddr::new(boot_info.physical_memory_offset);
 
         let config_cap = self.virtio_dev.capabilities.iter()
-            .find(|cap| cap.cfg_type == 0x04)
+            .find(|cap| cap.cfg_type == CfgType::VIRTIO_PCI_CAP_DEVICE_CFG)
             .expect("No VirtIO device config capability?");
 
         let bar_addr = match self.virtio_dev.pci_device.bars[&config_cap.bar] {

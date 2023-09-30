@@ -49,7 +49,8 @@ struct VirtioCapability {
     length: u32  // Length of the structure pointed to
 }
 
-pub struct VirtioQueue<const Q_SIZE: usize> {
+pub struct VirtioQueue<const Q_SIZE: usize, T: VirtqSerializable> {
+    pouet: T,
     q_index: u16,
     buffers: Vec<Vec<u8>>,
     descriptor_area: Box<VirtqDescTable<Q_SIZE>>,
@@ -60,7 +61,7 @@ pub struct VirtioQueue<const Q_SIZE: usize> {
     notify_ptr: VirtAddr
 }
 
-trait VirtqSerializable: Copy {}
+pub trait VirtqSerializable: Copy + Default {}
 
 unsafe fn to_bytes<T: VirtqSerializable>(obj: T) -> Vec<u8> {
     let ptr = (&obj as *const T) as *const u8;
@@ -127,7 +128,7 @@ impl VirtioInterruptAck {
     }
 }
 
-impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
+impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
 
     fn get_descriptor(&mut self) -> Option<usize> {
         for (desc_index, available) in self.avail_desc.iter_mut().enumerate() {
@@ -342,13 +343,13 @@ impl VirtioDevice {
         assert_eq!(status, 0x08);
     }
 
-    pub fn initialize_queue<const Q_SIZE: usize>(
+    pub fn initialize_queue<const Q_SIZE: usize, T: VirtqSerializable>(
         &mut self,
         boot_info: &'static BootInfo,
         mapper: &OffsetPageTable,
         q_index: u16,
         max_buf_size: usize
-    ) -> VirtioQueue<Q_SIZE> {
+    ) -> VirtioQueue<Q_SIZE, T> {
 
         // TODO: prevent a queue from being initialized twice
 
@@ -430,6 +431,7 @@ impl VirtioDevice {
         let notify_ptr = self.get_queue_notify_ptr(boot_info, q_index);
 
         VirtioQueue {
+            pouet: T::default(),
             q_index,
             buffers,
             descriptor_area: desc_table,

@@ -9,7 +9,7 @@ const Q_SIZE: usize = 64;
 
 pub struct VirtioInput {
     pub virtio_dev: VirtioDevice,
-    eventq: VirtioQueue<Q_SIZE>
+    eventq: VirtioQueue<Q_SIZE, VirtioInputEvent>
 }
 
 impl VirtioInput {

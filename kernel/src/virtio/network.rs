@@ -1,4 +1,5 @@
 use core::mem::size_of;
+use core::mem::MaybeUninit;
 use alloc::vec;
 use alloc::vec::Vec;
 use x86_64::structures::paging::{OffsetPageTable};
@@ -21,8 +22,8 @@ pub enum NetworkFeatureBits {
 pub struct VirtioNetwork {
     pub virtio_dev: VirtioDevice,
     pub mac_addr: [u8; 6],
-    receiveq1: VirtioQueue<Q_SIZE>,
-    transmitq1: VirtioQueue<Q_SIZE>,
+    receiveq1: VirtioQueue<Q_SIZE, VirtioNetPacket>,
+    transmitq1: VirtioQueue<Q_SIZE, VirtioNetPacket>,
 }
 
 impl VirtioNetwork {
@@ -100,6 +101,13 @@ impl VirtioNetwork {
 pub struct VirtioNetPacket {
     pub hdr: VirtioNetHdr,
     pub data: [u8; MAX_PACKET_SIZE],
+}
+
+impl Default for VirtioNetPacket {
+    fn default() -> Self {
+        let x = MaybeUninit::<Self>::zeroed();
+        unsafe { x.assume_init() }
+    }
 }
 
 impl VirtqSerializable for VirtioNetPacket {}

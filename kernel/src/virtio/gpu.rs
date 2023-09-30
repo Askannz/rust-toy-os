@@ -16,8 +16,30 @@ const Q_SIZE: usize = 64;
 pub struct VirtioGPU {
     pub virtio_dev: VirtioDevice,
     pub framebuffer: Vec<u8>,
-    controlq: VirtioQueue<Q_SIZE>
+    controlq: VirtioQueue<Q_SIZE, GpuVirtioMsg>
 }
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+union GpuVirtioMsg {
+    resp_display_info: VirtioGpuRespDisplayInfo,
+    resource_create_2d: VirtioGpuResourceCreate2d,
+    resource_attach_backing: VirtioGpuResourceAttachBacking,
+    set_scanout: VirtioGpuSetScanout,
+    transfer_to_host_2d: VirtioGpuTransferToHost2d,
+    resource_flush: VirtioGpuResourceFlush,
+    ctrl_hdr: VirtioGpuCtrlHdr,
+}
+
+// TODO: is there a cleaner way?
+impl Default for GpuVirtioMsg {
+    fn default() -> Self {
+        let x = MaybeUninit::<Self>::zeroed();
+        unsafe { x.assume_init() }
+    }
+}
+
+impl VirtqSerializable for GpuVirtioMsg {}
 
 impl VirtioGPU {
     pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
@@ -27,14 +49,7 @@ impl VirtioGPU {
             panic!("VirtIO device is not a GPU device (device type = {}, expected 16)", virtio_dev_type)
         }
 
-        let max_buf_size = *vec![
-            size_of::<VirtioGpuRespDisplayInfo>(),
-            size_of::<VirtioGpuResourceCreate2d>(),
-            size_of::<VirtioGpuResourceAttachBacking>(),
-            size_of::<VirtioGpuSetScanout>(),
-            size_of::<VirtioGpuTransferToHost2d>(),
-            size_of::<VirtioGpuResourceFlush>()
-        ].iter().max().unwrap();
+        let max_buf_size = size_of::<GpuVirtioMsg>();
 
         let controlq = virtio_dev.initialize_queue(boot_info, &mapper, 0, max_buf_size);  // queue 0 (controlq)
         virtio_dev.write_status(0x04);  // DRIVER_OK
@@ -92,13 +107,11 @@ impl VirtioGPU {
         phys_offset + bar_addr + (config_cap.bar_offset as u64)
     }
 
-    fn send_command<U, V>(&mut self, input: U) -> V 
-        where U: VirtqSerializable, V: VirtqSerializable
-    {
+    fn send_command(&mut self, input: GpuVirtioMsg) -> GpuVirtioMsg {
 
         self.controlq.try_push(vec![
             QueueMessage::DevReadOnly { buf: unsafe { to_bytes(input) } },
-            QueueMessage::DevWriteOnly { size: size_of::<V>() }
+            QueueMessage::DevWriteOnly { size: size_of::<GpuVirtioMsg>() }
         ]).unwrap();
 
         loop {
@@ -111,8 +124,9 @@ impl VirtioGPU {
         }
     }
 
-    fn send_command_noreply<U: VirtqSerializable>(&mut self, input: U) -> Option<()> {
-        let resp: VirtioGpuCtrlHdr = self.send_command(input);
+    fn send_command_noreply(&mut self, input: GpuVirtioMsg) -> Option<()> {
+        let resp = self.send_command(input);
+        let resp: VirtioGpuCtrlHdr = unsafe { resp.ctrl_hdr };
         if resp._type == VirtioGpuCtrlType::VIRTIO_GPU_RESP_OK_NODATA as u32 {
             Some(())
         } else {
@@ -123,17 +137,19 @@ impl VirtioGPU {
 
     pub fn get_display_info(&mut self) -> VirtioGpuRespDisplayInfo {
 
-        self.send_command(VirtioGpuCtrlHdr {
+        let res = self.send_command(GpuVirtioMsg { ctrl_hdr: VirtioGpuCtrlHdr {
             _type: VirtioGpuCtrlType::VIRTIO_GPU_CMD_GET_DISPLAY_INFO as u32,
             ..VirtioGpuCtrlHdr::default()
-        })
+        }});
+
+        unsafe { res.resp_display_info }
     }
 
     pub fn init_framebuffer(&mut self, mapper: &OffsetPageTable) {
 
         let resource_id = 0x1;
 
-        self.send_command_noreply(VirtioGpuResourceCreate2d {
+        self.send_command_noreply(GpuVirtioMsg { resource_create_2d: VirtioGpuResourceCreate2d {
             hdr: VirtioGpuCtrlHdr {
                 _type: VirtioGpuCtrlType::VIRTIO_GPU_CMD_RESOURCE_CREATE_2D as u32,
                 ..VirtioGpuCtrlHdr::default()
@@ -142,11 +158,11 @@ impl VirtioGPU {
             format: 67, // RGBA,
             width: W as u32,
             height: H as u32
-        }).unwrap();
+        }}).unwrap();
 
         let fb_addr = get_phys_addr(mapper, self.framebuffer.as_slice());
 
-        self.send_command_noreply(VirtioGpuResourceAttachBacking {
+        self.send_command_noreply(GpuVirtioMsg { resource_attach_backing: VirtioGpuResourceAttachBacking {
             hdr: VirtioGpuCtrlHdr {
                 _type: VirtioGpuCtrlType::VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING as u32,
                 ..VirtioGpuCtrlHdr::default()
@@ -162,9 +178,9 @@ impl VirtioGPU {
                 };
                 entries
             }
-        }).unwrap();
+        }}).unwrap();
 
-        self.send_command_noreply(VirtioGpuSetScanout {
+        self.send_command_noreply(GpuVirtioMsg { set_scanout: VirtioGpuSetScanout {
             hdr: VirtioGpuCtrlHdr {
                 _type: VirtioGpuCtrlType::VIRTIO_GPU_CMD_SET_SCANOUT as u32,
                 ..VirtioGpuCtrlHdr::default()
@@ -177,14 +193,14 @@ impl VirtioGPU {
             },
             scanout_id: 0,
             resource_id,
-        }).unwrap();
+        }}).unwrap();
     }
 
     pub fn flush(&mut self) {
 
         let resource_id = 0x1;
 
-        self.send_command_noreply(VirtioGpuTransferToHost2d {
+        self.send_command_noreply(GpuVirtioMsg { transfer_to_host_2d: VirtioGpuTransferToHost2d {
             hdr: VirtioGpuCtrlHdr {
                 _type: VirtioGpuCtrlType::VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D as u32,
                 ..VirtioGpuCtrlHdr::default()
@@ -198,9 +214,9 @@ impl VirtioGPU {
             offset: 0x0,
             resource_id,
             padding: 0x0
-        }).unwrap();
+        }}).unwrap();
 
-        self.send_command_noreply(VirtioGpuResourceFlush {
+        self.send_command_noreply(GpuVirtioMsg { resource_flush: VirtioGpuResourceFlush {
             hdr: VirtioGpuCtrlHdr {
                 _type: VirtioGpuCtrlType::VIRTIO_GPU_CMD_RESOURCE_FLUSH as u32,
                 ..VirtioGpuCtrlHdr::default()
@@ -213,7 +229,7 @@ impl VirtioGPU {
             },
             resource_id,
             padding: 0x0
-        }).unwrap();
+        }}).unwrap();
     }
 }
 
@@ -281,8 +297,6 @@ pub struct VirtioGpuDisplayOne {
     pub flags: u32
 }
 
-impl VirtqSerializable for VirtioGpuRespDisplayInfo {}
-
 //
 // VIRTIO_GPU_CMD_RESOURCE_CREATE_2D
 
@@ -295,8 +309,6 @@ pub struct VirtioGpuResourceCreate2d {
     width: u32,
     height: u32
 }
-
-impl VirtqSerializable for VirtioGpuResourceCreate2d {}
 
 //
 // VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING
@@ -327,8 +339,6 @@ impl Default for VirtioGpuMemEntry {
     }
 }
 
-impl VirtqSerializable for VirtioGpuResourceAttachBacking {}
-
 //
 // VIRTIO_GPU_CMD_SET_SCANOUT
 
@@ -340,8 +350,6 @@ pub struct VirtioGpuSetScanout {
     scanout_id: u32,
     resource_id: u32
 }
-
-impl VirtqSerializable for VirtioGpuSetScanout {}
 
 //
 // VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D
@@ -356,8 +364,6 @@ pub struct VirtioGpuTransferToHost2d {
     padding: u32
 }
 
-impl VirtqSerializable for VirtioGpuTransferToHost2d {}
-
 //
 // VIRTIO_GPU_CMD_RESOURCE_FLUSH
 
@@ -370,4 +376,3 @@ pub struct VirtioGpuResourceFlush {
     padding: u32
 }
 
-impl VirtqSerializable for VirtioGpuResourceFlush {}

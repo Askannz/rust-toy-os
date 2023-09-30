@@ -255,6 +255,8 @@ fn get_addr_in_bar(boot_info: &'static BootInfo, pci_device: &PciDevice, virtio_
 
 impl VirtioDevice {
 
+
+
     pub fn new(
         boot_info: &'static BootInfo,
         pci_device: PciDevice,
@@ -263,47 +265,30 @@ impl VirtioDevice {
 
         let mut pci_config_space = PciConfigSpace::new();
 
-        let mut common_config_cap = None;
-        let mut notification_cap = None;
-        let mut device_specific_config_cap = None;
+        let mut find_cap = |cfg_type: CfgType| -> Option<VirtioCapability> {
+            pci_device.capabilities.iter()
+                .filter(|pci_cap| pci_cap.vendor == VIRTIO_PCI_VENDOR)
+                .filter_map(|pci_cap| {
 
-        pci_device.capabilities.iter()
-            .filter(|pci_cap| pci_cap.vendor == VIRTIO_PCI_VENDOR)
-            .for_each(|pci_cap| {
+                    let virtio_cap = unsafe {
+                        pci_config_space.read_struct::<VirtioPciCap>(&pci_device.addr, pci_cap.offset)
+                    };
 
-                let virtio_cap = unsafe {
-                    pci_config_space.read_struct::<VirtioPciCap>(&pci_device.addr, pci_cap.offset)
-                };
-
-                match virtio_cap.cfg_type {
-
-                    CfgType::VIRTIO_PCI_CAP_COMMON_CFG => {
-                        assert!(common_config_cap.is_none());
-                        common_config_cap.replace(VirtioCapability { 
-                            config_space_offset: pci_cap.offset,
-                            virtio_cap,
-                        });
-                    }
-                    
-                    CfgType::VIRTIO_PCI_CAP_NOTIFY_CFG => {
-                        assert!(notification_cap.is_none());
-                        notification_cap.replace(VirtioCapability { 
-                            config_space_offset: pci_cap.offset,
-                            virtio_cap,
-                        });
-                    },
-
-                    CfgType::VIRTIO_PCI_CAP_DEVICE_CFG => {
-                        assert!(device_specific_config_cap.is_none());
-                        device_specific_config_cap.replace(VirtioCapability { 
-                            config_space_offset: pci_cap.offset,
-                            virtio_cap,
-                        });
+                    if virtio_cap.cfg_type != cfg_type {
+                        return None
                     }
 
-                    _ => ()
-                };
-            });
+                    Some(VirtioCapability { 
+                        config_space_offset: pci_cap.offset,
+                        virtio_cap,
+                    })
+                })
+                .next()
+        };
+
+        let common_config_cap = find_cap(CfgType::VIRTIO_PCI_CAP_COMMON_CFG);
+        let notification_cap = find_cap(CfgType::VIRTIO_PCI_CAP_NOTIFY_CFG);
+        let device_specific_config_cap = find_cap(CfgType::VIRTIO_PCI_CAP_DEVICE_CFG);
 
         let common_config_cap = common_config_cap.unwrap();
         let notification_cap = notification_cap.unwrap();
@@ -473,8 +458,6 @@ impl VirtioDevice {
     }
 
     fn get_queue_notify_ptr(&mut self, boot_info: &'static BootInfo, q_index: u16) -> VirtAddr {
-
-        serial_println!("{:?}", self.notification_cap);
 
         let mut pci_config_space = PciConfigSpace::new();
 

@@ -91,7 +91,7 @@ impl VirtioNetwork {
         };
 
         self.transmitq1.try_push(vec![
-            QueueMessage::DevReadOnly { buf: unsafe { to_bytes(msg) } },
+            QueueMessage::DevReadOnly { buf: msg },
         ])
     }
 }

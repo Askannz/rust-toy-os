@@ -79,9 +79,9 @@ unsafe fn from_bytes<T: VirtqSerializable>(bytes: Vec<u8>) -> T {
 }
 
 #[derive(Clone)]
-pub enum QueueMessage {
+pub enum QueueMessage<T: VirtqSerializable> {
     DevWriteOnly,
-    DevReadOnly { buf: Vec<u8> }
+    DevReadOnly { buf: T }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -140,7 +140,7 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
         return None
     }
 
-    pub fn try_push(&mut self, messages: Vec<QueueMessage>) -> Option<()> {
+    pub fn try_push(&mut self, messages: Vec<QueueMessage<T>>) -> Option<()> {
 
         let n = messages.len();
 
@@ -156,6 +156,7 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
             match msg {
                 QueueMessage::DevReadOnly { buf } => {
 
+                    let buf = unsafe { to_bytes(buf) };
                     let buffer = self.buffers.get_mut(desc_index).unwrap();
 
                     assert!(buf.len() <= buffer.len());

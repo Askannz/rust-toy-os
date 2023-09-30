@@ -110,7 +110,7 @@ impl VirtioGPU {
     fn send_command(&mut self, input: GpuVirtioMsg) -> GpuVirtioMsg {
 
         self.controlq.try_push(vec![
-            QueueMessage::DevReadOnly { buf: unsafe { to_bytes(input) } },
+            QueueMessage::DevReadOnly { buf: input },
             QueueMessage::DevWriteOnly
         ]).unwrap();
 

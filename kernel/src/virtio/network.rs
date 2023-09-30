@@ -52,8 +52,7 @@ impl VirtioNetwork {
         let resp_list = self.receiveq1.try_pop()?;
         assert_eq!(resp_list.len(), 1);
 
-        let resp_buf = resp_list[0].clone();
-        let virtio_packet: VirtioNetPacket = unsafe { from_bytes(resp_buf) };
+        let virtio_packet = resp_list[0];
 
         self.receiveq1.try_push(vec![
             QueueMessage::DevWriteOnly

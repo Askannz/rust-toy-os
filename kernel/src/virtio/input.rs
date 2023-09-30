@@ -3,7 +3,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use x86_64::structures::paging::OffsetPageTable;
 use crate::virtio::BootInfo;
-use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue, from_bytes};
+use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
 
 const Q_SIZE: usize = 64;
 
@@ -40,9 +40,8 @@ impl VirtioInput {
 
         while let Some(resp_list) = self.eventq.try_pop() {
             assert_eq!(resp_list.len(), 1);
-            let resp_buf = resp_list[0].clone();
             // TODO: check response status code
-            let event = unsafe { from_bytes(resp_buf) };
+            let event = resp_list[0];
             out.push(event);
 
             // TODO: unwrap()

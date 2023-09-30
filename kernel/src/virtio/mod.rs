@@ -194,7 +194,7 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
         Some(())
     }
 
-    pub fn try_pop(&mut self) -> Option<Vec<Vec<u8>>> {
+    pub fn try_pop(&mut self) -> Option<Vec<T>> {
 
         let new_index: usize = self.device_area.idx.into();
         if new_index == self.pop_index {
@@ -211,7 +211,7 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
         loop {
             
             let out_vec = self.buffers[desc_index].clone();
-            out.push(out_vec);
+            out.push(unsafe { from_bytes(out_vec) });
 
             let descriptor = self.descriptor_area.get(desc_index).unwrap();
             //serial_println!("Received descriptor: {:?}", descriptor);

@@ -117,9 +117,8 @@ impl VirtioGPU {
         loop {
            if let Some(resp_list) = self.controlq.try_pop() {
                 assert_eq!(resp_list.len(), 2);
-                let resp_buf = resp_list[1].clone();
                 // TODO: check response status code
-                break unsafe { from_bytes(resp_buf) };
+                break resp_list[1];
            }
         }
     }

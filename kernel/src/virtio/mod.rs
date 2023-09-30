@@ -1,7 +1,7 @@
 use core::convert::TryInto;
 use alloc::collections::BTreeMap;
 use alloc::boxed::Box;
-use alloc::vec::Vec;
+use alloc::{vec::Vec, vec};
 use alloc::slice;
 use core::mem::size_of;
 use core::cell::RefCell;
@@ -35,11 +35,10 @@ pub struct VirtioInterruptAck {
 
 unsafe impl Sync for VirtioInterruptAck {}
 
-pub struct VirtioDevice<const Q_SIZE: usize> {
+pub struct VirtioDevice {
     pub pci_device: PciDevice,
     capabilities: Vec<VirtioCapability>,
     pub common_config: RefCell<Volatile<&'static mut VirtioPciCommonCfg>>,
-    pub queues: BTreeMap<u16, VirtioQueue<Q_SIZE>>
 }
 
 struct VirtioCapability {
@@ -232,7 +231,7 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
     }
 }
 
-impl<const Q_SIZE: usize> VirtioDevice<Q_SIZE> {
+impl VirtioDevice {
 
    pub fn new(
         boot_info: &'static BootInfo,
@@ -286,8 +285,7 @@ impl<const Q_SIZE: usize> VirtioDevice<Q_SIZE> {
         let mut dev = VirtioDevice {
             pci_device,
             capabilities: virtio_capabilities,
-            common_config: RefCell::new(common_config_ptr),
-            queues: BTreeMap::new()
+            common_config: RefCell::new(common_config_ptr)
         };
 
         dev.initialize(feature_bits);
@@ -344,13 +342,15 @@ impl<const Q_SIZE: usize> VirtioDevice<Q_SIZE> {
         assert_eq!(status, 0x08);
     }
 
-    pub fn initialize_queue(
+    pub fn initialize_queue<const Q_SIZE: usize>(
         &mut self,
         boot_info: &'static BootInfo,
         mapper: &OffsetPageTable,
         q_index: u16,
         max_buf_size: usize
-    ) {
+    ) -> VirtioQueue<Q_SIZE> {
+
+        // TODO: prevent a queue from being initialized twice
 
         let mut desc_table = Box::new({
 
@@ -438,7 +438,7 @@ impl<const Q_SIZE: usize> VirtioDevice<Q_SIZE> {
 
         let notify_ptr = self.get_queue_notify_ptr(boot_info, q_index);
 
-        let queue = VirtioQueue {
+        VirtioQueue {
             q_index,
             buffers,
             descriptor_area: desc_table,
@@ -447,10 +447,7 @@ impl<const Q_SIZE: usize> VirtioDevice<Q_SIZE> {
             avail_desc,
             pop_index: 0,
             notify_ptr
-        };
-
-        let o = self.queues.insert(q_index, queue);
-        assert!(o.is_none());
+        }
     }
 
     fn get_queue_notify_ptr(&self, boot_info: &'static BootInfo, q_index: u16) -> VirtAddr {

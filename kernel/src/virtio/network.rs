@@ -19,42 +19,42 @@ pub enum NetworkFeatureBits {
 }
 
 pub struct VirtioNetwork {
-    pub virtio_dev: VirtioDevice<Q_SIZE>,
+    pub virtio_dev: VirtioDevice,
     pub mac_addr: [u8; 6],
+    receiveq1: VirtioQueue<Q_SIZE>,
+    transmitq1: VirtioQueue<Q_SIZE>,
 }
 
 impl VirtioNetwork {
-    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice<Q_SIZE>) -> Self {
+    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
 
         let max_buf_size = size_of::<VirtioNetPacket>();
 
-        virtio_dev.initialize_queue(boot_info, &mapper, 0, max_buf_size);  // queue 0 (receiveq1)
-        virtio_dev.initialize_queue(boot_info, &mapper, 1, max_buf_size);  // queue 1 (transmitq1)
+        let mut receiveq1 = virtio_dev.initialize_queue(boot_info, &mapper, 0, max_buf_size);  // queue 0 (receiveq1)
+        let transmitq1 = virtio_dev.initialize_queue(boot_info, &mapper, 1, max_buf_size);  // queue 1 (transmitq1)
         virtio_dev.write_status(0x04);  // DRIVER_OK
-    
-        let receiveq = virtio_dev.queues.get_mut(&0).unwrap();
 
         let msg = vec![QueueMessage::DevWriteOnly { size: max_buf_size }];
-        while receiveq.try_push(msg.clone()).is_some() {}
+        while receiveq1.try_push(msg.clone()).is_some() {}
 
         VirtioNetwork {
             virtio_dev,
             mac_addr: MAC_ADDR,
+            receiveq1,
+            transmitq1
         }
     }
 
 
     pub fn try_recv(&mut self) -> Option<Vec<u8>> {
 
-        let receiveq = self.virtio_dev.queues.get_mut(&0).unwrap();
-
-        let resp_list = receiveq.try_pop()?;
+        let resp_list = self.receiveq1.try_pop()?;
         assert_eq!(resp_list.len(), 1);
 
         let resp_buf = resp_list[0].clone();
         let virtio_packet: VirtioNetPacket = unsafe { from_bytes(resp_buf) };
 
-        receiveq.try_push(vec![
+        self.receiveq1.try_push(vec![
             QueueMessage::DevWriteOnly { size: size_of::<VirtioNetPacket>() }
         ]).unwrap();
 
@@ -64,8 +64,6 @@ impl VirtioNetwork {
     pub fn try_send(&mut self, value: Vec<u8>) -> Option<()> {
 
         assert!(value.len() <= MAX_PACKET_SIZE);
-
-        let transmitq = self.virtio_dev.queues.get_mut(&1).unwrap();
 
         let mut data = [0x00; MAX_PACKET_SIZE];
 
@@ -91,7 +89,7 @@ impl VirtioNetwork {
             data
         };
 
-        transmitq.try_push(vec![
+        self.transmitq1.try_push(vec![
             QueueMessage::DevReadOnly { buf: unsafe { to_bytes(msg) } },
         ])
     }

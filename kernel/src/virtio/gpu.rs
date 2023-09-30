@@ -6,7 +6,7 @@ use crate::virtio::BootInfo;
 use crate::{serial_println, pci::PciBar};
 use crate::get_phys_addr;
 
-use super::{VirtioDevice, QueueMessage, VirtqSerializable, to_bytes, from_bytes};
+use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue, to_bytes, from_bytes};
 
 pub const W: usize = 1366;
 pub const H: usize = 768;
@@ -14,12 +14,13 @@ pub const H: usize = 768;
 const Q_SIZE: usize = 64;
 
 pub struct VirtioGPU {
-    pub virtio_dev: VirtioDevice<Q_SIZE>,
+    pub virtio_dev: VirtioDevice,
     pub framebuffer: Vec<u8>,
+    controlq: VirtioQueue<Q_SIZE>
 }
 
 impl VirtioGPU {
-    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice<Q_SIZE>) -> Self {
+    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
 
         let virtio_dev_type = virtio_dev.get_virtio_device_type();
         if virtio_dev_type != 16 {
@@ -35,12 +36,13 @@ impl VirtioGPU {
             size_of::<VirtioGpuResourceFlush>()
         ].iter().max().unwrap();
 
-        virtio_dev.initialize_queue(boot_info, &mapper, 0, max_buf_size);  // queue 0 (controlq)
+        let controlq = virtio_dev.initialize_queue(boot_info, &mapper, 0, max_buf_size);  // queue 0 (controlq)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
         VirtioGPU {
             virtio_dev,
             framebuffer: vec![0u8; 4*W*H],
+            controlq
         }
     }
 
@@ -94,15 +96,13 @@ impl VirtioGPU {
         where U: VirtqSerializable, V: VirtqSerializable
     {
 
-        let controlq = self.virtio_dev.queues.get_mut(&0).unwrap();
-
-        controlq.try_push(vec![
+        self.controlq.try_push(vec![
             QueueMessage::DevReadOnly { buf: unsafe { to_bytes(input) } },
             QueueMessage::DevWriteOnly { size: size_of::<V>() }
         ]).unwrap();
 
         loop {
-           if let Some(resp_list) = controlq.try_pop() {
+           if let Some(resp_list) = self.controlq.try_pop() {
                 assert_eq!(resp_list.len(), 2);
                 let resp_buf = resp_list[1].clone();
                 // TODO: check response status code

@@ -8,11 +8,12 @@ use x86_64::VirtAddr;
 use x86_64::structures::paging::OffsetPageTable;
 use bitvec::prelude::Lsb0;
 use bitvec::view::BitView;
-use bitvec::field::BitField;
 use volatile::Volatile;
 use crate::serial_println;
 use crate::{pci::{PciDevice, PciBar, PciConfigSpace}, get_phys_addr};
 
+
+const VIRTIO_PCI_VENDOR: u8 = 0x09;
 
 pub mod input;
 pub mod gpu;
@@ -42,7 +43,7 @@ pub struct VirtioDevice {
 }
 
 #[repr(u8)]
-#[derive(PartialEq, enumn::N)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 #[allow(non_camel_case_types)]
 pub enum CfgType {
     VIRTIO_PCI_CAP_COMMON_CFG = 0x1,
@@ -50,14 +51,6 @@ pub enum CfgType {
     VIRTIO_PCI_CAP_ISR_CFG = 0x3,
     VIRTIO_PCI_CAP_DEVICE_CFG = 0x4,
     VIRTIO_PCI_CAP_PCI_CFG = 0x5,
-}
-
-struct VirtioCapability {
-    cfg_type: CfgType,
-    pci_config_space_offset: u8,
-    bar: usize,
-    bar_offset: u32,
-    length: u32  // Length of the structure pointed to
 }
 
 pub struct VirtioQueue<const Q_SIZE: usize, T: VirtqSerializable> {
@@ -225,6 +218,25 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
     }
 }
 
+// Just a convenience struct, not part of VirtIO spec
+struct VirtioCapability {
+    config_space_offset: u8,
+    virtio_cap: VirtioPciCap
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+struct VirtioPciCap { 
+    cap_vndr: u8,
+    cap_next: u8,
+    cap_len: u8,
+    cfg_type: CfgType,
+    bar: u8,
+    padding: [u8; 3],
+    offset: u32,  // This is the offset into the BAR, and NOT the PCI config space
+    length: u32,
+}
+
 impl VirtioDevice {
 
    pub fn new(
@@ -236,32 +248,12 @@ impl VirtioDevice {
         let mut pci_config_space = PciConfigSpace::new();
 
         let virtio_capabilities = pci_device.capabilities.iter()
-            .filter(|cap| cap.vendor == 0x09)  // VirtIO vendor
-            .map(|cap| {
-
-                let words = unsafe {
-                    [
-                        pci_config_space.read(&pci_device.addr, cap.offset),
-                        pci_config_space.read(&pci_device.addr, cap.offset + 0x4),
-                        pci_config_space.read(&pci_device.addr, cap.offset + 0x8),
-                        pci_config_space.read(&pci_device.addr, cap.offset + 0x12),
-                    ]
-                };
-
-
-                let bits_0 = words[0].view_bits::<Lsb0>();
-                let bits_1 = words[1].view_bits::<Lsb0>();
-
-                let cfg_type: u8 = bits_0[24..32].load();
-                let cfg_type = CfgType::n(cfg_type).unwrap();
-
-                let bar = bits_1[..8].load();
-                let bar_offset = words[2];
-                let length = words[3];
-
+            .filter(|pci_cap| pci_cap.vendor == VIRTIO_PCI_VENDOR)
+            .map(|pci_cap| unsafe {
+                let virtio_cap = pci_config_space.read_struct::<VirtioPciCap>(&pci_device.addr, pci_cap.offset);
                 VirtioCapability {
-                    cfg_type, bar, bar_offset, length,
-                    pci_config_space_offset: cap.offset
+                    config_space_offset: pci_cap.offset,
+                    virtio_cap
                 }
             })
             .collect::<Vec<VirtioCapability>>();
@@ -271,16 +263,16 @@ impl VirtioDevice {
         let common_config_ptr = {
 
             let common_config_cap = virtio_capabilities.iter()
-                .find(|cap| cap.cfg_type == CfgType::VIRTIO_PCI_CAP_COMMON_CFG)
+                .find(|cap| cap.virtio_cap.cfg_type == CfgType::VIRTIO_PCI_CAP_COMMON_CFG)
                 .expect("No VirtIO common config capability?");
 
-            let bar_addr = match pci_device.bars[&common_config_cap.bar] {
+            let bar_addr = match pci_device.bars[&common_config_cap.virtio_cap.bar.into()] {
                 PciBar::Memory { base_addr, .. } => base_addr,
                 PciBar::IO { .. } => unimplemented!(
                     "Support for I/O BARs in VirtIO not implemented")
             };
 
-            let addr = phys_offset + bar_addr + (common_config_cap.bar_offset as u64);
+            let addr = phys_offset + bar_addr + (common_config_cap.virtio_cap.offset as u64);
             let ptr: *mut VirtioPciCommonCfg = addr.as_mut_ptr();
             Volatile::new(unsafe { ptr.as_mut().unwrap() })
         };
@@ -303,16 +295,16 @@ impl VirtioDevice {
         let isr_status_ptr = {
 
             let isr_cap = self.capabilities.iter()
-                .find(|cap| cap.cfg_type == CfgType::VIRTIO_PCI_CAP_ISR_CFG)
+                .find(|cap| cap.virtio_cap.cfg_type == CfgType::VIRTIO_PCI_CAP_ISR_CFG)
                 .expect("No VirtIO ISR config capability?");
 
-            let bar_addr = match self.pci_device.bars[&isr_cap.bar] {
+            let bar_addr = match self.pci_device.bars[&isr_cap.virtio_cap.bar.into()] {
                 PciBar::Memory { base_addr, .. } => base_addr,
                 PciBar::IO { .. } => unimplemented!(
                     "Support for I/O BARs in VirtIO not implemented")
             };
 
-            let addr = phys_offset + bar_addr + (isr_cap.bar_offset as u64);
+            let addr = phys_offset + bar_addr + (isr_cap.virtio_cap.offset as u64);
             let ptr: *mut u8 = addr.as_mut_ptr();
             Volatile::new(unsafe { ptr.as_mut().unwrap() })
         };
@@ -445,10 +437,10 @@ impl VirtioDevice {
         let mut pci_config_space = PciConfigSpace::new();
 
         let notify_config_cap = self.capabilities.iter()
-            .find(|cap| cap.cfg_type == CfgType::VIRTIO_PCI_CAP_NOTIFY_CFG)
+            .find(|cap| cap.virtio_cap.cfg_type == CfgType::VIRTIO_PCI_CAP_NOTIFY_CFG)
             .expect("No VirtIO notify config capability?");
 
-        let bar_addr = match self.pci_device.bars[&notify_config_cap.bar] {
+        let bar_addr = match self.pci_device.bars[&notify_config_cap.virtio_cap.bar.into()] {
             PciBar::Memory { base_addr, .. } => base_addr,
             PciBar::IO { .. } => unimplemented!(
                 "Support for I/O BARs in VirtIO not implemented")
@@ -467,14 +459,14 @@ impl VirtioDevice {
         };
 
         let notify_off_multiplier: u64 = unsafe {
-            let offset = notify_config_cap.pci_config_space_offset + 4;
+            let offset = notify_config_cap.config_space_offset + 4;
             pci_config_space.read(&self.pci_device.addr, offset)
         }.into();
 
         let addr = 
             phys_offset + 
             bar_addr + 
-            (notify_config_cap.bar_offset as u64) +
+            (notify_config_cap.virtio_cap.offset as u64) +
             queue_notify_off * notify_off_multiplier;
 
         addr

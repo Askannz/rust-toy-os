@@ -1,5 +1,5 @@
 use alloc::borrow::ToOwned;
-use alloc::{rc::Rc, vec::Vec, vec};
+use alloc::{rc::Rc, vec::Vec, vec, boxed::Box};
 use core::mem;
 use core::cell::RefCell;
 use alloc::collections::BTreeMap;
@@ -7,6 +7,8 @@ use x86_64::instructions::port::{PortWriteOnly, Port};
 use bitvec::prelude::Lsb0;
 use bitvec::view::BitView;
 use bitvec::field::BitField;
+
+use crate::serial_println;
 
 
 
@@ -301,6 +303,23 @@ impl PciConfigSpace {
             address_port: PortWriteOnly::<u32>::new(0xCF8),
             data_port: Port::<u32>::new(0xCFC)
         }
+    }
+
+    pub unsafe fn read_struct<T: Clone>(&mut self, addr: &PciAddress, offset: u8) -> T {
+
+        let n = mem::size_of::<T>();
+        assert_eq!(n % 4, 0);
+        let num_words = n / 4;
+
+        let buf: Vec<u32> = (0..num_words).map(|i| {
+            let i: u8 = i.try_into().unwrap();
+            let addr_word = Self::get_addr_word(addr, offset + 4 * i);
+            self.address_port.write(addr_word);
+            self.data_port.read()
+        }).collect();
+
+        let ptr = buf.as_ptr() as *const T;
+        ptr.as_ref().unwrap().clone()
     }
 
     // Unsafe because addr and offset have to point to valid data

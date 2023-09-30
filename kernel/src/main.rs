@@ -65,6 +65,7 @@ const APPLICATIONS: [AppDescriptor; 2] = [
     },
 ];
 
+#[derive(Debug)]
 struct MouseStatus {
     x: i32,
     y: i32,
@@ -172,8 +173,12 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         VirtioNetwork::new(BOOT_INFO, &mapper, virtio_dev)
     };
 
+    serial_println!("All VirtIO devices created");
+
     virtio_gpu.init_framebuffer(&mapper);
     virtio_gpu.flush();
+
+    serial_println!("Display initialized");
 
     let (w, h) = virtio_gpu.get_dims();
     let (w, h) = (w as i32, h as i32);
@@ -189,16 +194,18 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     let mut sent: bool = false;
 
+    serial_println!("Entering main loop");
+
     loop {
 
         mouse_status = update_mouse(&mut virtio_input, (w, h), mouse_status);
 
-        if mouse_status.clicked && !sent {
-            serial_println!("Sending packet");
-            let virtio_net = virtio_net.take().unwrap();
-            smoltcp_demo::test_smolltcp(virtio_net);
-            sent = true;
-        }
+        // if mouse_status.clicked && !sent {
+        //     serial_println!("Sending packet");
+        //     let virtio_net = virtio_net.take().unwrap();
+        //     smoltcp_demo::test_smolltcp(virtio_net);
+        //     sent = true;
+        // }
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 

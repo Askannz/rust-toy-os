@@ -93,16 +93,16 @@ impl VirtioGPU {
         let phys_offset = VirtAddr::new(boot_info.physical_memory_offset);
 
         let config_cap = self.virtio_dev.capabilities.iter()
-            .find(|cap| cap.cfg_type == CfgType::VIRTIO_PCI_CAP_DEVICE_CFG)
+            .find(|cap| cap.virtio_cap.cfg_type == CfgType::VIRTIO_PCI_CAP_DEVICE_CFG)
             .expect("No VirtIO device config capability?");
 
-        let bar_addr = match self.virtio_dev.pci_device.bars[&config_cap.bar] {
+        let bar_addr = match self.virtio_dev.pci_device.bars[&config_cap.virtio_cap.bar.into()] {
             PciBar::Memory { base_addr, .. } => base_addr,
             PciBar::IO { .. } => unimplemented!(
                 "Support for I/O BARs in VirtIO not implemented")
         };
 
-        phys_offset + bar_addr + (config_cap.bar_offset as u64)
+        phys_offset + bar_addr + (config_cap.virtio_cap.offset as u64)
     }
 
     fn send_command(&mut self, input: GpuVirtioMsg) -> GpuVirtioMsg {

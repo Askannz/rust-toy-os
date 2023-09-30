@@ -3,8 +3,8 @@ use core::mem::MaybeUninit;
 use alloc::vec;
 use alloc::vec::Vec;
 use x86_64::structures::paging::OffsetPageTable;
-use crate::virtio::BootInfo;
-use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable};
+use crate::{virtio::BootInfo, serial_println};
+use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable, get_addr_in_bar};
 
 const Q_SIZE: usize = 256;
 // https://docs.oasis-open.org/virtio/virtio/v1.1/csprd01/virtio-v1.1-csprd01.html#x1-2050006
@@ -26,12 +26,29 @@ pub struct VirtioNetwork {
     transmitq1: VirtioQueue<Q_SIZE, VirtioNetPacket>,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct VirtioNetConfig { 
+    mac: [u8; 6],
+    status: u16, 
+    max_virtqueue_pairs: u16, 
+    mtu: u16, 
+}
+
 impl VirtioNetwork {
     pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
 
         let mut receiveq1 = virtio_dev.initialize_queue(boot_info, &mapper, 0);  // queue 0 (receiveq1)
         let transmitq1 = virtio_dev.initialize_queue(boot_info, &mapper, 1);  // queue 1 (transmitq1)
         virtio_dev.write_status(0x04);  // DRIVER_OK
+
+        // TEST
+        {
+            let virtio_cap = virtio_dev.device_specific_config_cap.as_ref().unwrap().virtio_cap;
+            let addr = get_addr_in_bar(boot_info, &virtio_dev.pci_device, &virtio_cap);
+            let ptr = addr.as_ptr() as *const VirtioNetConfig;
+            serial_println!("{:x?}", unsafe { *ptr });
+        }
 
         let msg = vec![QueueMessage::DevWriteOnly];
         while receiveq1.try_push(msg.clone()).is_some() {}

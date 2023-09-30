@@ -230,7 +230,7 @@ pub struct VirtioCapability {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-struct VirtioPciCap { 
+pub struct VirtioPciCap { 
     cap_vndr: u8,
     cap_next: u8,
     cap_len: u8,
@@ -241,7 +241,7 @@ struct VirtioPciCap {
     length: u32,
 }
 
-fn get_addr_in_bar(boot_info: &'static BootInfo, pci_device: &PciDevice, virtio_cap: VirtioPciCap) -> VirtAddr {
+pub fn get_addr_in_bar(boot_info: &'static BootInfo, pci_device: &PciDevice, virtio_cap: &VirtioPciCap) -> VirtAddr {
 
     let phys_offset = VirtAddr::new(boot_info.physical_memory_offset);
 
@@ -254,8 +254,6 @@ fn get_addr_in_bar(boot_info: &'static BootInfo, pci_device: &PciDevice, virtio_
 }
 
 impl VirtioDevice {
-
-
 
     pub fn new(
         boot_info: &'static BootInfo,
@@ -294,7 +292,7 @@ impl VirtioDevice {
         let notification_cap = notification_cap.unwrap();
 
         let common_config = {
-            let addr = get_addr_in_bar(boot_info, &pci_device, common_config_cap.virtio_cap);
+            let addr = get_addr_in_bar(boot_info, &pci_device, &common_config_cap.virtio_cap);
             let ptr = addr.as_mut_ptr() as *mut VirtioPciCommonCfg;
             Volatile::new(unsafe { ptr.as_mut().unwrap() })
         };
@@ -478,7 +476,7 @@ impl VirtioDevice {
             pci_config_space.read(&self.pci_device.addr, offset)
         }.into();
 
-        let base_addr = get_addr_in_bar(boot_info, &self.pci_device, self.notification_cap.virtio_cap);
+        let base_addr = get_addr_in_bar(boot_info, &self.pci_device, &self.notification_cap.virtio_cap);
         let addr = base_addr + queue_notify_off * notify_off_multiplier;
         
         addr

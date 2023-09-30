@@ -364,14 +364,14 @@ impl VirtioDevice {
             [zero_desc; Q_SIZE]
         });
     
-        let mut available_ring = Box::new(VirtqAvail {
+        let available_ring = Box::new(VirtqAvail {
             flags: 0x0,
             idx: 0,
             ring: [0u16; Q_SIZE],
             used_event: 0 // Unused
         });
     
-        let mut used_ring = Box::new({
+        let used_ring = Box::new({
     
             let zero_used_elem = VirtqUsedElem { id: 0, len: 0};
     
@@ -386,15 +386,9 @@ impl VirtioDevice {
 
         // Calculating addresses
     
-        let descr_area_addr = get_phys_addr(
-            mapper,
-            desc_table.as_mut() as *mut VirtqDescTable<Q_SIZE>);
-        let driver_area_addr = get_phys_addr(
-            mapper,
-            available_ring.as_mut() as *mut VirtqAvail<Q_SIZE>);
-        let dev_area_addr = get_phys_addr(
-            mapper,
-            used_ring.as_mut() as *mut VirtqUsed<Q_SIZE>);
+        let descr_area_addr = get_phys_addr(mapper, desc_table.as_ref());
+        let driver_area_addr = get_phys_addr(mapper, available_ring.as_ref());
+        let dev_area_addr = get_phys_addr(mapper, used_ring.as_ref());
 
         serial_println!("descr_area_addr={:x}", descr_area_addr);
         serial_println!("driver_area_addr={:x}", driver_area_addr);
@@ -419,13 +413,10 @@ impl VirtioDevice {
 
         for index in 0..Q_SIZE {
 
-            let mut buf = Vec::new();
-            buf.resize(max_buf_size, 0);
-
-            let buf_ptr = buf.as_mut_ptr();
+            let buf = vec![0u8; max_buf_size];
 
             desc_table[index] = VirtqDesc {
-                addr: get_phys_addr(mapper, buf_ptr),
+                addr: get_phys_addr(mapper, buf.as_slice()),
                 len: 0,
                 flags: 0x0,
                 next: 0

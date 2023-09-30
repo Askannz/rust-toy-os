@@ -385,9 +385,9 @@ fn panic(info: &PanicInfo) ->  ! {
     loop {}
 }
 
-fn get_phys_addr<T>(mapper: &impl Translate, p: *mut T) -> u64 {
+fn get_phys_addr<T: ?Sized>(mapper: &impl Translate, p: &T) -> u64 {
 
-    let virt_addr = VirtAddr::new(p as u64);
+    let virt_addr = VirtAddr::new(p as *const T as *const usize as u64);
     let (frame, offset) = match mapper.translate(virt_addr) {
         TranslateResult::Mapped { frame, offset, .. } => (frame, offset),
         v => panic!("Cannot translate page: {:?}", v)

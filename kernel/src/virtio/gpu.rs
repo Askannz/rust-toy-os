@@ -144,7 +144,7 @@ impl VirtioGPU {
             height: H as u32
         }).unwrap();
 
-        let fb_addr = get_phys_addr(mapper, self.framebuffer.as_mut_ptr());
+        let fb_addr = get_phys_addr(mapper, self.framebuffer.as_slice());
 
         self.send_command_noreply(VirtioGpuResourceAttachBacking {
             hdr: VirtioGpuCtrlHdr {

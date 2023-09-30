@@ -1,5 +1,6 @@
 use alloc::borrow::ToOwned;
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{rc::Rc, vec::Vec, vec};
+use core::mem;
 use core::cell::RefCell;
 use alloc::collections::BTreeMap;
 use x86_64::instructions::port::{PortWriteOnly, Port};
@@ -13,19 +14,17 @@ use bitvec::field::BitField;
 #[derive(Debug)]
 pub struct PciDevice {
 
-    addr: PciAddress,
+    pub addr: PciAddress,
     pub vendor_id: u16,
     pub device_id: u16,
     pub class: u8,
 
     pub capabilities: Vec<PciCapability>,
     pub bars: BTreeMap<usize, PciBar>,
-
-    pci_config_space: Rc<RefCell<PciConfigSpace>>
 }
 
 #[derive(Debug, Clone)]
-struct PciAddress {
+pub struct PciAddress {
     bus: u8,
     device: u8,
     function: u8
@@ -38,7 +37,7 @@ pub struct PciCapability {
 }
 
 #[derive(Debug)]
-struct PciConfigSpace {
+pub struct PciConfigSpace {
     address_port: PortWriteOnly<u32>,
     data_port: Port<u32>
 }
@@ -64,7 +63,9 @@ pub enum BarAddrType { Bar32, Bar64 }
 impl PciDevice {
     pub fn set_interrupt_line(&self, line: u8) {
 
-        let mut word = self.read_config_space(0x3c);
+        let mut pci_config_space = PciConfigSpace::new();
+
+        let mut word = unsafe { pci_config_space.read(&self.addr, 0x3c) };
 
         let bits = word.view_bits_mut::<Lsb0>();
 
@@ -73,26 +74,22 @@ impl PciDevice {
         bits[..8].copy_from_bitslice(&line_bits[..8]);
         let new_word = bits.load::<u32>();
 
-        self.write_config_space(0x3c, new_word);
+        unsafe { pci_config_space.write(&self.addr, 0x3c, new_word) };
     }
 
     pub fn read_interrupt_line(&self) -> u8 {
-        let mut word = self.read_config_space(0x3c);
+
+        let mut pci_config_space = PciConfigSpace::new();
+
+        let mut word = unsafe { pci_config_space.read(&self.addr, 0x3c) };
+
         let bits = word.view_bits_mut::<Lsb0>();
         bits[..8].load()
     }
 
-    pub fn read_config_space(&self, offset: u8) -> u32 {
-        let mut config_ref = self.pci_config_space.borrow_mut();
-        unsafe { config_ref.read(&self.addr, offset) }
-    }
-
-    pub fn write_config_space(&self, offset: u8, value: u32) {
-        let mut config_ref = self.pci_config_space.borrow_mut();
-        unsafe { config_ref.write(&self.addr, offset, value); }
-    }
-
     pub fn disable_msix(&self) {
+
+        let mut pci_config_space = PciConfigSpace::new();
         
         let cap = self.capabilities.iter()
             .find(|cap| cap.vendor == 0x11);
@@ -101,10 +98,12 @@ impl PciDevice {
             if let Some(cap) = cap { cap }
             else { return };
 
-        let mut word = self.read_config_space(cap.offset);
+        let mut word = unsafe { pci_config_space.read(&self.addr, cap.offset) };
+
         let bits = word.view_bits_mut::<Lsb0>();
         bits.set(31, false);
-        self.write_config_space(cap.offset, bits.load());
+
+        unsafe { pci_config_space.write(&self.addr, cap.offset, bits.load()) };
     }
 }
 
@@ -287,12 +286,9 @@ pub fn enumerate() -> impl Iterator<Item=PciDevice> {
                 bars
             };
 
-            let pci_config_space = pci_config_space.clone();
-
             Some(PciDevice {
                 addr, vendor_id, device_id, class,
                 capabilities, bars,
-                pci_config_space
             })
         })
 }
@@ -300,7 +296,7 @@ pub fn enumerate() -> impl Iterator<Item=PciDevice> {
 
 impl PciConfigSpace {
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         PciConfigSpace {
             address_port: PortWriteOnly::<u32>::new(0xCF8),
             data_port: Port::<u32>::new(0xCFC)
@@ -308,7 +304,7 @@ impl PciConfigSpace {
     }
 
     // Unsafe because addr and offset have to point to valid data
-    unsafe fn read(&mut self, addr: &PciAddress, offset: u8) -> u32 {
+    pub unsafe fn read(&mut self, addr: &PciAddress, offset: u8) -> u32 {
 
         let addr_word = Self::get_addr_word(addr, offset);
 
@@ -317,7 +313,7 @@ impl PciConfigSpace {
     }
 
     // Same
-    unsafe fn write(&mut self, addr: &PciAddress, offset: u8, val: u32) {
+    pub unsafe fn write(&mut self, addr: &PciAddress, offset: u8, val: u32) {
 
         let addr_word = Self::get_addr_word(addr, offset);
 

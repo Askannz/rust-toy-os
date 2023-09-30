@@ -12,7 +12,7 @@ use bitvec::view::BitView;
 use bitvec::field::BitField;
 use volatile::Volatile;
 use crate::serial_println;
-use crate::{pci::{PciDevice, PciBar}, get_phys_addr};
+use crate::{pci::{PciDevice, PciBar, PciConfigSpace}, get_phys_addr};
 
 
 pub mod input;
@@ -234,24 +234,31 @@ impl VirtioDevice {
         feature_bits: u32,
     ) -> Self {
 
+        let mut pci_config_space = PciConfigSpace::new();
+
         let virtio_capabilities = pci_device.capabilities.iter()
             .filter(|cap| cap.vendor == 0x09)  // VirtIO vendor
             .map(|cap| {
 
-                let word_0 = pci_device.read_config_space(cap.offset);
-                let word_1 = pci_device.read_config_space(cap.offset + 0x4);
-                let word_2 = pci_device.read_config_space(cap.offset + 0x8);
-                let word_3 = pci_device.read_config_space(cap.offset + 0x12);
+                let words = unsafe {
+                    [
+                        pci_config_space.read(&pci_device.addr, cap.offset),
+                        pci_config_space.read(&pci_device.addr, cap.offset + 0x4),
+                        pci_config_space.read(&pci_device.addr, cap.offset + 0x8),
+                        pci_config_space.read(&pci_device.addr, cap.offset + 0x12),
+                    ]
+                };
 
-                let bits_0 = word_0.view_bits::<Lsb0>();
-                let bits_1 = word_1.view_bits::<Lsb0>();
+
+                let bits_0 = words[0].view_bits::<Lsb0>();
+                let bits_1 = words[1].view_bits::<Lsb0>();
 
                 let cfg_type: u8 = bits_0[24..32].load();
                 let cfg_type = CfgType::n(cfg_type).unwrap();
 
                 let bar = bits_1[..8].load();
-                let bar_offset = word_2;
-                let length = word_3;
+                let bar_offset = words[2];
+                let length = words[3];
 
                 VirtioCapability {
                     cfg_type, bar, bar_offset, length,
@@ -437,6 +444,7 @@ impl VirtioDevice {
     fn get_queue_notify_ptr(&self, boot_info: &'static BootInfo, q_index: u16) -> VirtAddr {
 
         let phys_offset = VirtAddr::new(boot_info.physical_memory_offset);
+        let mut pci_config_space = PciConfigSpace::new();
 
         let notify_config_cap = self.capabilities.iter()
             .find(|cap| cap.cfg_type == CfgType::VIRTIO_PCI_CAP_NOTIFY_CFG)
@@ -462,9 +470,10 @@ impl VirtioDevice {
                 .into()
         };
 
-        let notify_off_multiplier: u64 = self.pci_device.read_config_space(
-            notify_config_cap.pci_config_space_offset + 4
-        ).into();
+        let notify_off_multiplier: u64 = unsafe {
+            let offset = notify_config_cap.pci_config_space_offset + 4;
+            pci_config_space.read(&self.pci_device.addr, offset)
+        }.into();
 
         let addr = 
             phys_offset + 

@@ -310,6 +310,7 @@ fn update_mouse(virtio_input: &mut VirtioInput, dims: (i32, i32), status: MouseS
         } else if event._type == 0x1 {
             status.clicked = event.value == 1
         }
+        //serial_println!("{:?}", status);
     }
 
     status

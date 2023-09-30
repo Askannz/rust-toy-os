@@ -63,6 +63,7 @@ impl VirtioGPU {
         (W, H)
     }
 
+    /*
     pub fn get_max_scanouts(&self, boot_info: &'static BootInfo) -> u32 {
 
         let addr = self.get_device_config_bar_addr(boot_info);
@@ -104,6 +105,7 @@ impl VirtioGPU {
 
         phys_offset + bar_addr + (config_cap.virtio_cap.offset as u64)
     }
+    */
 
     fn send_command(&mut self, input: GpuVirtioMsg) -> GpuVirtioMsg {
 

@@ -81,7 +81,7 @@ unsafe fn from_bytes<T: VirtqSerializable>(bytes: Vec<u8>) -> T {
 #[derive(Clone)]
 pub enum QueueMessage<T: VirtqSerializable> {
     DevWriteOnly,
-    DevReadOnly { buf: T }
+    DevReadOnly { data: T }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -154,9 +154,9 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
             let descriptor = self.descriptor_area.get_mut(desc_index).unwrap();
 
             match msg {
-                QueueMessage::DevReadOnly { buf } => {
+                QueueMessage::DevReadOnly { data } => {
 
-                    let buf = unsafe { to_bytes(buf) };
+                    let buf = unsafe { to_bytes(data) };
                     let buffer = self.buffers.get_mut(desc_index).unwrap();
 
                     assert!(buf.len() <= buffer.len());

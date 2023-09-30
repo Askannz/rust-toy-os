@@ -4,7 +4,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use x86_64::structures::paging::{OffsetPageTable};
 use crate::{virtio::BootInfo, serial_println};
-use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable, from_bytes, to_bytes};
+use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable};
 
 const Q_SIZE: usize = 256;
 // https://docs.oasis-open.org/virtio/virtio/v1.1/csprd01/virtio-v1.1-csprd01.html#x1-2050006
@@ -29,10 +29,8 @@ pub struct VirtioNetwork {
 impl VirtioNetwork {
     pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
 
-        let max_buf_size = size_of::<VirtioNetPacket>();
-
-        let mut receiveq1 = virtio_dev.initialize_queue(boot_info, &mapper, 0, max_buf_size);  // queue 0 (receiveq1)
-        let transmitq1 = virtio_dev.initialize_queue(boot_info, &mapper, 1, max_buf_size);  // queue 1 (transmitq1)
+        let mut receiveq1 = virtio_dev.initialize_queue(boot_info, &mapper, 0);  // queue 0 (receiveq1)
+        let transmitq1 = virtio_dev.initialize_queue(boot_info, &mapper, 1);  // queue 1 (transmitq1)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
         let msg = vec![QueueMessage::DevWriteOnly];

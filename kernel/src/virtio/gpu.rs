@@ -6,7 +6,7 @@ use crate::virtio::BootInfo;
 use crate::{serial_println, pci::PciBar};
 use crate::get_phys_addr;
 
-use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue, to_bytes, from_bytes};
+use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
 
 pub const W: usize = 1366;
 pub const H: usize = 768;
@@ -49,9 +49,7 @@ impl VirtioGPU {
             panic!("VirtIO device is not a GPU device (device type = {}, expected 16)", virtio_dev_type)
         }
 
-        let max_buf_size = size_of::<GpuVirtioMsg>();
-
-        let controlq = virtio_dev.initialize_queue(boot_info, &mapper, 0, max_buf_size);  // queue 0 (controlq)
+        let controlq = virtio_dev.initialize_queue(boot_info, &mapper, 0);  // queue 0 (controlq)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
         VirtioGPU {

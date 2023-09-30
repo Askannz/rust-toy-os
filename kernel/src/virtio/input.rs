@@ -20,8 +20,7 @@ impl VirtioInput {
             panic!("VirtIO device is not an input device (device type = {}, expected 18)", virtio_dev_type)
         }
 
-        let max_buf_size = size_of::<VirtioInputEvent>();
-        let mut eventq = virtio_dev.initialize_queue(boot_info, &mapper, 0, max_buf_size);  // queue 0 (eventq)
+        let mut eventq = virtio_dev.initialize_queue(boot_info, &mapper, 0);  // queue 0 (eventq)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
 

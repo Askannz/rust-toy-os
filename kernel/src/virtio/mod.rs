@@ -50,9 +50,8 @@ struct VirtioCapability {
 }
 
 pub struct VirtioQueue<const Q_SIZE: usize, T: VirtqSerializable> {
-    pouet: T,
     q_index: u16,
-    buffers: Vec<Vec<u8>>,
+    buffers: Vec<Box<T>>,
     descriptor_area: Box<VirtqDescTable<Q_SIZE>>,
     driver_area: Box<VirtqAvail<Q_SIZE>>,
     device_area: Box<VirtqUsed<Q_SIZE>>,
@@ -62,21 +61,6 @@ pub struct VirtioQueue<const Q_SIZE: usize, T: VirtqSerializable> {
 }
 
 pub trait VirtqSerializable: Copy + Default {}
-
-unsafe fn to_bytes<T: VirtqSerializable>(obj: T) -> Vec<u8> {
-    let ptr = (&obj as *const T) as *const u8;
-    slice::from_raw_parts(ptr, size_of::<T>()).to_vec()
-}
-
-unsafe fn from_bytes<T: VirtqSerializable>(bytes: Vec<u8>) -> T {
-
-    let t_size = size_of::<T>();
-    assert!(t_size <= bytes.len());
-    let s = &bytes[0..t_size];
-
-    let ptr = s.as_ptr() as *const T;
-    *ptr
-}
 
 #[derive(Clone)]
 pub enum QueueMessage<T: VirtqSerializable> {
@@ -156,14 +140,11 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
             match msg {
                 QueueMessage::DevReadOnly { data } => {
 
-                    let buf = unsafe { to_bytes(data) };
-                    let buffer = self.buffers.get_mut(desc_index).unwrap();
-
-                    assert!(buf.len() <= buffer.len());
-                    buffer[0..buf.len()].copy_from_slice(&buf);
+                    let buffer = self.buffers.get_mut(desc_index).unwrap().as_mut();
+                    *buffer = data;
         
                     descriptor.flags = 0x0;
-                    descriptor.len = buf.len() as u32;
+                    descriptor.len = size_of::<T>() as u32;
                 },
                 QueueMessage::DevWriteOnly => {
                     descriptor.flags = 0x2;
@@ -210,8 +191,8 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
 
         loop {
             
-            let out_vec = self.buffers[desc_index].clone();
-            out.push(unsafe { from_bytes(out_vec) });
+            let out_val = self.buffers[desc_index].as_ref().clone();
+            out.push(out_val);
 
             let descriptor = self.descriptor_area.get(desc_index).unwrap();
             //serial_println!("Received descriptor: {:?}", descriptor);
@@ -349,7 +330,6 @@ impl VirtioDevice {
         boot_info: &'static BootInfo,
         mapper: &OffsetPageTable,
         q_index: u16,
-        max_buf_size: usize
     ) -> VirtioQueue<Q_SIZE, T> {
 
         // TODO: prevent a queue from being initialized twice
@@ -415,10 +395,10 @@ impl VirtioDevice {
 
         for index in 0..Q_SIZE {
 
-            let buf = vec![0u8; max_buf_size];
+            let buf = Box::new(T::default());
 
             desc_table[index] = VirtqDesc {
-                addr: get_phys_addr(mapper, buf.as_slice()),
+                addr: get_phys_addr(mapper, buf.as_ref()),
                 len: 0,
                 flags: 0x0,
                 next: 0
@@ -432,7 +412,6 @@ impl VirtioDevice {
         let notify_ptr = self.get_queue_notify_ptr(boot_info, q_index);
 
         VirtioQueue {
-            pouet: T::default(),
             q_index,
             buffers,
             descriptor_area: desc_table,

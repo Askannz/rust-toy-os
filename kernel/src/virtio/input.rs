@@ -40,7 +40,7 @@ impl VirtioInput {
         while let Some(resp_list) = self.eventq.try_pop() {
             assert_eq!(resp_list.len(), 1);
             // TODO: check response status code
-            let event = resp_list[0];
+            let event = resp_list.into_iter().next().unwrap();
             out.push(event);
 
             // TODO: unwrap()
@@ -54,7 +54,7 @@ impl VirtioInput {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct VirtioInputEvent {
     pub _type: u16,
     pub code: u16,

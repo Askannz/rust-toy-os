@@ -60,7 +60,7 @@ pub struct VirtioQueue<const Q_SIZE: usize, T: VirtqSerializable> {
     notify_ptr: VirtAddr
 }
 
-pub trait VirtqSerializable: Copy + Default {}
+pub trait VirtqSerializable: Clone + Default {}
 
 #[derive(Clone)]
 pub enum QueueMessage<T: VirtqSerializable> {

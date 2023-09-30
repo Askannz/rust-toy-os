@@ -1,7 +1,7 @@
 use core::convert::TryInto;
 
 use alloc::boxed::Box;
-use alloc::{vec::Vec};
+use alloc::vec::Vec;
 
 use core::mem::size_of;
 use core::cell::RefCell;
@@ -51,7 +51,7 @@ struct VirtioCapability {
 
 pub struct VirtioQueue<const Q_SIZE: usize, T: VirtqSerializable> {
     q_index: u16,
-    buffers: Vec<Box<T>>,
+    buffers: Box<[Box<T>]>,
     descriptor_area: Box<VirtqDescTable<Q_SIZE>>,
     driver_area: Box<VirtqAvail<Q_SIZE>>,
     device_area: Box<VirtqUsed<Q_SIZE>>,
@@ -391,11 +391,10 @@ impl VirtioDevice {
         }
 
         // Allocating buffers
-        let mut buffers = Vec::new();
+        let buffers: Vec<Box<T>> = (0..Q_SIZE).map(|_| Box::new(T::default())).collect();
+        let buffers: Box<[Box<T>]> = buffers.into_boxed_slice();
 
-        for index in 0..Q_SIZE {
-
-            let buf = Box::new(T::default());
+        for (index, buf) in buffers.iter().enumerate() {
 
             desc_table[index] = VirtqDesc {
                 addr: get_phys_addr(mapper, buf.as_ref()),
@@ -403,8 +402,6 @@ impl VirtioDevice {
                 flags: 0x0,
                 next: 0
             };
-
-            buffers.push(buf);
         }
 
         let avail_desc = [true; Q_SIZE];

@@ -2,8 +2,8 @@
 use core::mem::MaybeUninit;
 use alloc::vec;
 use alloc::vec::Vec;
-use x86_64::structures::paging::{OffsetPageTable};
-use crate::{virtio::BootInfo};
+use x86_64::structures::paging::OffsetPageTable;
+use crate::virtio::BootInfo;
 use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable};
 
 const Q_SIZE: usize = 256;

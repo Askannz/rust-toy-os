@@ -1,6 +1,6 @@
-use alloc::vec;
-use alloc::vec::Vec;
-use core::{mem::{MaybeUninit}, sync::atomic::{fence, Ordering}};
+use alloc::{vec, boxed::Box};
+
+use core::{mem::MaybeUninit, sync::atomic::{fence, Ordering}};
 use x86_64::{structures::paging::OffsetPageTable, VirtAddr};
 use crate::virtio::BootInfo;
 use crate::{serial_println, pci::PciBar};
@@ -15,7 +15,7 @@ const Q_SIZE: usize = 64;
 
 pub struct VirtioGPU {
     pub virtio_dev: VirtioDevice,
-    pub framebuffer: Vec<u8>,
+    pub framebuffer: Box<[u8]>,
     controlq: VirtioQueue<Q_SIZE, GpuVirtioMsg>
 }
 
@@ -54,7 +54,7 @@ impl VirtioGPU {
 
         VirtioGPU {
             virtio_dev,
-            framebuffer: vec![0u8; 4*W*H],
+            framebuffer: vec![0u8; W*H*4].into_boxed_slice(),
             controlq
         }
     }
@@ -157,7 +157,7 @@ impl VirtioGPU {
             height: H as u32
         }}).unwrap();
 
-        let fb_addr = get_phys_addr(mapper, self.framebuffer.as_slice());
+        let fb_addr = get_phys_addr(mapper, self.framebuffer.as_ref());
 
         self.send_command_noreply(GpuVirtioMsg { resource_attach_backing: VirtioGpuResourceAttachBacking {
             hdr: VirtioGpuCtrlHdr {

@@ -455,6 +455,16 @@ impl VirtioDevice {
         }
     }
 
+    unsafe fn read_device_specific_config<T>(&self, boot_info: &'static BootInfo) -> &'static T {
+
+        let cap = self.device_specific_config_cap.as_ref().unwrap();
+
+        let addr = get_addr_in_bar(boot_info, &self.pci_device, &cap.virtio_cap);
+        let ptr = addr.as_ptr() as *const T;
+
+        ptr.as_ref().unwrap()
+    }
+
     fn get_queue_notify_ptr(&mut self, boot_info: &'static BootInfo, q_index: u16) -> VirtAddr {
 
         let mut pci_config_space = PciConfigSpace::new();

@@ -3,15 +3,12 @@ use core::mem::MaybeUninit;
 use alloc::vec;
 use alloc::vec::Vec;
 use x86_64::structures::paging::OffsetPageTable;
-use crate::{virtio::BootInfo, serial_println};
-use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable, get_addr_in_bar};
+use crate::virtio::BootInfo;
+use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable};
 
 const Q_SIZE: usize = 256;
 // https://docs.oasis-open.org/virtio/virtio/v1.1/csprd01/virtio-v1.1-csprd01.html#x1-2050006
 pub const MAX_PACKET_SIZE: usize = 1514;
-
-// TODO: read MAC address from the VirtIO device
-const MAC_ADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
 
 #[repr(u32)]
 #[allow(non_camel_case_types)]
@@ -42,20 +39,16 @@ impl VirtioNetwork {
         let transmitq1 = virtio_dev.initialize_queue(boot_info, &mapper, 1);  // queue 1 (transmitq1)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
-        // TEST
-        {
-            let virtio_cap = virtio_dev.device_specific_config_cap.as_ref().unwrap().virtio_cap;
-            let addr = get_addr_in_bar(boot_info, &virtio_dev.pci_device, &virtio_cap);
-            let ptr = addr.as_ptr() as *const VirtioNetConfig;
-            serial_println!("{:x?}", unsafe { *ptr });
-        }
+        let device_config = unsafe {
+            virtio_dev.read_device_specific_config::<VirtioNetConfig>(boot_info)
+        };
 
         let msg = vec![QueueMessage::DevWriteOnly];
         while receiveq1.try_push(msg.clone()).is_some() {}
 
         VirtioNetwork {
             virtio_dev,
-            mac_addr: MAC_ADDR,
+            mac_addr: device_config.mac,
             receiveq1,
             transmitq1
         }

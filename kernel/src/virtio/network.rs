@@ -3,7 +3,7 @@ use core::mem::MaybeUninit;
 use alloc::vec;
 use alloc::vec::Vec;
 use x86_64::structures::paging::OffsetPageTable;
-use crate::virtio::BootInfo;
+use crate::{virtio::BootInfo, serial_println};
 use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable};
 
 const Q_SIZE: usize = 256;
@@ -74,13 +74,6 @@ impl VirtioNetwork {
         assert!(value.len() <= MAX_PACKET_SIZE);
 
         let mut data = [0x00; MAX_PACKET_SIZE];
-
-        // //4a:f2:d5:5e:61:80
-        // data[0..6].copy_from_slice(&MAC_ADDR);
-        // data[6..12].copy_from_slice(&MAC_ADDR);
-        // data[12..14].copy_from_slice(&[0x08, 0x01]);
-        // data[14..16].copy_from_slice(&[0xBA, 0xBA]);
-        // data[16..20].copy_from_slice(&[0x00, 0x00, 0x00, 0x00]);
 
         data[0..value.len()].copy_from_slice(&value[0..value.len()]);
 

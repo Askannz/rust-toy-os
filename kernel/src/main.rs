@@ -10,6 +10,7 @@ use uefi::table::boot::{MemoryDescriptor, MemoryType};
 use linked_list_allocator::LockedHeap;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::{PageTable, OffsetPageTable, Translate, mapper::TranslateResult};
+use smoltcp::wire::{IpAddress, IpCidr};
 
 use applib::{Color, Rect, Framebuffer, FrameBufSlice, Oshandle};
 
@@ -18,10 +19,10 @@ extern crate alloc;
 mod serial;
 mod pci;
 mod virtio;
-//mod interrupts;
-mod smoltcp_demo;
-mod loopback;
 mod smoltcp_virtio;
+mod http;
+
+use http::HttpServer;
 
 
 use virtio::gpu::VirtioGPU;
@@ -190,9 +191,14 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         grab_pos: None
     }).collect();
 
-    let mut virtio_net = Some(virtio_net);
+    serial_println!("Applications loaded");
 
-    let mut sent: bool = false;
+    let port = 1234;
+    let ip_cidr = IpCidr::new(IpAddress::v4(10, 0, 0, 1), 24);
+    let mut server = HttpServer::new(virtio_net, ip_cidr, port);
+
+    serial_println!("HTTP server initialized");
+
 
     serial_println!("Entering main loop");
 
@@ -200,12 +206,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
         mouse_status = update_mouse(&mut virtio_input, (w, h), mouse_status);
 
-        // if mouse_status.clicked && !sent {
-        //     serial_println!("Sending packet");
-        //     let virtio_net = virtio_net.take().unwrap();
-        //     smoltcp_demo::test_smolltcp(virtio_net);
-        //     sent = true;
-        // }
+        server.update();
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 

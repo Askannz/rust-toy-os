@@ -1,3 +1,8 @@
+/*
+    Loosely adapted from
+    https://github.com/smoltcp-rs/smoltcp/blob/533f103a9544fa0de7d75383b13fc021f7b0642b/src/phy/loopback.rs
+*/
+
 use alloc::vec::Vec;
 
 use smoltcp::phy::{self, Device, DeviceCapabilities, Medium};

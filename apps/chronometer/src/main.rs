@@ -38,7 +38,7 @@ fn panic(_info: &PanicInfo) -> ! {
 
 pub fn draw_chrono(fb: &mut FrameBufSlice) {
 
-    const N_CYCLES: u64 = 30000000000;
+    const N_CYCLES: u64 = 30_000_000_000;
     let timestamp = unsafe { core::arch::x86_64::_rdtsc()};
     let angle = (((timestamp % N_CYCLES) as f32) / (N_CYCLES as f32)) * 2.0 * PI;
 

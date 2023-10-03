@@ -19,8 +19,8 @@ pub enum NetworkFeatureBits {
 pub struct VirtioNetwork {
     pub virtio_dev: VirtioDevice,
     pub mac_addr: [u8; 6],
-    receiveq1: VirtioQueue<Q_SIZE, VirtioNetPacket>,
-    transmitq1: VirtioQueue<Q_SIZE, VirtioNetPacket>,
+    receiveq1: VirtioQueue<Q_SIZE>,
+    transmitq1: VirtioQueue<Q_SIZE>,
 }
 
 #[repr(C)]
@@ -33,17 +33,17 @@ struct VirtioNetConfig {
 }
 
 impl VirtioNetwork {
-    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(boot_info: &'static BootInfo, mapper: &'static OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
 
-        let mut receiveq1 = virtio_dev.initialize_queue(boot_info, &mapper, 0);  // queue 0 (receiveq1)
-        let transmitq1 = virtio_dev.initialize_queue(boot_info, &mapper, 1);  // queue 1 (transmitq1)
+        let mut receiveq1 = virtio_dev.initialize_queue(boot_info, mapper, 0);  // queue 0 (receiveq1)
+        let transmitq1 = virtio_dev.initialize_queue(boot_info, mapper, 1);  // queue 1 (transmitq1)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
         let device_config = unsafe {
             virtio_dev.read_device_specific_config::<VirtioNetConfig>(boot_info)
         };
 
-        let msg = vec![QueueMessage::DevWriteOnly];
+        let msg = vec![QueueMessage::<VirtioNetPacket>::DevWriteOnly];
         while receiveq1.try_push(msg.clone()).is_some() {}
 
         VirtioNetwork {
@@ -60,10 +60,10 @@ impl VirtioNetwork {
         let resp_list = self.receiveq1.try_pop()?;
         assert_eq!(resp_list.len(), 1);
 
-        let virtio_packet = resp_list[0];
+        let virtio_packet: VirtioNetPacket = resp_list[0];
 
         self.receiveq1.try_push(vec![
-            QueueMessage::DevWriteOnly
+            QueueMessage::<VirtioNetPacket>::DevWriteOnly
         ]).unwrap();
 
         Some(virtio_packet.data.to_vec())

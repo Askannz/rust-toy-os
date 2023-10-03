@@ -16,7 +16,7 @@ const Q_SIZE: usize = 64;
 pub struct VirtioGPU {
     pub virtio_dev: VirtioDevice,
     pub framebuffer: Box<[u8]>,
-    controlq: VirtioQueue<Q_SIZE, GpuVirtioMsg>
+    controlq: VirtioQueue<Q_SIZE>
 }
 
 #[repr(C)]
@@ -42,14 +42,14 @@ impl Default for GpuVirtioMsg {
 impl VirtqSerializable for GpuVirtioMsg {}
 
 impl VirtioGPU {
-    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(boot_info: &'static BootInfo, mapper: &'static OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
 
         let virtio_dev_type = virtio_dev.get_virtio_device_type();
         if virtio_dev_type != 16 {
             panic!("VirtIO device is not a GPU device (device type = {}, expected 16)", virtio_dev_type)
         }
 
-        let controlq = virtio_dev.initialize_queue(boot_info, &mapper, 0);  // queue 0 (controlq)
+        let controlq = virtio_dev.initialize_queue(boot_info, mapper, 0);  // queue 0 (controlq)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
         VirtioGPU {

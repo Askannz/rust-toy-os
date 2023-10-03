@@ -82,6 +82,8 @@ const WALLPAPER: &'static [u8] = include_bytes!("../../embedded_data/wallpaper.b
 
 const BOOT_INFO: &'static BootInfo  = &BootInfo { physical_memory_offset: 0 };
 
+static mut MAPPER: Option<OffsetPageTable> = None;
+
 #[entry]
 fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
@@ -116,24 +118,29 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         ALLOCATOR.lock().init(desc.phys_start as usize, HEAP_SIZE);
     }
 
+    unsafe {
+        MAPPER.replace({ 
 
-    let mapper = unsafe { 
+            let phys_offset = VirtAddr::new(0x0);
 
-        let phys_offset = VirtAddr::new(0x0);
+            // Get active L4 table
+            let l4_table = {
+                use x86_64::registers::control::Cr3;
+                let (l4_frame, _) = Cr3::read();
 
-        // Get active L4 table
-        let l4_table = {
-            use x86_64::registers::control::Cr3;
-            let (l4_frame, _) = Cr3::read();
+                let phys = l4_frame.start_address();
+                let virt = phys_offset + phys.as_u64();
+                let ptr: *mut PageTable = virt.as_mut_ptr();
+            
+                &mut *ptr
+            };
 
-            let phys = l4_frame.start_address();
-            let virt = phys_offset + phys.as_u64();
-            let ptr: *mut PageTable = virt.as_mut_ptr();
-        
-            &mut *ptr
-        };
+            OffsetPageTable::new(l4_table, phys_offset)
+        });
+    }
 
-        OffsetPageTable::new(l4_table, phys_offset)
+    let mapper = unsafe {
+        MAPPER.as_ref().unwrap()
     };
 
     pci::enumerate().for_each(|dev| serial_println!("Found PCI device, vendor={:#x} device={:#x}", dev.vendor_id, dev.device_id));

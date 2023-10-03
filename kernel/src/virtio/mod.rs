@@ -1,5 +1,7 @@
 use core::convert::TryInto;
 
+use core::marker::PhantomData;
+use core::cell::RefCell;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
@@ -56,9 +58,10 @@ pub enum CfgType {
     VIRTIO_PCI_CAP_PCI_CFG = 0x5,
 }
 
-pub struct VirtioQueue<const Q_SIZE: usize, T: VirtqSerializable> {
+pub struct VirtioQueue<const Q_SIZE: usize> {
+    boot_info: &'static BootInfo,
+    mapper: &'static OffsetPageTable<'static>,
     q_index: u16,
-    buffers: Box<[Box<T>]>,
     descriptor_area: Box<VirtqDescTable<Q_SIZE>>,
     driver_area: Box<VirtqAvail<Q_SIZE>>,
     device_area: Box<VirtqUsed<Q_SIZE>>,
@@ -119,7 +122,7 @@ impl VirtioInterruptAck {
     }
 }
 
-impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
+impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
     fn get_descriptor(&mut self) -> Option<usize> {
         for (desc_index, available) in self.avail_desc.iter_mut().enumerate() {
@@ -131,7 +134,7 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
         return None
     }
 
-    pub fn try_push(&mut self, messages: Vec<QueueMessage<T>>) -> Option<()> {
+    pub fn try_push<T: VirtqSerializable>(&mut self, messages: Vec<QueueMessage<T>>) -> Option<()> {
 
         let n = messages.len();
 
@@ -144,20 +147,15 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
             let desc_index = desc_indices[i];
             let descriptor = self.descriptor_area.get_mut(desc_index).unwrap();
 
-            match msg {
-                QueueMessage::DevReadOnly { data } => {
+            let (buffer, flags) = match msg {
+                QueueMessage::DevReadOnly { data } => (data, 0x0),
+                QueueMessage::DevWriteOnly => (T::default(), 0x2)
+            };
 
-                    let buffer = self.buffers.get_mut(desc_index).unwrap().as_mut();
-                    *buffer = data;
-        
-                    descriptor.flags = 0x0;
-                    descriptor.len = mem::size_of::<T>() as u32;
-                },
-                QueueMessage::DevWriteOnly => {
-                    descriptor.flags = 0x2;
-                    descriptor.len = mem::size_of::<T>() as u32;
-                }
-            }
+            let buffer = Box::new(buffer);
+            descriptor.addr = get_phys_addr(self.mapper, Box::leak(buffer));
+            descriptor.flags = flags;
+            descriptor.len = mem::size_of::<T>() as u32;
 
             if i < n - 1 {
                 descriptor.next = desc_indices[i + 1] as u16;
@@ -182,7 +180,7 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
         Some(())
     }
 
-    pub fn try_pop(&mut self) -> Option<Vec<T>> {
+    pub fn try_pop<T: VirtqSerializable>(&mut self) -> Option<Vec<T>> {
 
         let new_index: usize = self.device_area.idx.into();
         if new_index == self.pop_index {
@@ -197,12 +195,18 @@ impl<const Q_SIZE: usize, T: VirtqSerializable> VirtioQueue<Q_SIZE, T> {
         let mut desc_index: usize = it.id.try_into().unwrap();
 
         loop {
-            
-            let out_val = self.buffers[desc_index].as_ref().clone();
-            out.push(out_val);
 
             let descriptor = self.descriptor_area.get(desc_index).unwrap();
             //serial_println!("Received descriptor: {:?}", descriptor);
+
+            let buffer = unsafe { 
+                // That probably wouldn't work if the physical offset wasn't zero...
+                let virt_addr = self.boot_info.physical_memory_offset + descriptor.addr;
+                let ptr = virt_addr as *mut T;
+                Box::from_raw(ptr)
+            };
+
+            out.push(*buffer);
 
             let next_desc = descriptor.next.into();
 
@@ -361,12 +365,12 @@ impl VirtioDevice {
         assert_eq!(status, 0x08);
     }
 
-    pub fn initialize_queue<const Q_SIZE: usize, T: VirtqSerializable>(
+    pub fn initialize_queue<const Q_SIZE: usize>(
         &mut self,
         boot_info: &'static BootInfo,
-        mapper: &OffsetPageTable,
+        mapper: &'static OffsetPageTable,
         q_index: u16,
-    ) -> VirtioQueue<Q_SIZE, T> {
+    ) -> VirtioQueue<Q_SIZE> {
 
         // TODO: prevent a queue from being initialized twice
 
@@ -426,13 +430,23 @@ impl VirtioDevice {
         }
 
         // Allocating buffers
-        let buffers: Vec<Box<T>> = (0..Q_SIZE).map(|_| Box::new(T::default())).collect();
-        let buffers: Box<[Box<T>]> = buffers.into_boxed_slice();
+        // let buffers: Vec<Box<T>> = (0..Q_SIZE).map(|_| Box::new(T::default())).collect();
+        // let buffers: Box<[Box<T>]> = buffers.into_boxed_slice();
 
-        for (index, buf) in buffers.iter().enumerate() {
+        // for (index, buf) in buffers.iter().enumerate() {
+
+        //     desc_table[index] = VirtqDesc {
+        //         addr: get_phys_addr(mapper, buf.as_ref()),
+        //         len: 0,
+        //         flags: 0x0,
+        //         next: 0
+        //     };
+        // }
+
+        for index in 0..Q_SIZE {
 
             desc_table[index] = VirtqDesc {
-                addr: get_phys_addr(mapper, buf.as_ref()),
+                addr: 0x0,
                 len: 0,
                 flags: 0x0,
                 next: 0
@@ -444,8 +458,9 @@ impl VirtioDevice {
         let notify_ptr = self.get_queue_notify_ptr(boot_info, q_index);
 
         VirtioQueue {
+            boot_info,
+            mapper,
             q_index,
-            buffers,
             descriptor_area: desc_table,
             driver_area: available_ring,
             device_area: used_ring,

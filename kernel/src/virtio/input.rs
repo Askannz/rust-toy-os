@@ -9,22 +9,22 @@ const Q_SIZE: usize = 64;
 
 pub struct VirtioInput {
     pub virtio_dev: VirtioDevice,
-    eventq: VirtioQueue<Q_SIZE, VirtioInputEvent>
+    eventq: VirtioQueue<Q_SIZE>
 }
 
 impl VirtioInput {
-    pub fn new(boot_info: &'static BootInfo, mapper: &OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(boot_info: &'static BootInfo, mapper: &'static OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
 
         let virtio_dev_type = virtio_dev.get_virtio_device_type();
         if virtio_dev_type != 18 {
             panic!("VirtIO device is not an input device (device type = {}, expected 18)", virtio_dev_type)
         }
 
-        let mut eventq = virtio_dev.initialize_queue(boot_info, &mapper, 0);  // queue 0 (eventq)
+        let mut eventq = virtio_dev.initialize_queue(boot_info, mapper, 0);  // queue 0 (eventq)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
 
-        let msg = vec![QueueMessage::DevWriteOnly];
+        let msg = vec![QueueMessage::<VirtioInputEvent>::DevWriteOnly];
         while eventq.try_push(msg.clone()).is_some() {}
 
         VirtioInput {
@@ -45,7 +45,7 @@ impl VirtioInput {
 
             // TODO: unwrap()
             self.eventq.try_push(vec![
-                QueueMessage::DevWriteOnly
+                QueueMessage::<VirtioInputEvent>::DevWriteOnly
             ]);
         }
 

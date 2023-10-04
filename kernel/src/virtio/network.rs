@@ -1,5 +1,6 @@
 
 use core::mem::MaybeUninit;
+use core::mem;
 use alloc::vec;
 use alloc::vec::Vec;
 use x86_64::structures::paging::OffsetPageTable;
@@ -44,7 +45,8 @@ impl VirtioNetwork {
         };
 
         let msg = vec![QueueMessage::<VirtioNetPacket>::DevWriteOnly];
-        while receiveq1.try_push(msg.clone()).is_some() {}
+
+        unsafe { while receiveq1.try_push(msg.clone()).is_some() {} }
 
         VirtioNetwork {
             virtio_dev,
@@ -57,14 +59,16 @@ impl VirtioNetwork {
 
     pub fn try_recv(&mut self) -> Option<Vec<u8>> {
 
-        let resp_list = self.receiveq1.try_pop()?;
+        let resp_list = unsafe { self.receiveq1.try_pop()? };
         assert_eq!(resp_list.len(), 1);
 
         let virtio_packet: VirtioNetPacket = resp_list[0];
 
-        self.receiveq1.try_push(vec![
-            QueueMessage::<VirtioNetPacket>::DevWriteOnly
-        ]).unwrap();
+        unsafe {
+            self.receiveq1.try_push(vec![
+                QueueMessage::<VirtioNetPacket>::DevWriteOnly
+            ]).unwrap();
+        }
 
         Some(virtio_packet.data.to_vec())
     }
@@ -90,9 +94,13 @@ impl VirtioNetwork {
             data
         };
 
-        self.transmitq1.try_push(vec![
-            QueueMessage::DevReadOnly { data: msg },
-        ])
+        let virtio_buf_len = value.len() + core::mem::size_of::<VirtioNetHdr>();
+
+        unsafe {
+            self.transmitq1.try_push(vec![
+                QueueMessage::DevReadOnly { data: msg, len: Some(virtio_buf_len) },
+            ])
+        }
     }
 }
 

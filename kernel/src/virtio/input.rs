@@ -25,7 +25,7 @@ impl VirtioInput {
 
 
         let msg = vec![QueueMessage::<VirtioInputEvent>::DevWriteOnly];
-        while eventq.try_push(msg.clone()).is_some() {}
+        unsafe { while eventq.try_push(msg.clone()).is_some() {} };
 
         VirtioInput {
             virtio_dev,
@@ -37,16 +37,18 @@ impl VirtioInput {
 
         let mut out = Vec::new();
 
-        while let Some(resp_list) = self.eventq.try_pop() {
+        while let Some(resp_list) = unsafe { self.eventq.try_pop() } {
             assert_eq!(resp_list.len(), 1);
             // TODO: check response status code
             let event = resp_list.into_iter().next().unwrap();
             out.push(event);
 
             // TODO: unwrap()
-            self.eventq.try_push(vec![
-                QueueMessage::<VirtioInputEvent>::DevWriteOnly
-            ]);
+            unsafe{
+                self.eventq.try_push(vec![
+                    QueueMessage::<VirtioInputEvent>::DevWriteOnly
+                ]);
+            }
         }
 
         out

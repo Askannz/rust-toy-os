@@ -109,13 +109,16 @@ impl VirtioGPU {
 
     fn send_command(&mut self, input: GpuVirtioMsg) -> GpuVirtioMsg {
 
-        self.controlq.try_push(vec![
-            QueueMessage::DevReadOnly { data: input },
-            QueueMessage::DevWriteOnly
-        ]).unwrap();
+        unsafe {
+            self.controlq.try_push(vec![
+                QueueMessage::DevReadOnly { data: input, len: None },
+                QueueMessage::DevWriteOnly
+            ]).unwrap();
+        }
+
 
         loop {
-           if let Some(resp_list) = self.controlq.try_pop() {
+           if let Some(resp_list) = unsafe { self.controlq.try_pop() } {
                 assert_eq!(resp_list.len(), 2);
                 // TODO: check response status code
                 break resp_list[1];

@@ -75,7 +75,7 @@ pub trait VirtqSerializable: Clone + Default {}
 #[derive(Clone)]
 pub enum QueueMessage<T: VirtqSerializable> {
     DevWriteOnly,
-    DevReadOnly { data: T }
+    DevReadOnly { data: T, len: Option<usize> }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -134,7 +134,7 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
         return None
     }
 
-    pub fn try_push<T: VirtqSerializable>(&mut self, messages: Vec<QueueMessage<T>>) -> Option<()> {
+    pub unsafe fn try_push<T: VirtqSerializable>(&mut self, messages: Vec<QueueMessage<T>>) -> Option<()> {
 
         let n = messages.len();
 
@@ -147,15 +147,24 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
             let desc_index = desc_indices[i];
             let descriptor = self.descriptor_area.get_mut(desc_index).unwrap();
 
-            let (buffer, flags) = match msg {
-                QueueMessage::DevReadOnly { data } => (data, 0x0),
-                QueueMessage::DevWriteOnly => (T::default(), 0x2)
+            let buffer = match msg {
+                QueueMessage::DevReadOnly { data, len } => {
+                    descriptor.flags = 0x0;
+                    descriptor.len = match len {
+                        Some(len) => len,
+                        None => mem::size_of::<T>()
+                    } as u32;
+                    data
+                },
+                QueueMessage::DevWriteOnly => {
+                    descriptor.flags = 0x2;
+                    descriptor.len = mem::size_of::<T>() as u32;
+                    T::default()
+                }
             };
 
             let buffer = Box::new(buffer);
             descriptor.addr = get_phys_addr(self.mapper, Box::leak(buffer));
-            descriptor.flags = flags;
-            descriptor.len = mem::size_of::<T>() as u32;
 
             if i < n - 1 {
                 descriptor.next = desc_indices[i + 1] as u16;
@@ -180,7 +189,7 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
         Some(())
     }
 
-    pub fn try_pop<T: VirtqSerializable>(&mut self) -> Option<Vec<T>> {
+    pub unsafe fn try_pop<T: VirtqSerializable>(&mut self) -> Option<Vec<T>> {
 
         let new_index: usize = self.device_area.idx.into();
         if new_index == self.pop_index {

@@ -2,8 +2,9 @@
 use alloc::vec;
 use alloc::vec::Vec;
 use x86_64::structures::paging::OffsetPageTable;
+use crate::serial_println;
 use crate::virtio::BootInfo;
-use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
+use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue, VirtqDescTable};
 
 const Q_SIZE: usize = 64;
 
@@ -21,6 +22,7 @@ impl VirtioInput {
         }
 
         let mut eventq = virtio_dev.initialize_queue(boot_info, mapper, 0);  // queue 0 (eventq)
+        //serial_println!("out of initialize_queue(): {:?}", eventq.descriptor_area.as_ptr());
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
 

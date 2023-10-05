@@ -1,7 +1,4 @@
 use core::convert::TryInto;
-
-use core::marker::PhantomData;
-use core::cell::RefCell;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
@@ -58,14 +55,63 @@ pub enum CfgType {
     VIRTIO_PCI_CAP_PCI_CFG = 0x5,
 }
 
+struct VirtQStorage<const Q_SIZE: usize> {
+    descriptor_area: VirtqDescTable<Q_SIZE>,
+    driver_area: VirtqAvail<Q_SIZE>,
+    device_area: VirtqUsed<Q_SIZE>,
+    avail_desc: [bool; Q_SIZE],
+}
+
+impl<const Q_SIZE: usize> VirtQStorage<Q_SIZE> {
+    const fn new() -> Self {
+
+        let desc_table = {
+
+            let zero_desc = VirtqDesc {
+                addr: 0x0,
+                len: 0,
+                flags: 0x0,
+                next: 0
+            };
+    
+            [zero_desc; Q_SIZE]
+        };
+    
+        let available_ring = VirtqAvail {
+            flags: 0x0,
+            idx: 0,
+            ring: [0u16; Q_SIZE],
+            used_event: 0 // Unused
+        };
+    
+        let used_ring = {
+    
+            let zero_used_elem = VirtqUsedElem { id: 0, len: 0};
+    
+            VirtqUsed {
+                flags: 0x0,
+                idx: 0,
+                ring: [zero_used_elem; Q_SIZE],
+                avail_event: 0 // Unused
+            }
+        };
+
+        let avail_desc = [true; Q_SIZE];
+
+        VirtQStorage {
+            descriptor_area: desc_table,
+            driver_area: available_ring,
+            device_area: used_ring,
+            avail_desc
+        }
+    }
+}
+
 pub struct VirtioQueue<const Q_SIZE: usize> {
     boot_info: &'static BootInfo,
     mapper: &'static OffsetPageTable<'static>,
     q_index: u16,
-    descriptor_area: Box<VirtqDescTable<Q_SIZE>>,
-    driver_area: Box<VirtqAvail<Q_SIZE>>,
-    device_area: Box<VirtqUsed<Q_SIZE>>,
-    avail_desc: [bool; Q_SIZE],
+    storage: Box<VirtQStorage<Q_SIZE>>,
     pop_index: usize,
     notify_ptr: VirtAddr
 }
@@ -125,7 +171,7 @@ impl VirtioInterruptAck {
 impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
     fn get_descriptor(&mut self) -> Option<usize> {
-        for (desc_index, available) in self.avail_desc.iter_mut().enumerate() {
+        for (desc_index, available) in self.storage.avail_desc.iter_mut().enumerate() {
             if *available {
                 *available = false;
                 return Some(desc_index)
@@ -145,7 +191,7 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
         for (i, msg) in messages.into_iter().enumerate() {
 
             let desc_index = desc_indices[i];
-            let descriptor = self.descriptor_area.get_mut(desc_index).unwrap();
+            let descriptor = self.storage.descriptor_area.get_mut(desc_index).unwrap();
 
             let buffer = match msg {
                 QueueMessage::DevReadOnly { data, len } => {
@@ -172,10 +218,10 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
             }
         }
 
-        let ring_index: usize = self.driver_area.idx.into();
-        self.driver_area.ring[ring_index % Q_SIZE] = desc_indices[0] as u16;
+        let ring_index: usize = self.storage.driver_area.idx.into();
+        self.storage.driver_area.ring[ring_index % Q_SIZE] = desc_indices[0] as u16;
 
-        self.driver_area.idx += 1;
+        self.storage.driver_area.idx += 1;
 
         let q_index: u8 = self.q_index.try_into().unwrap();
 
@@ -191,13 +237,13 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
     pub unsafe fn try_pop<T: VirtqSerializable>(&mut self) -> Option<Vec<T>> {
 
-        let new_index: usize = self.device_area.idx.into();
+        let new_index: usize = self.storage.device_area.idx.into();
         if new_index == self.pop_index {
             return None;
         }
 
         let idx: usize = self.pop_index.try_into().unwrap();
-        let it: VirtqUsedElem = self.device_area.ring[idx % Q_SIZE];
+        let it: VirtqUsedElem = self.storage.device_area.ring[idx % Q_SIZE];
         //serial_println!("Received element: {:?}", it);
 
         let mut out = Vec::new();
@@ -205,7 +251,7 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
         loop {
 
-            let descriptor = self.descriptor_area.get(desc_index).unwrap();
+            let descriptor = self.storage.descriptor_area.get(desc_index).unwrap();
             //serial_println!("Received descriptor: {:?}", descriptor);
 
             let buffer = unsafe { 
@@ -219,7 +265,7 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
             let next_desc = descriptor.next.into();
 
-            self.avail_desc[desc_index] = true;
+            self.storage.avail_desc[desc_index] = true;
 
             if next_desc != 0 {
                 desc_index = next_desc
@@ -383,43 +429,13 @@ impl VirtioDevice {
 
         // TODO: prevent a queue from being initialized twice
 
-        let mut desc_table = Box::new({
-
-            let zero_desc = VirtqDesc {
-                addr: 0x0,
-                len: 0,
-                flags: 0x0,
-                next: 0
-            };
-    
-            [zero_desc; Q_SIZE]
-        });
-    
-        let available_ring = Box::new(VirtqAvail {
-            flags: 0x0,
-            idx: 0,
-            ring: [0u16; Q_SIZE],
-            used_event: 0 // Unused
-        });
-    
-        let used_ring = Box::new({
-    
-            let zero_used_elem = VirtqUsedElem { id: 0, len: 0};
-    
-            VirtqUsed {
-                flags: 0x0,
-                idx: 0,
-                ring: [zero_used_elem; Q_SIZE],
-                avail_event: 0 // Unused
-            }
-        });
-
+        let storage = Box::new(VirtQStorage::new());
 
         // Calculating addresses
     
-        let descr_area_addr = get_phys_addr(mapper, desc_table.as_ref());
-        let driver_area_addr = get_phys_addr(mapper, available_ring.as_ref());
-        let dev_area_addr = get_phys_addr(mapper, used_ring.as_ref());
+        let descr_area_addr = get_phys_addr(mapper, storage.descriptor_area.as_ref());
+        let driver_area_addr = get_phys_addr(mapper, &storage.driver_area);
+        let dev_area_addr = get_phys_addr(mapper, &storage.device_area);
 
         // serial_println!("descr_area_addr={:x}", descr_area_addr);
         // serial_println!("driver_area_addr={:x}", driver_area_addr);
@@ -438,42 +454,13 @@ impl VirtioDevice {
             assert_eq!(q_size, Q_SIZE);
         }
 
-        // Allocating buffers
-        // let buffers: Vec<Box<T>> = (0..Q_SIZE).map(|_| Box::new(T::default())).collect();
-        // let buffers: Box<[Box<T>]> = buffers.into_boxed_slice();
-
-        // for (index, buf) in buffers.iter().enumerate() {
-
-        //     desc_table[index] = VirtqDesc {
-        //         addr: get_phys_addr(mapper, buf.as_ref()),
-        //         len: 0,
-        //         flags: 0x0,
-        //         next: 0
-        //     };
-        // }
-
-        for index in 0..Q_SIZE {
-
-            desc_table[index] = VirtqDesc {
-                addr: 0x0,
-                len: 0,
-                flags: 0x0,
-                next: 0
-            };
-        }
-
-        let avail_desc = [true; Q_SIZE];
-
         let notify_ptr = self.get_queue_notify_ptr(boot_info, q_index);
 
         VirtioQueue {
             boot_info,
             mapper,
             q_index,
-            descriptor_area: desc_table,
-            driver_area: available_ring,
-            device_area: used_ring,
-            avail_desc,
+            storage,
             pop_index: 0,
             notify_ptr
         }
@@ -556,7 +543,7 @@ impl VirtioDevice {
 }
 
 
-type VirtqDescTable<const Q_SIZE: usize> = [VirtqDesc; Q_SIZE];
+pub type VirtqDescTable<const Q_SIZE: usize> = [VirtqDesc; Q_SIZE];
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]

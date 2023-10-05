@@ -3,6 +3,7 @@
     https://github.com/smoltcp-rs/smoltcp/blob/533f103a9544fa0de7d75383b13fc021f7b0642b/examples/loopback.rs
 */
 
+use alloc::vec;
 use smoltcp::iface::{Config, Interface, SocketSet, SocketHandle};
 use smoltcp::phy::{Device, Medium};
 use smoltcp::socket::tcp;
@@ -45,10 +46,8 @@ impl<'a> HttpServer<'a> {
         });
 
         let server_socket = {
-            static mut TCP_SERVER_RX_DATA: [u8; BUF_SIZE] = [0; BUF_SIZE];
-            static mut TCP_SERVER_TX_DATA: [u8; BUF_SIZE] = [0; BUF_SIZE];
-            let tcp_rx_buffer = tcp::SocketBuffer::new(unsafe { &mut TCP_SERVER_RX_DATA[..] });
-            let tcp_tx_buffer = tcp::SocketBuffer::new(unsafe { &mut TCP_SERVER_TX_DATA[..] });
+            let tcp_rx_buffer = tcp::SocketBuffer::new(vec![0u8; BUF_SIZE]);
+            let tcp_tx_buffer = tcp::SocketBuffer::new(vec![0u8; BUF_SIZE]);
             tcp::Socket::new(tcp_rx_buffer, tcp_tx_buffer)
         };
     

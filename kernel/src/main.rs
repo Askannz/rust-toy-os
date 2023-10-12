@@ -22,6 +22,8 @@ mod virtio;
 mod smoltcp_virtio;
 mod http;
 
+mod wasmi_test;
+
 use http::HttpServer;
 
 
@@ -206,6 +208,8 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     serial_println!("HTTP server initialized");
 
+    serial_println!("WASM test");
+    wasmi_test::wasmi_test().unwrap();
 
     serial_println!("Entering main loop");
 

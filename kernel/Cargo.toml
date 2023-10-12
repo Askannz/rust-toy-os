@@ -17,3 +17,5 @@ pic8259 = "0.10.1"
 applib = { path = "../applib" }
 smoltcp = { version = "0.10.0", default-features = false, features = ["log", "proto-ipv4", "socket-tcp", "medium-ethernet", "alloc"] }
 enumn = "0.1.12"
+wasmi = { version = "0.31.0", default-features = false }
+anyhow = { version = "1.0.75", default-features = false }

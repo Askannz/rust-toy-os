@@ -1,2 +1,5 @@
+[unstable]
+build-std = ["core", "alloc"]
+
 [build]
 target = "wasm32-unknown-unknown"

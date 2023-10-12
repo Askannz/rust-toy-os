@@ -13,3 +13,8 @@ panic = "abort" # disable stack unwinding on panic
 lto = true
 strip = true 
 codegen-units = 1
+
+[lib]
+name = "applib"
+test = false
+bench = false

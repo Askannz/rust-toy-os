@@ -18,3 +18,8 @@ codegen-units = 1
 uart_16550 = "0.2.18"
 micromath = "2.0.0"
 applib = { path = "../../applib" }
+
+[[bin]]
+name = "chronometer"
+test = false
+bench = false

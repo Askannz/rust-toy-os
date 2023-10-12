@@ -1,7 +1,7 @@
 use alloc::vec;
 use crate::serial_println;
 use anyhow::Result;
-use wasmi::{Engine, Store, Func, Caller, Module, Linker};
+use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config};
 
 const WASM_CODE: &'static [u8] = include_bytes!("../../embedded_data/wasm_test.wasm");
 
@@ -17,7 +17,7 @@ pub fn wasmi_test() -> Result<()> {
 
     serial_println!("Starting WASM test");
 
-    let engine = Engine::default();
+    let engine = Engine::new(&Config::default().consume_fuel(true));
     let module = Module::new(&engine, WASM_CODE).unwrap();
     let mut store: Store<HostState> = Store::new(&engine, ());
     
@@ -53,7 +53,9 @@ pub fn wasmi_test() -> Result<()> {
     let hello = instance.get_typed_func::<(), i32>(&store, "hello").unwrap();
 
     serial_println!("Calling WASM");
+    store.add_fuel(100000).unwrap();
     let res = hello.call(&mut store, ()).unwrap();
+    serial_println!("Fuel consumed {:?}", store.fuel_consumed());
 
     serial_println!("Result: {}", res);
 

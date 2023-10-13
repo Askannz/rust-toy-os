@@ -9,7 +9,7 @@ use uart_16550::SerialPort;
 use core::cmp::Ordering;
 use micromath::F32Ext;
 
-use applib::{Oshandle, Color, FrameBufSlice};
+use applib::{AppHandle, Color, FrameBufSlice};
 
 const COLORS: [Color; 6] = [
     Color(0xff, 0x00, 0x00),
@@ -24,9 +24,9 @@ const PI: f32 = 3.14159265359;
 
 
 #[no_mangle]
-pub extern "C" fn efi_main(handle: &mut Oshandle) {
+pub extern "C" fn efi_main(handle: &mut AppHandle) {
 
-    draw_chrono(&mut handle.fb);
+    draw_chrono(&mut handle.app_framebuffer);
 }
 
 

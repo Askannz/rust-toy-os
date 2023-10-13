@@ -6,7 +6,7 @@ use core::panic::PanicInfo;
 use core::cmp::Ordering;
 use micromath::F32Ext;
 
-use applib::{Oshandle, Color, FrameBufSlice};
+use applib::{AppHandle, Color, FrameBufSlice};
 
 const COLORS: [Color; 6] = [
     Color(0xff, 0x00, 0x00),
@@ -23,14 +23,15 @@ const NB_QUADS: usize = 6;
 
 
 #[no_mangle]
-pub extern "C" fn efi_main(handle: &mut Oshandle) {
+pub extern "C" fn efi_main(handle: &mut AppHandle) {
 
-    let win_rect = handle.fb.rect.clone();
+    let win_rect = &handle.app_rect;
+    let pointer = &handle.system_state.pointer;
 
-    let xf = (handle.cursor_x as f32) / ((win_rect.w - 1) as f32);
-    let yf = (handle.cursor_y as f32) / ((win_rect.h - 1) as f32);
+    let xf = (pointer.x as f32) / ((win_rect.w - 1) as f32);
+    let yf = (pointer.y as f32) / ((win_rect.h - 1) as f32);
 
-    draw_cube(&mut handle.fb, xf, yf);
+    draw_cube(&mut handle.app_framebuffer, xf, yf);
 }
 
 

@@ -1,5 +1,30 @@
 #![no_std]
 
+#[repr(C)]
+pub struct AppHandle<'a, 'b> {
+    pub system_state: SystemState,
+    pub app_rect: Rect,
+    pub app_framebuffer: FrameBufSlice<'a, 'b>,
+} 
+
+
+#[derive(Debug, Clone)]
+#[repr(C)]
+pub struct SystemState {
+    pub pointer: PointerState,
+    pub time: u64,
+}
+
+#[derive(Debug, Clone)]
+#[repr(C)]
+pub struct PointerState {
+    pub x: i32,
+    pub y: i32,
+    pub clicked: bool
+}
+
+
+
 #[derive(Clone)]
 pub struct Color(pub u8, pub u8, pub u8);
 #[derive(Clone)]
@@ -20,8 +45,14 @@ pub struct Framebuffer<'a> {
 }
 
 pub struct FrameBufSlice<'a, 'b> {
-    pub  fb: &'b mut Framebuffer<'a>,
+    pub fb: &'b mut Framebuffer<'a>,
     pub rect: Rect
+}
+
+impl<'a> Framebuffer<'a> {
+    pub fn get_slice<'b>(&'b mut self, rect: &Rect) -> FrameBufSlice<'a, 'b> {
+        FrameBufSlice { fb: self, rect: rect.clone() }
+    }
 }
 
 impl<'a, 'b> FrameBufSlice<'a, 'b> {
@@ -34,10 +65,3 @@ impl<'a, 'b> FrameBufSlice<'a, 'b> {
         self.fb.data[i+3] = 0xff;
     }
 }
-
-#[repr(C)]
-pub struct Oshandle<'a, 'b> {
-    pub fb: FrameBufSlice<'a, 'b>,
-    pub cursor_x: i32,
-    pub cursor_y: i32,
-} 

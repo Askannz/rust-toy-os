@@ -12,7 +12,7 @@ use x86_64::VirtAddr;
 use x86_64::structures::paging::{PageTable, OffsetPageTable, Translate, mapper::TranslateResult};
 use smoltcp::wire::{IpAddress, IpCidr};
 
-use applib::{Color, Rect, Framebuffer, FrameBufSlice, Oshandle};
+use applib::{Color, Rect, Framebuffer, AppHandle, SystemState, PointerState};
 
 extern crate alloc;
 
@@ -67,13 +67,6 @@ const APPLICATIONS: [AppDescriptor; 2] = [
         init_win_rect: Rect { x0: 600, y0: 200, w: 200, h: 200 }
     },
 ];
-
-#[derive(Debug)]
-struct MouseStatus {
-    x: i32,
-    y: i32,
-    clicked: bool
-}
 
 const FONT_BYTES: &'static [u8] = include_bytes!("../../embedded_data/fontmap.bin");
 const FONT_NB_CHARS: usize = 95;
@@ -192,7 +185,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     let (w, h) = virtio_gpu.get_dims();
     let (w, h) = (w as i32, h as i32);
-    let mut mouse_status = MouseStatus { x: 0, y: 0, clicked: false };
+    let mut mouse_status = PointerState { x: 0, y: 0, clicked: false };
     let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
         descriptor: app_desc.clone(),
         is_open: false,
@@ -234,7 +227,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
 }
 
-fn update_apps(fb: &mut Framebuffer, mouse_status: &MouseStatus, applications: &mut Vec<App>) {
+fn update_apps(fb: &mut Framebuffer, mouse_status: &PointerState, applications: &mut Vec<App>) {
 
     const COLOR_IDLE: Color = Color(0x44, 0x44, 0x44);
     const COLOR_HOVER: Color = Color(0x88, 0x88, 0x88);
@@ -287,24 +280,27 @@ fn update_apps(fb: &mut Framebuffer, mouse_status: &MouseStatus, applications: &
             draw_rect(fb, &app.rect, &Color(0x00, 0x00, 0x00), 0.5);
             draw_str(fb, app.rect.x0, app.rect.y0 - 30, app.descriptor.name, &Color(0xff, 0xff, 0xff));
 
-            let mut handle = Oshandle {
-                fb: FrameBufSlice { fb, rect: app.rect.clone() },
-                cursor_x: mouse_status.x - app.rect.x0,
-                cursor_y: mouse_status.y - app.rect.y0
+            let handle = AppHandle {
+                system_state: SystemState { 
+                    pointer: mouse_status.clone(),
+                    time: 0u64  // TODO !
+                },
+                app_rect: app.rect.clone(),
+                app_framebuffer: fb.get_slice(&app.rect),
             };
 
-            call_app(&mut handle, &app.descriptor);
+            call_app(handle, &app.descriptor);
         }
     }
 }
 
-fn draw_cursor(fb: &mut Framebuffer, mouse_status: &MouseStatus) {
+fn draw_cursor(fb: &mut Framebuffer, mouse_status: &PointerState) {
     let x = mouse_status.x;
     let y = mouse_status.y;
     draw_rect(fb, &Rect { x0: x, y0: y, w: 5, h: 5 }, &Color(0xff, 0xff, 0xff), 1.0)
 }
 
-fn update_mouse(virtio_input: &mut VirtioInput, dims: (i32, i32), status: MouseStatus) -> MouseStatus {
+fn update_mouse(virtio_input: &mut VirtioInput, dims: (i32, i32), status: PointerState) -> PointerState {
 
     let (w, h) = dims;
 
@@ -386,16 +382,16 @@ fn draw_char(fb: &mut Framebuffer, x0: i32, y0: i32, c: u8, color: &Color) {
 
 }
 
-fn call_app(handle: &mut Oshandle, app: &AppDescriptor) -> () {
+fn call_app(mut handle: AppHandle, app: &AppDescriptor) -> () {
 
     let code_ptr =  app.data.as_ptr();
     let entrypoint_ptr = unsafe { code_ptr.offset(app.entrypoint as isize)};
 
-    let exec_data: extern "C" fn (&mut Oshandle) = unsafe {  
+    let exec_data: extern "C" fn (&mut AppHandle) = unsafe {  
         core::mem::transmute(entrypoint_ptr)
     };
 
-    exec_data(handle);
+    exec_data(&mut handle);
 }
 
 

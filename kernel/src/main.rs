@@ -119,22 +119,11 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     system_table.stdout().reset(false).unwrap();
 
-    let mmap_storage = {
-        let base_size = system_table.boot_services().memory_map_size().map_size;
-        let extra = 8 * core::mem::size_of::<MemoryDescriptor>();
-        let max_mmap_size = base_size + extra;
-        let ptr = system_table
-            .boot_services()
-            .allocate_pool(MemoryType::LOADER_DATA, max_mmap_size)
-            .unwrap();
-        unsafe { core::slice::from_raw_parts_mut(ptr, max_mmap_size) }
-    };
-
     let (system_table, memory_map) = system_table
-        .exit_boot_services(image, mmap_storage)
-        .expect("Failed to exit boot services");
+        .exit_boot_services(MemoryType::LOADER_DATA);
 
     let desc = memory_map
+        .entries()
         .filter(|desc| desc.ty == MemoryType::CONVENTIONAL)
         .max_by_key(|desc| desc.page_count)
         .unwrap();

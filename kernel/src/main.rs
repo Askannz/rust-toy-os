@@ -5,7 +5,7 @@
 
 use core::panic::PanicInfo;
 use alloc::vec::Vec;
-use uefi::prelude::{RuntimeServices, entry, Handle, SystemTable, Boot, Status};
+use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use linked_list_allocator::LockedHeap;
 use x86_64::VirtAddr;
@@ -18,6 +18,7 @@ extern crate alloc;
 
 mod serial;
 mod logging;
+mod time;
 mod pci;
 mod virtio;
 mod smoltcp_virtio;
@@ -25,6 +26,7 @@ mod http;
 
 mod wasmi_test;
 
+use time::SystemClock;
 use http::HttpServer;
 
 
@@ -79,41 +81,6 @@ const WALLPAPER: &'static [u8] = include_bytes!("../../embedded_data/wallpaper.b
 const BOOT_INFO: &'static BootInfo  = &BootInfo { physical_memory_offset: 0 };
 
 static mut MAPPER: Option<OffsetPageTable> = None;
-
-struct SystemClock {
-    period_s: f64,
-}
-
-impl SystemClock {
-    fn new(runtime_services: &RuntimeServices) -> Self {
-
-        // Waiting for the "seconds" value to change
-        let s1 = runtime_services.get_time().unwrap().second();
-        let s2 = loop {
-            let s2 = runtime_services.get_time().unwrap().second();
-            if s1 != s2 { break s2 }
-        };
-
-        // Waiting approximately one second and measuring the change in rdtsc
-        let n1 = unsafe { core::arch::x86_64::_rdtsc()};
-        loop {
-            let s3 = runtime_services.get_time().unwrap().second();
-            if s2 != s3 { break; }
-        };
-        let n2 = unsafe { core::arch::x86_64::_rdtsc()};
-
-        let period_s = 1.0 / ((n2 - n1) as f64);
-        let freq_ghz = 1.0 / period_s / 1E9;
-        serial_println!("{} cycles in 1s, frequency estimated to {:.3}Ghz", n2 - n1, freq_ghz);
-
-        SystemClock { period_s }
-    }
-
-    fn time(&self) -> u64 {  // in milliseconds
-        let n = unsafe { core::arch::x86_64::_rdtsc()};
-        (1000f64 * (n as f64) * self.period_s) as u64
-    }
-}
 
 static LOGGER: logging::SerialLogger = logging::SerialLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
@@ -237,8 +204,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let runtime_services = unsafe { system_table.runtime_services() };
     let clock = SystemClock::new(runtime_services);
-
-    serial_println!("period = {} s", clock.period_s);
 
     serial_println!("Entering main loop");
 

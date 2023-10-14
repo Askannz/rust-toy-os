@@ -17,6 +17,7 @@ use applib::{Color, Rect, Framebuffer, AppHandle, SystemState, PointerState};
 extern crate alloc;
 
 mod serial;
+mod logging;
 mod pci;
 mod virtio;
 mod smoltcp_virtio;
@@ -114,13 +115,21 @@ impl SystemClock {
     }
 }
 
+static LOGGER: logging::SerialLogger = logging::SerialLogger;
+const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
+
 #[entry]
 fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
-    //system_table.stdout().reset(false).unwrap();
+    log::set_max_level(LOGGING_LEVEL);
+    log::set_logger(&LOGGER).unwrap();
+
+    log::info!("Booting kernel");
 
     let (system_table, memory_map) = system_table
         .exit_boot_services(MemoryType::LOADER_DATA);
+
+    log::info!("Exited UEFI boot services");
 
     let desc = memory_map
         .entries()

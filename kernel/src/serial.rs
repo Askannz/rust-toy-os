@@ -20,7 +20,7 @@ pub fn _print(args: core::fmt::Arguments) {
         SERIAL1
             .lock()
             .write_fmt(args)
-            .expect("Priting to serial failed");
+            .expect("Printing to serial failed");
     });
 }
 

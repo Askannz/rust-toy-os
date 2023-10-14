@@ -6,7 +6,7 @@ use core::panic::PanicInfo;
 use core::cmp::Ordering;
 use micromath::F32Ext;
 
-use applib::{AppHandle, Color, FrameBufSlice};
+use applib::{AppHandle, Color, FrameBufRegion};
 
 const COLORS: [Color; 6] = [
     Color(0xff, 0x00, 0x00),
@@ -41,7 +41,7 @@ fn panic(_info: &PanicInfo) -> ! {
     loop {}
 }
 
-pub fn draw_cube(fb: &mut FrameBufSlice, xf: f32, yf: f32) {
+pub fn draw_cube(fb: &mut FrameBufRegion, xf: f32, yf: f32) {
 
     let base_quad = [
         Point { x: -1.0, y: -1.0, z: -1.0 },
@@ -106,7 +106,7 @@ fn rotate(poly: &Quad, axis: Axis, angle: f32) -> Quad {
     new_poly
 }
 
-fn rasterize(fb: &mut FrameBufSlice, geometry: &[Quad; NB_QUADS]) {
+fn rasterize(fb: &mut FrameBufRegion, geometry: &[Quad; NB_QUADS]) {
 
     for (i, poly) in geometry.iter().enumerate() {
         let color = &COLORS[i % COLORS.len()];
@@ -115,7 +115,7 @@ fn rasterize(fb: &mut FrameBufSlice, geometry: &[Quad; NB_QUADS]) {
 
 }
 
-fn rasterize_poly(fb: &mut FrameBufSlice, poly: &Quad, color: &Color) {
+fn rasterize_poly(fb: &mut FrameBufRegion, poly: &Quad, color: &Color) {
 
     let cmp_f = |a: &f32, b: &f32| { a.partial_cmp(b).unwrap_or(Ordering::Equal) };
     let min_x = poly.iter().map(|p| p.x).min_by(cmp_f).unwrap();

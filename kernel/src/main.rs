@@ -286,7 +286,7 @@ fn update_apps(fb: &mut Framebuffer, mouse_status: &PointerState, applications: 
                     time: 0u64  // TODO !
                 },
                 app_rect: app.rect.clone(),
-                app_framebuffer: fb.get_slice(&app.rect),
+                app_framebuffer: fb.get_region(&app.rect),
             };
 
             call_app(handle, &app.descriptor);

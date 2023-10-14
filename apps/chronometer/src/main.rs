@@ -9,7 +9,7 @@ use uart_16550::SerialPort;
 use core::cmp::Ordering;
 use micromath::F32Ext;
 
-use applib::{AppHandle, Color, FrameBufSlice};
+use applib::{AppHandle, Color, FrameBufRegion};
 
 const COLORS: [Color; 6] = [
     Color(0xff, 0x00, 0x00),
@@ -36,7 +36,7 @@ fn panic(_info: &PanicInfo) -> ! {
     loop {}
 }
 
-pub fn draw_chrono(fb: &mut FrameBufSlice) {
+pub fn draw_chrono(fb: &mut FrameBufRegion) {
 
     const N_CYCLES: u64 = 30_000_000_000;
     let timestamp = unsafe { core::arch::x86_64::_rdtsc()};
@@ -86,7 +86,7 @@ fn rotate(poly: &Quad, axis: Axis, angle: f32) -> Quad {
     new_poly
 }
 
-fn rasterize_poly(fb: &mut FrameBufSlice, poly: &Quad, color: &Color) {
+fn rasterize_poly(fb: &mut FrameBufRegion, poly: &Quad, color: &Color) {
 
     let cmp_f = |a: &f32, b: &f32| { a.partial_cmp(b).unwrap_or(Ordering::Equal) };
     let min_x = poly.iter().map(|p| p.x).min_by(cmp_f).unwrap();

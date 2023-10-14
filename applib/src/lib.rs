@@ -4,7 +4,7 @@
 pub struct AppHandle<'a, 'b> {
     pub system_state: SystemState,
     pub app_rect: Rect,
-    pub app_framebuffer: FrameBufSlice<'a, 'b>,
+    pub app_framebuffer: FrameBufRegion<'a, 'b>,
 } 
 
 
@@ -44,18 +44,18 @@ pub struct Framebuffer<'a> {
     pub h: i32,
 }
 
-pub struct FrameBufSlice<'a, 'b> {
+pub struct FrameBufRegion<'a, 'b> {
     pub fb: &'b mut Framebuffer<'a>,
     pub rect: Rect
 }
 
 impl<'a> Framebuffer<'a> {
-    pub fn get_slice<'b>(&'b mut self, rect: &Rect) -> FrameBufSlice<'a, 'b> {
-        FrameBufSlice { fb: self, rect: rect.clone() }
+    pub fn get_region<'b>(&'b mut self, rect: &Rect) -> FrameBufRegion<'a, 'b> {
+        FrameBufRegion { fb: self, rect: rect.clone() }
     }
 }
 
-impl<'a, 'b> FrameBufSlice<'a, 'b> {
+impl<'a, 'b> FrameBufRegion<'a, 'b> {
     pub fn set_pixel(&mut self, x: i32, y: i32, color: &Color) {
         let Color(r, g, b) = *color;
         let i = (((y+self.rect.y0) * self.fb.w + x + self.rect.x0) * 4) as usize;

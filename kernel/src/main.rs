@@ -84,8 +84,6 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     system_table.stdout().reset(false).unwrap();
 
-    x86_64::instructions::interrupts::enable();
-
     let mmap_storage = {
         let base_size = system_table.boot_services().memory_map_size().map_size;
         let extra = 8 * core::mem::size_of::<MemoryDescriptor>();

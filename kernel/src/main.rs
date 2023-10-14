@@ -79,6 +79,41 @@ const BOOT_INFO: &'static BootInfo  = &BootInfo { physical_memory_offset: 0 };
 
 static mut MAPPER: Option<OffsetPageTable> = None;
 
+struct SystemClock {
+    period_s: f64,
+}
+
+impl SystemClock {
+    fn new(runtime_services: &RuntimeServices) -> Self {
+
+        // Waiting for the "seconds" value to change
+        let s1 = runtime_services.get_time().unwrap().second();
+        let s2 = loop {
+            let s2 = runtime_services.get_time().unwrap().second();
+            if s1 != s2 { break s2 }
+        };
+
+        // Waiting approximately one second and measuring the change in rdtsc
+        let n1 = unsafe { core::arch::x86_64::_rdtsc()};
+        loop {
+            let s3 = runtime_services.get_time().unwrap().second();
+            if s2 != s3 { break; }
+        };
+        let n2 = unsafe { core::arch::x86_64::_rdtsc()};
+
+        let period_s = 1.0 / ((n2 - n1) as f64);
+        let freq_ghz = 1.0 / period_s / 1E9;
+        serial_println!("{} cycles in 1s, frequency estimated to {:.3}Ghz", n2 - n1, freq_ghz);
+
+        SystemClock { period_s }
+    }
+
+    fn time(&self) -> u64 {  // in milliseconds
+        let n = unsafe { core::arch::x86_64::_rdtsc()};
+        (1000f64 * (n as f64) * self.period_s) as u64
+    }
+}
+
 #[entry]
 fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
@@ -95,7 +130,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         unsafe { core::slice::from_raw_parts_mut(ptr, max_mmap_size) }
     };
 
-    let (_system_table, memory_map) = system_table
+    let (system_table, memory_map) = system_table
         .exit_boot_services(image, mmap_storage)
         .expect("Failed to exit boot services");
 
@@ -183,7 +218,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
     let (w, h) = virtio_gpu.get_dims();
     let (w, h) = (w as i32, h as i32);
-    let mut mouse_status = PointerState { x: 0, y: 0, clicked: false };
+    let mut pointer_state = PointerState { x: 0, y: 0, clicked: false };
     let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
         descriptor: app_desc.clone(),
         is_open: false,
@@ -202,11 +237,16 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
     serial_println!("WASM test");
     wasmi_test::wasmi_test().unwrap();
 
+    let runtime_services = unsafe { system_table.runtime_services() };
+    let clock = SystemClock::new(runtime_services);
+
+    serial_println!("period = {} s", clock.period_s);
+
     serial_println!("Entering main loop");
 
     loop {
 
-        mouse_status = update_mouse(&mut virtio_input, (w, h), mouse_status);
+        pointer_state = update_pointer(&mut virtio_input, (w, h), pointer_state);
 
         server.update();
 
@@ -214,9 +254,16 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
         let mut framebuffer = Framebuffer { data: &mut virtio_gpu.framebuffer[..], w, h };
 
-        update_apps(&mut framebuffer, &mouse_status, &mut applications);
+        let system_state = SystemState {
+            pointer: pointer_state.clone(),
+            time: clock.time()
+        };
 
-        draw_cursor(&mut framebuffer, &mouse_status);
+        //serial_println!("{:?}", system_state);
+
+        update_apps(&mut framebuffer, &system_state, &mut applications);
+
+        draw_cursor(&mut framebuffer, &system_state);
         virtio_gpu.flush();
     }
 
@@ -225,7 +272,7 @@ fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
 
 }
 
-fn update_apps(fb: &mut Framebuffer, mouse_status: &PointerState, applications: &mut Vec<App>) {
+fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &mut Vec<App>) {
 
     const COLOR_IDLE: Color = Color(0x44, 0x44, 0x44);
     const COLOR_HOVER: Color = Color(0x88, 0x88, 0x88);
@@ -235,11 +282,12 @@ fn update_apps(fb: &mut Framebuffer, mouse_status: &PointerState, applications: 
 
         let rect = &app.descriptor.launch_rect;
 
-        let hover = rect.check_in(mouse_status.x, mouse_status.y);
+        let pointer_state = &system_state.pointer;
+        let hover = rect.check_in(pointer_state.x, pointer_state.y);
 
         let color = if hover { &COLOR_HOVER } else { &COLOR_IDLE };
 
-        if hover && mouse_status.clicked && !app.is_open {
+        if hover && pointer_state.clicked && !app.is_open {
             serial_println!("{} is open", app.descriptor.name);
             app.is_open = true;
         }
@@ -260,16 +308,16 @@ fn update_apps(fb: &mut Framebuffer, mouse_status: &PointerState, applications: 
             };
 
             if let Some((dx, dy)) = app.grab_pos {
-                if mouse_status.clicked {
-                    app.rect.x0 = mouse_status.x - dx;
-                    app.rect.y0 = mouse_status.y - dy;
+                if pointer_state.clicked {
+                    app.rect.x0 = pointer_state.x - dx;
+                    app.rect.y0 = pointer_state.y - dy;
                 } else {
                     app.grab_pos = None
                 }
             } else {
-                if mouse_status.clicked && deco_rect.check_in(mouse_status.x, mouse_status.y){
-                    let dx = mouse_status.x - app.rect.x0;
-                    let dy = mouse_status.y - app.rect.y0;
+                if pointer_state.clicked && deco_rect.check_in(pointer_state.x, pointer_state.y){
+                    let dx = pointer_state.x - app.rect.x0;
+                    let dy = pointer_state.y - app.rect.y0;
                     app.grab_pos = Some((dx, dy));
                 }
             }
@@ -279,10 +327,7 @@ fn update_apps(fb: &mut Framebuffer, mouse_status: &PointerState, applications: 
             draw_str(fb, app.rect.x0, app.rect.y0 - 30, app.descriptor.name, &Color(0xff, 0xff, 0xff));
 
             let handle = AppHandle {
-                system_state: SystemState { 
-                    pointer: mouse_status.clone(),
-                    time: 0u64  // TODO !
-                },
+                system_state: system_state.clone(),
                 app_rect: app.rect.clone(),
                 app_framebuffer: fb.get_region(&app.rect),
             };
@@ -292,13 +337,14 @@ fn update_apps(fb: &mut Framebuffer, mouse_status: &PointerState, applications: 
     }
 }
 
-fn draw_cursor(fb: &mut Framebuffer, mouse_status: &PointerState) {
-    let x = mouse_status.x;
-    let y = mouse_status.y;
+fn draw_cursor(fb: &mut Framebuffer, system_state: &SystemState) {
+    let pointer_state = &system_state.pointer;
+    let x = pointer_state.x;
+    let y = pointer_state.y;
     draw_rect(fb, &Rect { x0: x, y0: y, w: 5, h: 5 }, &Color(0xff, 0xff, 0xff), 1.0)
 }
 
-fn update_mouse(virtio_input: &mut VirtioInput, dims: (i32, i32), status: PointerState) -> PointerState {
+fn update_pointer(virtio_input: &mut VirtioInput, dims: (i32, i32), status: PointerState) -> PointerState {
 
     let (w, h) = dims;
 

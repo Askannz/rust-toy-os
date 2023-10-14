@@ -26,7 +26,8 @@ const PI: f32 = 3.14159265359;
 #[no_mangle]
 pub extern "C" fn efi_main(handle: &mut AppHandle) {
 
-    draw_chrono(&mut handle.app_framebuffer);
+    let time = handle.system_state.time;
+    draw_chrono(&mut handle.app_framebuffer, time);
 }
 
 
@@ -36,11 +37,10 @@ fn panic(_info: &PanicInfo) -> ! {
     loop {}
 }
 
-pub fn draw_chrono(fb: &mut FrameBufRegion) {
+pub fn draw_chrono(fb: &mut FrameBufRegion, time: u64) {
 
-    const N_CYCLES: u64 = 30_000_000_000;
-    let timestamp = unsafe { core::arch::x86_64::_rdtsc()};
-    let angle = (((timestamp % N_CYCLES) as f32) / (N_CYCLES as f32)) * 2.0 * PI;
+    const DIVIDER: u64 = 60_000;
+    let angle = (((time % DIVIDER) as f32) / (DIVIDER as f32)) * 2.0 * PI;
 
     let quad = [
         Point { x: -0.5, y: 0.0, z: 0.0 },

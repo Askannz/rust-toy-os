@@ -5,8 +5,8 @@
 
 use core::panic::PanicInfo;
 use alloc::vec::Vec;
-use uefi::prelude::*;
-use uefi::table::boot::{MemoryDescriptor, MemoryType};
+use uefi::prelude::{RuntimeServices, entry, Handle, SystemTable, Boot, Status};
+use uefi::table::boot::MemoryType;
 use linked_list_allocator::LockedHeap;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::{PageTable, OffsetPageTable, Translate, mapper::TranslateResult};
@@ -115,9 +115,9 @@ impl SystemClock {
 }
 
 #[entry]
-fn main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
+fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
-    system_table.stdout().reset(false).unwrap();
+    //system_table.stdout().reset(false).unwrap();
 
     let (system_table, memory_map) = system_table
         .exit_boot_services(MemoryType::LOADER_DATA);

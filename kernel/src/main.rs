@@ -96,11 +96,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("Exited UEFI boot services");
 
     memory::init_allocator(&memory_map);
-
-    let mapper = unsafe { 
-        MAPPER.replace(memory::get_mapper());
-        MAPPER.as_mut().unwrap()
-    };
+    let mapper = memory::init_mapper();
 
     pci::enumerate().for_each(|dev| serial_println!("Found PCI device, vendor={:#x} device={:#x}", dev.vendor_id, dev.device_id));
 

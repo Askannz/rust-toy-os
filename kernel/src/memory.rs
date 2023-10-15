@@ -1,12 +1,15 @@
+use core::cell::OnceCell;
 use uefi::table::boot::{MemoryMap, MemoryType};
 use x86_64::VirtAddr;
-use x86_64::structures::paging::{PageTable, OffsetPageTable, Translate, mapper::TranslateResult};
+use x86_64::structures::paging::{PageTable, OffsetPageTable};
 use linked_list_allocator::LockedHeap;
 
 const HEAP_SIZE: usize = 10000 * 4 * 1024;
 
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
+
+pub static mut MAPPER: OnceCell<OffsetPageTable> = OnceCell::new();
 
 pub fn init_allocator(memory_map: &MemoryMap) {
 
@@ -29,7 +32,7 @@ pub fn init_allocator(memory_map: &MemoryMap) {
     }
 }
 
-pub fn get_mapper() -> OffsetPageTable<'static> {
+pub fn init_mapper() -> &'static OffsetPageTable<'static> {
 
     // UEFI has already set up paging with identity-mapping
     let phys_offset = VirtAddr::new(0x0);
@@ -46,5 +49,10 @@ pub fn get_mapper() -> OffsetPageTable<'static> {
         &mut *ptr
     };
 
-    unsafe { OffsetPageTable::new(l4_table, phys_offset) }
+    unsafe {
+        let mapper = OffsetPageTable::new(l4_table, phys_offset);
+        MAPPER.set(mapper).expect("Memory mapper already initialized?");
+        MAPPER.get_mut().unwrap()
+    }
+
 }

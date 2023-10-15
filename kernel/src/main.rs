@@ -7,7 +7,6 @@ use core::panic::PanicInfo;
 use alloc::vec::Vec;
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
-use linked_list_allocator::LockedHeap;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::{PageTable, OffsetPageTable, Translate, mapper::TranslateResult};
 use smoltcp::wire::{IpAddress, IpCidr};
@@ -16,6 +15,7 @@ use applib::{Color, Rect, Framebuffer, AppHandle, SystemState, PointerState};
 
 extern crate alloc;
 
+mod memory;
 mod serial;
 mod logging;
 mod time;
@@ -34,9 +34,6 @@ use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
 use virtio::network::{VirtioNetwork, NetworkFeatureBits};
 use virtio::{VirtioDevice, BootInfo};
-
-#[global_allocator]
-static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 #[derive(Clone)]
 struct AppDescriptor {
@@ -98,18 +95,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     log::info!("Exited UEFI boot services");
 
-    let desc = memory_map
-        .entries()
-        .filter(|desc| desc.ty == MemoryType::CONVENTIONAL)
-        .max_by_key(|desc| desc.page_count)
-        .unwrap();
-    serial_println!("{:?}", desc);
-
-    const HEAP_SIZE: usize = 10000 * 4 * 1024;
-    assert!(HEAP_SIZE < (desc.page_count * 4000) as usize);
-    unsafe {
-        ALLOCATOR.lock().init(desc.phys_start as usize, HEAP_SIZE);
-    }
+    memory::init_allocator(&memory_map);
 
     unsafe {
         MAPPER.replace({ 

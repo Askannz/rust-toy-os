@@ -97,29 +97,9 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     memory::init_allocator(&memory_map);
 
-    unsafe {
-        MAPPER.replace({ 
-
-            let phys_offset = VirtAddr::new(0x0);
-
-            // Get active L4 table
-            let l4_table = {
-                use x86_64::registers::control::Cr3;
-                let (l4_frame, _) = Cr3::read();
-
-                let phys = l4_frame.start_address();
-                let virt = phys_offset + phys.as_u64();
-                let ptr: *mut PageTable = virt.as_mut_ptr();
-            
-                &mut *ptr
-            };
-
-            OffsetPageTable::new(l4_table, phys_offset)
-        });
-    }
-
-    let mapper = unsafe {
-        MAPPER.as_ref().unwrap()
+    let mapper = unsafe { 
+        MAPPER.replace(memory::get_mapper());
+        MAPPER.as_mut().unwrap()
     };
 
     pci::enumerate().for_each(|dev| serial_println!("Found PCI device, vendor={:#x} device={:#x}", dev.vendor_id, dev.device_id));
@@ -132,7 +112,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, 0x0);
 
-        VirtioGPU::new(BOOT_INFO, &mapper, virtio_dev)
+        VirtioGPU::new(BOOT_INFO, mapper, virtio_dev)
     };
     
 
@@ -144,7 +124,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, 0x0);
 
-        VirtioInput::new(BOOT_INFO, &mapper, virtio_dev)
+        VirtioInput::new(BOOT_INFO, mapper, virtio_dev)
     };
 
     let virtio_net = {
@@ -157,12 +137,12 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, feature_bits);
 
-        VirtioNetwork::new(BOOT_INFO, &mapper, virtio_dev)
+        VirtioNetwork::new(BOOT_INFO, mapper, virtio_dev)
     };
 
     serial_println!("All VirtIO devices created");
 
-    virtio_gpu.init_framebuffer(&mapper);
+    virtio_gpu.init_framebuffer(mapper);
     virtio_gpu.flush();
 
     serial_println!("Display initialized");

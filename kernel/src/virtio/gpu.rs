@@ -1,10 +1,8 @@
 use alloc::{vec, boxed::Box};
 
 use core::mem::MaybeUninit;
-use x86_64::structures::paging::OffsetPageTable;
-use crate::virtio::BootInfo;
 use crate::serial_println;
-use crate::get_phys_addr;
+use crate::memory;
 
 use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
 
@@ -42,14 +40,14 @@ impl Default for GpuVirtioMsg {
 impl VirtqSerializable for GpuVirtioMsg {}
 
 impl VirtioGPU {
-    pub fn new(boot_info: &'static BootInfo, mapper: &'static OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(mut virtio_dev: VirtioDevice) -> Self {
 
         let virtio_dev_type = virtio_dev.get_virtio_device_type();
         if virtio_dev_type != 16 {
             panic!("VirtIO device is not a GPU device (device type = {}, expected 16)", virtio_dev_type)
         }
 
-        let controlq = virtio_dev.initialize_queue(boot_info, mapper, 0);  // queue 0 (controlq)
+        let controlq = virtio_dev.initialize_queue(0);  // queue 0 (controlq)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
         VirtioGPU {
@@ -148,7 +146,7 @@ impl VirtioGPU {
         unsafe { res.resp_display_info }
     }
 
-    pub fn init_framebuffer(&mut self, mapper: &OffsetPageTable) {
+    pub fn init_framebuffer(&mut self) {
 
         let resource_id = 0x1;
 
@@ -163,7 +161,7 @@ impl VirtioGPU {
             height: H as u32
         }}).unwrap();
 
-        let fb_addr = get_phys_addr(mapper, self.framebuffer.as_ref());
+        let fb_addr = memory::get_mapper().ref_to_phys(self.framebuffer.as_ref()).as_u64();
 
         self.send_command_noreply(GpuVirtioMsg { resource_attach_backing: VirtioGpuResourceAttachBacking {
             hdr: VirtioGpuCtrlHdr {

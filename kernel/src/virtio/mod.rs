@@ -3,11 +3,11 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use core::mem;
-use x86_64::VirtAddr;
-use x86_64::structures::paging::OffsetPageTable;
+use x86_64::{VirtAddr, PhysAddr};
 use volatile::Volatile;
 
-use crate::{pci::{PciDevice, PciBar, PciConfigSpace}, get_phys_addr};
+use crate::pci::{PciDevice, PciBar, PciConfigSpace};
+use crate::memory;
 
 
 const VIRTIO_PCI_VENDOR: u8 = 0x09;
@@ -20,10 +20,6 @@ pub mod network;
 #[allow(non_camel_case_types)]
 pub enum FeatureBits {
     VIRTIO_F_VERSION_1 = 0x1
-}
-
-pub struct BootInfo {
-    pub physical_memory_offset: u64
 }
 
 #[allow(dead_code)]
@@ -108,8 +104,6 @@ impl<const Q_SIZE: usize> VirtQStorage<Q_SIZE> {
 }
 
 pub struct VirtioQueue<const Q_SIZE: usize> {
-    boot_info: &'static BootInfo,
-    mapper: &'static OffsetPageTable<'static>,
     q_index: u16,
     storage: Box<VirtQStorage<Q_SIZE>>,
     pop_index: usize,
@@ -198,7 +192,7 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
             };
 
             let buffer = Box::new(buffer);
-            descriptor.addr = get_phys_addr(self.mapper, Box::leak(buffer));
+            descriptor.addr = memory::get_mapper().ref_to_phys(Box::leak(buffer)).as_u64();
 
             if i < n - 1 {
                 descriptor.next = desc_indices[i + 1] as u16;
@@ -225,6 +219,8 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
     pub unsafe fn try_pop<T: VirtqSerializable>(&mut self) -> Option<Vec<T>> {
 
+        let mapper = memory::get_mapper();
+
         let new_index: usize = self.storage.device_area.idx.into();
         if new_index == self.pop_index {
             return None;
@@ -241,12 +237,9 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
             let descriptor = self.storage.descriptor_area.get(desc_index).unwrap();
             //serial_println!("Received descriptor: {:?}", descriptor);
-
             let buffer = unsafe { 
-                // That probably wouldn't work if the physical offset wasn't zero...
-                let virt_addr = self.boot_info.physical_memory_offset + descriptor.addr;
-                let ptr = virt_addr as *mut T;
-                Box::from_raw(ptr)
+                let virt_addr = mapper.phys_to_virt(PhysAddr::new(descriptor.addr));
+                Box::from_raw(virt_addr.as_mut_ptr())
             };
 
             out.push(*buffer);
@@ -288,22 +281,21 @@ pub struct VirtioPciCap {
     length: u32,
 }
 
-pub fn get_addr_in_bar(boot_info: &'static BootInfo, pci_device: &PciDevice, virtio_cap: &VirtioPciCap) -> VirtAddr {
-
-    let phys_offset = VirtAddr::new(boot_info.physical_memory_offset);
+pub fn get_addr_in_bar(pci_device: &PciDevice, virtio_cap: &VirtioPciCap) -> VirtAddr {
 
     let bar_addr = match pci_device.bars[&virtio_cap.bar.into()] {
         PciBar::Memory { base_addr, .. } => base_addr,
         PciBar::IO { .. } => unimplemented!()
     };
 
-    phys_offset + bar_addr + (virtio_cap.offset as u64)
+    let phys_addr = PhysAddr::new(bar_addr + (virtio_cap.offset as u64));
+
+    memory::get_mapper().phys_to_virt(phys_addr)
 }
 
 impl VirtioDevice {
 
     pub fn new(
-        boot_info: &'static BootInfo,
         pci_device: PciDevice,
         feature_bits: u32,
     ) -> Self {
@@ -339,7 +331,7 @@ impl VirtioDevice {
         let notification_cap = notification_cap.unwrap();
 
         let common_config = {
-            let addr = get_addr_in_bar(boot_info, &pci_device, &common_config_cap.virtio_cap);
+            let addr = get_addr_in_bar(&pci_device, &common_config_cap.virtio_cap);
             let ptr = addr.as_mut_ptr() as *mut VirtioPciCommonCfg;
             Volatile::new(unsafe { ptr.as_mut().unwrap() })
         };
@@ -381,10 +373,10 @@ impl VirtioDevice {
 
     pub fn initialize_queue<const Q_SIZE: usize>(
         &mut self,
-        boot_info: &'static BootInfo,
-        mapper: &'static OffsetPageTable,
         q_index: u16,
     ) -> VirtioQueue<Q_SIZE> {
+
+        let mapper = memory::get_mapper();
 
         // TODO: prevent a queue from being initialized twice
 
@@ -392,9 +384,9 @@ impl VirtioDevice {
 
         // Calculating addresses
     
-        let descr_area_addr = get_phys_addr(mapper, storage.descriptor_area.as_ref());
-        let driver_area_addr = get_phys_addr(mapper, &storage.driver_area);
-        let dev_area_addr = get_phys_addr(mapper, &storage.device_area);
+        let descr_area_addr = mapper.ref_to_phys(storage.descriptor_area.as_ref()).as_u64();
+        let driver_area_addr = mapper.ref_to_phys(&storage.driver_area).as_u64();
+        let dev_area_addr = mapper.ref_to_phys(&storage.device_area).as_u64();
 
         // serial_println!("descr_area_addr={:x}", descr_area_addr);
         // serial_println!("driver_area_addr={:x}", driver_area_addr);
@@ -413,11 +405,9 @@ impl VirtioDevice {
             assert_eq!(q_size, Q_SIZE);
         }
 
-        let notify_ptr = self.get_queue_notify_ptr(boot_info, q_index);
+        let notify_ptr = self.get_queue_notify_ptr(q_index);
 
         VirtioQueue {
-            boot_info,
-            mapper,
             q_index,
             storage,
             pop_index: 0,
@@ -425,17 +415,17 @@ impl VirtioDevice {
         }
     }
 
-    unsafe fn read_device_specific_config<T>(&self, boot_info: &'static BootInfo) -> &'static T {
+    unsafe fn read_device_specific_config<T>(&self) -> &'static T {
 
         let cap = self.device_specific_config_cap.as_ref().unwrap();
 
-        let addr = get_addr_in_bar(boot_info, &self.pci_device, &cap.virtio_cap);
+        let addr = get_addr_in_bar(&self.pci_device, &cap.virtio_cap);
         let ptr = addr.as_ptr() as *const T;
 
         ptr.as_ref().unwrap()
     }
 
-    fn get_queue_notify_ptr(&mut self, boot_info: &'static BootInfo, q_index: u16) -> VirtAddr {
+    fn get_queue_notify_ptr(&mut self, q_index: u16) -> VirtAddr {
 
         let mut pci_config_space = PciConfigSpace::new();
 
@@ -456,7 +446,7 @@ impl VirtioDevice {
             pci_config_space.read(&self.pci_device.addr, offset)
         }.into();
 
-        let base_addr = get_addr_in_bar(boot_info, &self.pci_device, &self.notification_cap.virtio_cap);
+        let base_addr = get_addr_in_bar(&self.pci_device, &self.notification_cap.virtio_cap);
         let addr = base_addr + queue_notify_off * notify_off_multiplier;
         
         addr

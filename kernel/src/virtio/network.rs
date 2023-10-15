@@ -3,8 +3,6 @@ use core::mem::MaybeUninit;
 
 use alloc::vec;
 use alloc::vec::Vec;
-use x86_64::structures::paging::OffsetPageTable;
-use crate::{virtio::BootInfo};
 use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable};
 
 const Q_SIZE: usize = 256;
@@ -34,14 +32,14 @@ struct VirtioNetConfig {
 }
 
 impl VirtioNetwork {
-    pub fn new(boot_info: &'static BootInfo, mapper: &'static OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(mut virtio_dev: VirtioDevice) -> Self {
 
-        let mut receiveq1 = virtio_dev.initialize_queue(boot_info, mapper, 0);  // queue 0 (receiveq1)
-        let transmitq1 = virtio_dev.initialize_queue(boot_info, mapper, 1);  // queue 1 (transmitq1)
+        let mut receiveq1 = virtio_dev.initialize_queue(0);  // queue 0 (receiveq1)
+        let transmitq1 = virtio_dev.initialize_queue(1);  // queue 1 (transmitq1)
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
         let device_config = unsafe {
-            virtio_dev.read_device_specific_config::<VirtioNetConfig>(boot_info)
+            virtio_dev.read_device_specific_config::<VirtioNetConfig>()
         };
 
         let msg = vec![QueueMessage::<VirtioNetPacket>::DevWriteOnly];

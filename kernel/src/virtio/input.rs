@@ -1,9 +1,6 @@
 
 use alloc::vec;
 use alloc::vec::Vec;
-use x86_64::structures::paging::OffsetPageTable;
-
-use crate::virtio::BootInfo;
 use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
 
 const Q_SIZE: usize = 64;
@@ -14,14 +11,14 @@ pub struct VirtioInput {
 }
 
 impl VirtioInput {
-    pub fn new(boot_info: &'static BootInfo, mapper: &'static OffsetPageTable, mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(mut virtio_dev: VirtioDevice) -> Self {
 
         let virtio_dev_type = virtio_dev.get_virtio_device_type();
         if virtio_dev_type != 18 {
             panic!("VirtIO device is not an input device (device type = {}, expected 18)", virtio_dev_type)
         }
 
-        let mut eventq = virtio_dev.initialize_queue(boot_info, mapper, 0);  // queue 0 (eventq)
+        let mut eventq = virtio_dev.initialize_queue(0);  // queue 0 (eventq)
         //serial_println!("out of initialize_queue(): {:?}", eventq.descriptor_area.as_ptr());
         virtio_dev.write_status(0x04);  // DRIVER_OK
 

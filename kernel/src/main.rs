@@ -7,8 +7,6 @@ use core::panic::PanicInfo;
 use alloc::vec::Vec;
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
-use x86_64::VirtAddr;
-use x86_64::structures::paging::{Translate, mapper::TranslateResult};
 use smoltcp::wire::{IpAddress, IpCidr};
 
 use applib::{Color, Rect, Framebuffer, AppHandle, SystemState, PointerState};
@@ -33,7 +31,7 @@ use http::HttpServer;
 use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
 use virtio::network::{VirtioNetwork, NetworkFeatureBits};
-use virtio::{VirtioDevice, BootInfo};
+use virtio::VirtioDevice;
 
 #[derive(Clone)]
 struct AppDescriptor {
@@ -75,8 +73,6 @@ const FONT_CHAR_W: usize = 12;
 
 const WALLPAPER: &'static [u8] = include_bytes!("../../embedded_data/wallpaper.bin");
 
-const BOOT_INFO: &'static BootInfo  = &BootInfo { physical_memory_offset: 0 };
-
 static LOGGER: logging::SerialLogger = logging::SerialLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
@@ -94,7 +90,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("Exited UEFI boot services");
 
     memory::init_allocator(&memory_map);
-    let mapper = memory::init_mapper();
+    memory::init_mapper();
 
     pci::enumerate().for_each(|dev| serial_println!("Found PCI device, vendor={:#x} device={:#x}", dev.vendor_id, dev.device_id));
 
@@ -104,9 +100,9 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1040 + 16)
             .expect("Cannot find VirtIO GPU device");
 
-        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, 0x0);
+        let virtio_dev = VirtioDevice::new(virtio_pci_dev, 0x0);
 
-        VirtioGPU::new(BOOT_INFO, mapper, virtio_dev)
+        VirtioGPU::new(virtio_dev)
     };
     
 
@@ -116,9 +112,9 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1040 + 18)
             .expect("Cannot find VirtIO input device");
 
-        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, 0x0);
+        let virtio_dev = VirtioDevice::new(virtio_pci_dev, 0x0);
 
-        VirtioInput::new(BOOT_INFO, mapper, virtio_dev)
+        VirtioInput::new(virtio_dev)
     };
 
     let virtio_net = {
@@ -129,14 +125,14 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         let feature_bits = NetworkFeatureBits::VIRTIO_NET_F_MAC as u32;
 
-        let virtio_dev = VirtioDevice::new(BOOT_INFO, virtio_pci_dev, feature_bits);
+        let virtio_dev = VirtioDevice::new(virtio_pci_dev, feature_bits);
 
-        VirtioNetwork::new(BOOT_INFO, mapper, virtio_dev)
+        VirtioNetwork::new(virtio_dev)
     };
 
     serial_println!("All VirtIO devices created");
 
-    virtio_gpu.init_framebuffer(mapper);
+    virtio_gpu.init_framebuffer();
     virtio_gpu.flush();
 
     serial_println!("Display initialized");
@@ -366,15 +362,4 @@ fn call_app(mut handle: AppHandle, app: &AppDescriptor) -> () {
 fn panic(info: &PanicInfo) ->  ! {
     serial_println!("{}", info);
     loop {}
-}
-
-fn get_phys_addr<T: ?Sized>(mapper: &impl Translate, p: &T) -> u64 {
-
-    let virt_addr = VirtAddr::new(p as *const T as *const usize as u64);
-    let (frame, offset) = match mapper.translate(virt_addr) {
-        TranslateResult::Mapped { frame, offset, .. } => (frame, offset),
-        v => panic!("Cannot translate page: {:?}", v)
-    };
-
-    (frame.start_address() + offset).as_u64()
 }

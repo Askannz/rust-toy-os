@@ -1,7 +1,7 @@
 use core::cell::OnceCell;
 use uefi::table::boot::{MemoryMap, MemoryType};
-use x86_64::VirtAddr;
-use x86_64::structures::paging::{PageTable, OffsetPageTable};
+use x86_64::{VirtAddr, PhysAddr};
+use x86_64::structures::paging::{Translate, PageTable, OffsetPageTable, mapper::TranslateResult};
 use linked_list_allocator::LockedHeap;
 
 const HEAP_SIZE: usize = 10000 * 4 * 1024;
@@ -9,7 +9,7 @@ const HEAP_SIZE: usize = 10000 * 4 * 1024;
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
-pub static mut MAPPER: OnceCell<OffsetPageTable> = OnceCell::new();
+pub static mut MAPPER: OnceCell<MemoryMapper> = OnceCell::new();
 
 pub fn init_allocator(memory_map: &MemoryMap) {
 
@@ -32,7 +32,38 @@ pub fn init_allocator(memory_map: &MemoryMap) {
     }
 }
 
-pub fn init_mapper() -> &'static OffsetPageTable<'static> {
+#[derive(Debug)]
+pub struct MemoryMapper {
+    page_table: OffsetPageTable<'static>,
+    phys_offset: VirtAddr,
+}
+
+impl MemoryMapper {
+
+    pub fn virt_to_phys(&self, virt: VirtAddr) -> PhysAddr {
+
+        let (frame, offset) = match self.page_table.translate(virt) {
+            TranslateResult::Mapped { frame, offset, .. } => (frame, offset),
+            v => panic!("Cannot translate page: {:?}", v)
+        };
+
+        frame.start_address() + offset
+    }
+
+    // Note: technically there can be more than one VirtAddr mapped to
+    // a given PhysAddr, but we only care about the one that has been 
+    // offset-mapped by UEFI
+    pub fn phys_to_virt(&self, phys: PhysAddr) -> VirtAddr {
+        self.phys_offset + phys.as_u64()
+    }
+
+    pub fn ref_to_phys<T: ?Sized>(&self, p: &T) -> PhysAddr {
+        let virt = VirtAddr::new(p as *const T as *const usize as u64);
+        self.virt_to_phys(virt)
+    }
+}
+
+pub fn init_mapper() {
 
     // UEFI has already set up paging with identity-mapping
     let phys_offset = VirtAddr::new(0x0);
@@ -49,10 +80,19 @@ pub fn init_mapper() -> &'static OffsetPageTable<'static> {
         &mut *ptr
     };
 
+    let page_table = unsafe { OffsetPageTable::new(l4_table, phys_offset) };
+
+    let mapper = MemoryMapper {
+        page_table,
+        phys_offset,
+    };
+
     unsafe {
-        let mapper = OffsetPageTable::new(l4_table, phys_offset);
         MAPPER.set(mapper).expect("Memory mapper already initialized?");
-        MAPPER.get_mut().unwrap()
     }
 
+}
+
+pub fn get_mapper() -> &'static MemoryMapper {
+    unsafe { MAPPER.get().expect("Memory mapper not initialized?") }
 }

@@ -3,7 +3,7 @@
 extern crate alloc;
 
 use core::panic::PanicInfo;
-use alloc::{string::String, format, vec::Vec};
+use alloc::{string::String, format};
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;

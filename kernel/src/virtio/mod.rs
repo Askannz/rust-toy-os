@@ -5,10 +5,8 @@ use alloc::vec::Vec;
 use core::mem;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::OffsetPageTable;
-use bitvec::prelude::Lsb0;
-use bitvec::view::BitView;
 use volatile::Volatile;
-use crate::serial_println;
+
 use crate::{pci::{PciDevice, PciBar, PciConfigSpace}, get_phys_addr};
 
 
@@ -28,6 +26,7 @@ pub struct BootInfo {
     pub physical_memory_offset: u64
 }
 
+#[allow(dead_code)]
 pub struct VirtioInterruptAck {
     isr_ptr: Volatile<&'static mut u8>,
     pub latest_status: Option<IsrStatus>
@@ -35,6 +34,7 @@ pub struct VirtioInterruptAck {
 
 unsafe impl Sync for VirtioInterruptAck {}
 
+#[allow(dead_code)]
 pub struct VirtioDevice {
     pci_device: PciDevice,
     common_config_cap: VirtioCapability,
@@ -46,7 +46,7 @@ pub struct VirtioDevice {
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Debug)]
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, dead_code)]
 pub enum CfgType {
     VIRTIO_PCI_CAP_COMMON_CFG = 0x1,
     VIRTIO_PCI_CAP_NOTIFY_CFG = 0x2,
@@ -154,18 +154,6 @@ pub struct VirtioPciCommonCfg {
     pub queue_desc: u64,
     pub queue_driver: u64,
     pub queue_device: u64
-}
-
-impl VirtioInterruptAck {
-    pub fn ack_interrupt(&mut self) {
-        let isr = self.isr_ptr.read();
-        let isr_bits = isr.view_bits::<Lsb0>();
-        let isr_status = IsrStatus {
-            queue: isr_bits[0],
-            config: isr_bits[1]
-        };
-        self.latest_status = Some(isr_status);
-    }
 }
 
 impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
@@ -369,35 +357,6 @@ impl VirtioDevice {
         dev
     }
 
-    /*
-    pub fn get_ack_object(&self, boot_info: &'static BootInfo) -> VirtioInterruptAck {
-
-        let phys_offset = VirtAddr::new(boot_info.physical_memory_offset);
-
-        let isr_status_ptr = {
-
-            let isr_cap = self.capabilities.iter()
-                .find(|cap| cap.virtio_cap.cfg_type == CfgType::VIRTIO_PCI_CAP_ISR_CFG)
-                .expect("No VirtIO ISR config capability?");
-
-            let bar_addr = match self.pci_device.bars[&isr_cap.virtio_cap.bar.into()] {
-                PciBar::Memory { base_addr, .. } => base_addr,
-                PciBar::IO { .. } => unimplemented!(
-                    "Support for I/O BARs in VirtIO not implemented")
-            };
-
-            let addr = phys_offset + bar_addr + (isr_cap.virtio_cap.offset as u64);
-            let ptr: *mut u8 = addr.as_mut_ptr();
-            Volatile::new(unsafe { ptr.as_mut().unwrap() })
-        };
-
-        VirtioInterruptAck {
-            isr_ptr: isr_status_ptr,
-            latest_status: None
-        }
-    }
-    */
-
     fn initialize(&mut self, feature_bits: u32) {
 
         self.write_status(0x0);  // RESET
@@ -530,6 +489,7 @@ impl VirtioDevice {
             .update(|feat_val| *feat_val = val);
     }
 
+    #[allow(dead_code)]
     fn read_feature_bits(&mut self, select: u32) -> u32 {
 
         self.common_config

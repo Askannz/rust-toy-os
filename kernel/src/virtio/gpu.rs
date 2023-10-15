@@ -1,12 +1,12 @@
 use alloc::{vec, boxed::Box};
 
-use core::{mem::MaybeUninit, sync::atomic::{fence, Ordering}};
-use x86_64::{structures::paging::OffsetPageTable, VirtAddr};
+use core::mem::MaybeUninit;
+use x86_64::structures::paging::OffsetPageTable;
 use crate::virtio::BootInfo;
-use crate::{serial_println, pci::PciBar};
+use crate::serial_println;
 use crate::get_phys_addr;
 
-use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue, CfgType};
+use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
 
 pub const W: usize = 1366;
 pub const H: usize = 768;
@@ -137,6 +137,7 @@ impl VirtioGPU {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_display_info(&mut self) -> VirtioGpuRespDisplayInfo {
 
         let res = self.send_command(GpuVirtioMsg { ctrl_hdr: VirtioGpuCtrlHdr {
@@ -259,7 +260,7 @@ struct VirtioGpuCtrlHdr {
 }
 
 #[repr(C)]
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, dead_code)]
 enum VirtioGpuCtrlType {
     VIRTIO_GPU_CMD_GET_DISPLAY_INFO = 0x0100,
     VIRTIO_GPU_CMD_RESOURCE_CREATE_2D = 0x0101,

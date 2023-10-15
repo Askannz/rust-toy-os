@@ -1,24 +1,13 @@
 #![no_std]
 #![no_main]
 
-use core::arch::asm;
 use core::panic::PanicInfo;
-use core::fmt::Write;
-use uart_16550::SerialPort;
 
 use core::cmp::Ordering;
 use micromath::F32Ext;
 
 use applib::{AppHandle, Color, FrameBufRegion};
 
-const COLORS: [Color; 6] = [
-    Color(0xff, 0x00, 0x00),
-    Color(0x00, 0xff, 0x00),
-    Color(0x00, 0x00, 0xff),
-    Color(0xff, 0xff, 0x00),
-    Color(0xff, 0x00, 0xff),
-    Color(0x00, 0xff, 0xff),
-];
 const ZOOM: f32 = 0.2;
 const PI: f32 = 3.14159265359;
 
@@ -161,5 +150,6 @@ type Quad = [Point; 4];
 type Matrix = [f32; 9];
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 enum Axis { X, Y, Z }
  

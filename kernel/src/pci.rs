@@ -1,5 +1,5 @@
 use alloc::borrow::ToOwned;
-use alloc::{rc::Rc, vec::Vec, vec, boxed::Box};
+use alloc::{rc::Rc, vec::Vec};
 use core::mem;
 use core::cell::RefCell;
 use alloc::collections::BTreeMap;
@@ -8,7 +8,7 @@ use bitvec::prelude::Lsb0;
 use bitvec::view::BitView;
 use bitvec::field::BitField;
 
-use crate::serial_println;
+
 
 
 
@@ -63,6 +63,8 @@ pub enum BarAddrType { Bar32, Bar64 }
 
 
 impl PciDevice {
+
+    #[allow(dead_code)]
     pub fn set_interrupt_line(&self, line: u8) {
 
         let mut pci_config_space = PciConfigSpace::new();
@@ -79,6 +81,7 @@ impl PciDevice {
         unsafe { pci_config_space.write(&self.addr, 0x3c, new_word) };
     }
 
+    #[allow(dead_code)]
     pub fn read_interrupt_line(&self) -> u8 {
 
         let mut pci_config_space = PciConfigSpace::new();

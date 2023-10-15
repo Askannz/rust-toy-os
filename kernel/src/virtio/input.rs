@@ -2,9 +2,9 @@
 use alloc::vec;
 use alloc::vec::Vec;
 use x86_64::structures::paging::OffsetPageTable;
-use crate::serial_println;
+
 use crate::virtio::BootInfo;
-use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue, VirtqDescTable};
+use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
 
 const Q_SIZE: usize = 64;
 

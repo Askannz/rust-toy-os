@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use x86_64::VirtAddr;
-use x86_64::structures::paging::{PageTable, OffsetPageTable, Translate, mapper::TranslateResult};
+use x86_64::structures::paging::{Translate, mapper::TranslateResult};
 use smoltcp::wire::{IpAddress, IpCidr};
 
 use applib::{Color, Rect, Framebuffer, AppHandle, SystemState, PointerState};
@@ -76,8 +76,6 @@ const FONT_CHAR_W: usize = 12;
 const WALLPAPER: &'static [u8] = include_bytes!("../../embedded_data/wallpaper.bin");
 
 const BOOT_INFO: &'static BootInfo  = &BootInfo { physical_memory_offset: 0 };
-
-static mut MAPPER: Option<OffsetPageTable> = None;
 
 static LOGGER: logging::SerialLogger = logging::SerialLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;

@@ -190,4 +190,5 @@ type Quad = [Point; 4];
 type Matrix = [f32; 9];
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 enum Axis { X, Y, Z }

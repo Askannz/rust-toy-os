@@ -3,16 +3,11 @@
 extern crate alloc;
 
 use core::panic::PanicInfo;
+use core::cell::OnceCell;
 use alloc::{string::String, format};
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
-#[derive(Debug)]
-#[repr(C)]
-struct AppData {
-    n: u32
-}
 
 extern "C" {
     fn host_print_console(addr: i32, len: i32);
@@ -38,6 +33,24 @@ macro_rules! println {
     ($fmt:expr, $($arg:tt)*) => (print!(concat!($fmt, "\n"), $($arg)*));
 }
 
+#[panic_handler]
+fn panic(info: &PanicInfo) ->  ! {
+    println!("{}", info);
+    loop {}
+}
+
+
+trait Application {
+    fn new() -> Self;
+    fn step(&mut self);
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct AppData {
+    n: u32
+}
+
 fn get_appdata() -> AppData {
     let mut data: AppData = unsafe { 
         core::mem::zeroed()
@@ -47,17 +60,44 @@ fn get_appdata() -> AppData {
     data
 }
 
-#[no_mangle]
-pub fn hello() -> i32 {
 
-    let app_data = get_appdata();
-    println!("Hello from WASM, {:?}", app_data);
+//
+//  END OF BOILERPLATE
+//
 
-    42
+
+#[derive(Debug)]
+struct TestApp {
+    s: String,
+    n: u64
 }
 
-#[panic_handler]
-fn panic(info: &PanicInfo) ->  ! {
-    println!("{}", info);
-    loop {}
+static mut LOCAL_DATA: OnceCell<TestApp> = OnceCell::new();
+
+impl Application for TestApp {
+
+    fn new() -> Self {
+        TestApp { s: "Pouet".into(), n: 0 }
+    }
+
+    fn step(&mut self) {
+        println!("App state: {:?}", self);
+        self.n += 1;
+    }
+}
+
+#[no_mangle]
+pub fn init() {
+    unsafe { 
+        let app = TestApp::new();
+        LOCAL_DATA.set(app).expect("Application was already initialized")
+    };
+}
+
+#[no_mangle]
+pub fn step() {
+    unsafe { 
+        let app = LOCAL_DATA.get_mut().expect("Application is not initialized");
+        app.step();
+    }
 }

@@ -50,14 +50,18 @@ pub fn wasmi_test() -> Result<()> {
     let instance = linker
         .instantiate(&mut store, &module).unwrap()
         .start(&mut store).unwrap();
-    let hello = instance.get_typed_func::<(), i32>(&store, "hello").unwrap();
+
+    let wasm_init = instance.get_typed_func::<(), ()>(&store, "init").unwrap();
+    let wasm_step = instance.get_typed_func::<(), ()>(&store, "step").unwrap();
 
     serial_println!("Calling WASM");
     store.add_fuel(100000).unwrap();
-    let res = hello.call(&mut store, ()).unwrap();
-    serial_println!("Fuel consumed {:?}", store.fuel_consumed());
 
-    serial_println!("Result: {}", res);
+    wasm_init.call(&mut store, ()).unwrap();
+    wasm_step.call(&mut store, ()).unwrap();
+    wasm_step.call(&mut store, ()).unwrap();
+
+    serial_println!("Fuel consumed {:?}", store.fuel_consumed());
 
     Ok(())
 }

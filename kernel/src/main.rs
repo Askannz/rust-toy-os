@@ -22,7 +22,7 @@ mod virtio;
 mod smoltcp_virtio;
 mod http;
 
-mod wasmi_test;
+mod wasm;
 
 use time::SystemClock;
 use http::HttpServer;
@@ -32,6 +32,8 @@ use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
 use virtio::network::{VirtioNetwork, NetworkFeatureBits};
 use virtio::VirtioDevice;
+
+use wasm::WasmEngine;
 
 #[derive(Clone)]
 struct AppDescriptor {
@@ -65,6 +67,8 @@ const APPLICATIONS: [AppDescriptor; 2] = [
         init_win_rect: Rect { x0: 600, y0: 200, w: 200, h: 200 }
     },
 ];
+
+const WASM_CODE: &'static [u8] = include_bytes!("../../embedded_data/wasm_test.wasm");
 
 const FONT_BYTES: &'static [u8] = include_bytes!("../../embedded_data/fontmap.bin");
 const FONT_NB_CHARS: usize = 95;
@@ -156,7 +160,10 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     serial_println!("HTTP server initialized");
 
     serial_println!("WASM test");
-    wasmi_test::wasmi_test().unwrap();
+    let wasm_engine = WasmEngine::new();
+    let mut wasm_app = wasm_engine.instantiate_app(WASM_CODE);
+    wasm_app.step();
+    wasm_app.step();
 
     let runtime_services = unsafe { system_table.runtime_services() };
     let clock = SystemClock::new(runtime_services);

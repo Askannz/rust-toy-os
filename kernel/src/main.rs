@@ -162,8 +162,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     serial_println!("WASM test");
     let wasm_engine = WasmEngine::new();
     let mut wasm_app = wasm_engine.instantiate_app(WASM_CODE);
-    wasm_app.step();
-    wasm_app.step();
 
     let runtime_services = unsafe { system_table.runtime_services() };
     let clock = SystemClock::new(runtime_services);
@@ -188,6 +186,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         //serial_println!("{:?}", system_state);
 
         update_apps(&mut framebuffer, &system_state, &mut applications);
+
+        wasm_app.step(&system_state);
 
         draw_cursor(&mut framebuffer, &system_state);
         virtio_gpu.flush();

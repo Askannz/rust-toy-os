@@ -4,13 +4,17 @@ extern crate alloc;
 
 use core::panic::PanicInfo;
 use core::cell::OnceCell;
+use core::mem::size_of;
 use alloc::{string::String, format, boxed::Box};
+
+use applib::SystemState;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 extern "C" {
     fn host_print_console(addr: i32, len: i32);
+    fn host_get_system_state(addr: i32);
 }
 
 fn print_console(s: String) {
@@ -18,6 +22,15 @@ fn print_console(s: String) {
     let addr = buf.as_ptr() as i32;
     let len = buf.len() as i32;
     unsafe { host_print_console(addr, len) };
+}
+
+fn get_system_state() -> SystemState {
+    let mut buf = [0u8; size_of::<SystemState>()];
+    let addr = buf.as_mut_ptr() as i32;
+    unsafe { 
+        host_get_system_state(addr);
+        core::mem::transmute(buf)
+    }
 }
 
 macro_rules! print {
@@ -95,5 +108,7 @@ pub fn step() {
     state.n += 1;
     let handle = unsafe { core::ptr::read_volatile(state.handle_ptr) };
 
-    println!("{:?} {:?}", state, handle);
+    let system_state = get_system_state();
+
+    println!("{:?} {:?} {:?}", state, handle, system_state);
 }

@@ -7,7 +7,6 @@ pub struct AppHandle<'a, 'b> {
     pub app_framebuffer: FrameBufRegion<'a, 'b>,
 } 
 
-
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct SystemState {

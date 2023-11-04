@@ -83,7 +83,7 @@ const H: usize = 100;
 pub fn init() -> () {
 
     let fb_ptr = unsafe {
-        let ptr = vec![0u8; W*H*4].leak().as_mut_ptr();
+        let ptr = vec![128u8; W*H*4].leak().as_mut_ptr();
         host_set_framebuffer(ptr as i32, W as i32, H as i32);
         ptr
     };

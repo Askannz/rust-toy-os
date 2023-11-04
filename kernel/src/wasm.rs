@@ -4,7 +4,7 @@ use core::mem::size_of;
 use crate::serial_println;
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext};
 
-use applib::{SystemState, Framebuffer};
+use applib::{SystemState, Framebuffer, FrameBufRegion, Color, Rect};
 
 pub struct WasmEngine {
     engine: Engine
@@ -49,7 +49,7 @@ impl WasmEngine {
         });
 
         let host_set_framebuffer = Func::wrap(&mut store, |mut caller: Caller<StoreData>, addr: i32, w: i32, h: i32| {
-            caller.data_mut().framebuffer = Some(WasmFramebuffer { 
+            caller.data_mut().framebuffer = Some(WasmFramebufferDef { 
                 addr: addr as usize,
                 w: w as usize,
                 h: h as usize,
@@ -79,7 +79,8 @@ impl WasmEngine {
     }
 }
 
-struct WasmFramebuffer {
+#[derive(Clone)]
+struct WasmFramebufferDef {
     addr: usize,
     h: usize,
     w: usize,
@@ -87,7 +88,7 @@ struct WasmFramebuffer {
 
 struct StoreData {
     system_state: Option<SystemState>,
-    framebuffer: Option<WasmFramebuffer>
+    framebuffer: Option<WasmFramebufferDef>
 }
 
 impl StoreData {
@@ -105,30 +106,33 @@ pub struct WasmApp {
 impl WasmApp {
     pub fn step(&mut self, system_state: &SystemState, system_fb: &mut Framebuffer) {
 
-        {
-            let mut ctx = self.store.as_context_mut();
+        let mut ctx = self.store.as_context_mut();
 
-            ctx.data_mut().system_state = Some(system_state.clone());
-    
-            self.wasm_step
-                .call(&mut self.store, ())
-                .expect("Failed to step WASM app");
-        }
+        ctx.data_mut().system_state = Some(system_state.clone());
 
-        let ctx = self.store.as_context();
+        self.wasm_step
+            .call(&mut self.store, ())
+            .expect("Failed to step WASM app");
 
-        if let Some(wasm_fb) = ctx.data().framebuffer.as_ref() {
+
+        let wasm_fb_def = self.store.as_context().data().framebuffer.clone();
+        if let Some(wasm_fb_def) = wasm_fb_def {
 
             let mem = self.instance.get_memory(&self.store, "memory").unwrap();
+            let ctx = self.store.as_context_mut();
+            let mem_data = mem.data_mut(ctx);
 
-            let mem_data = mem.data(&ctx);
-            for x in 0..wasm_fb.w {
-                for y in 0..wasm_fb.h {
-                    let system_i = ((y * (system_fb.w as usize) + x) * 4) as usize;
-                    let wasm_i = ((y * wasm_fb.w + x) * 4) as usize;
-                    system_fb.data[system_i..system_i+4].copy_from_slice(&mem_data[wasm_i..wasm_i+4]);
+            let mut wasm_fb = {
+                let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
+                let fb_data = &mut mem_data[addr..addr + w*h*4];
+                Framebuffer {
+                    data: fb_data,
+                    h: h as i32,
+                    w: w as i32
                 }
-            }
+            };
+
+            system_fb.as_region().copy_from(&wasm_fb.as_region());
         }
     }
 }

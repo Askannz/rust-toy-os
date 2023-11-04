@@ -22,6 +22,9 @@ impl WasmEngine {
         let module = Module::new(&self.engine, wasm_code).unwrap();
         let store_data = StoreData::new();
         let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
+
+        //
+        // WASM<->System API functions
     
         let host_print_console = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32, len: i32| {
             let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
@@ -56,6 +59,10 @@ impl WasmEngine {
             });
         });
 
+
+        //
+        // Instantiating app
+
         let mut linker = <Linker<StoreData>>::new(&self.engine);
         linker.define("env", "host_print_console", host_print_console).unwrap();
         linker.define("env", "host_get_system_state", host_get_system_state).unwrap();
@@ -66,6 +73,10 @@ impl WasmEngine {
     
         let wasm_init = instance.get_typed_func::<(), ()>(&store, "init").unwrap();
         let wasm_step = instance.get_typed_func::<(), ()>(&store, "step").unwrap();
+
+
+        //
+        // App init
 
         wasm_init
             .call(&mut store, ())

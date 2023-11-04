@@ -5,11 +5,14 @@ extern crate alloc;
 use core::panic::PanicInfo;
 use core::cell::OnceCell;
 use core::mem::size_of;
-use alloc::{string::String, format, boxed::Box};
+use alloc::{string::String, format};
 use alloc::vec;
-use alloc::vec::Vec;
 
-use applib::SystemState;
+use applib::{SystemState, Framebuffer, Color};
+
+mod drawing;
+
+use drawing::draw_cube;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -59,39 +62,31 @@ fn panic(info: &PanicInfo) ->  ! {
 //  END OF BOILERPLATE
 //
 
-
 #[derive(Debug)]
-struct Framebuffer {
-    ptr: *mut u8,
+struct AppState {
+    framebuffer_ptr: *mut u8,
     w: usize,
     h: usize,
 }
 
-#[derive(Debug)]
-struct AppState {
-    s: String,
-    n: u64,
-    framebuffer: Framebuffer
-}
-
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
-const W: usize = 100;
-const H: usize = 100;
+const W: usize = 400;
+const H: usize = 400;
 
 #[no_mangle]
 pub fn init() -> () {
 
-    let fb_ptr = unsafe {
+    let framebuffer_ptr = unsafe {
         let ptr = vec![128u8; W*H*4].leak().as_mut_ptr();
         host_set_framebuffer(ptr as i32, W as i32, H as i32);
         ptr
     };
 
     let state = AppState {
-        s: "aaaa".into(),
-        n: 0,
-        framebuffer: Framebuffer { ptr: fb_ptr, w: W, h: H }
+        framebuffer_ptr,
+        w: W,
+        h: H,
     };
 
     unsafe { 
@@ -110,8 +105,27 @@ pub fn step() {
             .expect("Application is not initialized")
     };
 
-    state.n += 1;
     let system_state = get_system_state();
 
-    println!("{:?} {:?}", state, system_state);
+    let mut framebuffer = unsafe {
+
+        let AppState { framebuffer_ptr, w, h } = *state;
+        let fb_data = core::slice::from_raw_parts_mut(framebuffer_ptr, w*h*4);
+
+        Framebuffer  {
+            data: fb_data,
+            w: w as i32,
+            h: h as i32,
+        }
+    };
+
+    let pointer = system_state.pointer;
+    let xf = (pointer.x as f32) / ((W - 1) as f32);
+    let yf = (pointer.y as f32) / ((H - 1) as f32);
+
+    let mut region = framebuffer.as_region();
+    region.fill(&Color(0, 0, 0));
+    draw_cube(&mut region, xf, yf)
+
+    //println!("{:?} {:?}", state, system_state);
 }

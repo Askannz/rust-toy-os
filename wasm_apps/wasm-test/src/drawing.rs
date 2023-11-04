@@ -1,7 +1,6 @@
 //use micromath::F32Ext;
 use num_traits::Float;
-use core::cmp::Ordering;
-use applib::{AppHandle, Color, FrameBufRegion};
+use applib::{Color, FrameBufRegion};
 
 const COLORS: [Color; 6] = [
     Color(0xff, 0x00, 0x00),
@@ -11,7 +10,7 @@ const COLORS: [Color; 6] = [
     Color(0xff, 0x00, 0xff),
     Color(0x00, 0xff, 0xff),
 ];
-const ZOOM: f32 = 0.2;
+const ZOOM: f32 = 0.4;
 const MOUSE_SENSITIVITY: f32 = 5.0;
 const PI: f32 = 3.14159265359;
 const NB_QUADS: usize = 6;
@@ -84,20 +83,20 @@ fn rotate(poly: &Quad, axis: Axis, angle: f32) -> Quad {
 
 fn rasterize(fb: &mut FrameBufRegion, geometry: &[Quad; NB_QUADS]) {
 
-    for (i, poly) in geometry.iter().enumerate() {
-        let color = &COLORS[i % COLORS.len()];
-        rasterize_poly(fb, poly, &color);
+    let (mut min_x, mut min_y) = (0.0, 0.0);
+    let (mut max_x, mut max_y) = (0.0, 0.0);
+
+    for poly in geometry.iter() {
+        for p in poly.iter() {
+            min_x = f32::min(min_x, p.x);
+            min_y = f32::min(min_y, p.y);
+            max_x = f32::max(max_x, p.x);
+            max_y = f32::max(max_y, p.y);
+        }
     }
 
-}
-
-fn rasterize_poly(fb: &mut FrameBufRegion, poly: &Quad, color: &Color) {
-
-    let cmp_f = |a: &f32, b: &f32| { a.partial_cmp(b).unwrap_or(Ordering::Equal) };
-    let min_x = poly.iter().map(|p| p.x).min_by(cmp_f).unwrap();
-    let max_x = poly.iter().map(|p| p.x).max_by(cmp_f).unwrap();
-    let min_y = poly.iter().map(|p| p.y).min_by(cmp_f).unwrap();
-    let max_y = poly.iter().map(|p| p.y).max_by(cmp_f).unwrap();
+    let w = fb.rect.w as f32;
+    let h = fb.rect.h as f32;
 
     for x_px in 0..fb.rect.w {
         for y_px in 0..fb.rect.h {
@@ -106,8 +105,6 @@ fn rasterize_poly(fb: &mut FrameBufRegion, poly: &Quad, color: &Color) {
    
                 let x_px = x_px as f32;
                 let y_px = y_px as f32;
-                let w = fb.rect.w as f32;
-                let h = fb.rect.h as f32;
 
                 let rx = 2.0 * (x_px - (w - h) / 2.0) / (h - 1.0);
                 let ry = 2.0 * y_px / (h - 1.0);
@@ -123,8 +120,12 @@ fn rasterize_poly(fb: &mut FrameBufRegion, poly: &Quad, color: &Color) {
                 continue;
             }
 
-            if test_in_poly(&poly, &p) {
-                fb.set_pixel(x_px, y_px, color);
+            for (i, poly) in geometry.iter().enumerate() {
+                if test_in_poly(&poly, &p) {
+                    let color = &COLORS[i % COLORS.len()];
+                    fb.set_pixel(x_px, y_px, color);
+                    break;
+                }
             }
         }
     }

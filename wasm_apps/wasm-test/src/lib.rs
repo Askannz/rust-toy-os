@@ -71,8 +71,8 @@ struct AppState {
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
-const W: usize = 400;
-const H: usize = 400;
+const W: usize = 200;
+const H: usize = 200;
 
 #[no_mangle]
 pub fn init() -> () {

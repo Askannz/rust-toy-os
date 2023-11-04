@@ -6,6 +6,8 @@ use core::panic::PanicInfo;
 use core::cell::OnceCell;
 use core::mem::size_of;
 use alloc::{string::String, format, boxed::Box};
+use alloc::vec;
+use alloc::vec::Vec;
 
 use applib::SystemState;
 
@@ -15,6 +17,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 extern "C" {
     fn host_print_console(addr: i32, len: i32);
     fn host_get_system_state(addr: i32);
+    fn host_set_framebuffer(addr: i32, w: i32, h: i32);
 }
 
 fn print_console(s: String) {
@@ -51,12 +54,6 @@ fn panic(info: &PanicInfo) ->  ! {
     loop {}
 }
 
-#[derive(Debug)]
-#[repr(C)]
-struct AppHandle {
-    n: u32
-}
-
 
 //
 //  END OF BOILERPLATE
@@ -64,27 +61,37 @@ struct AppHandle {
 
 
 #[derive(Debug)]
+struct Framebuffer {
+    ptr: *mut u8,
+    w: usize,
+    h: usize,
+}
+
+#[derive(Debug)]
 struct AppState {
-    handle_ptr: *mut AppHandle,
     s: String,
-    n: u64
+    n: u64,
+    framebuffer: Framebuffer
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
+const W: usize = 100;
+const H: usize = 100;
+
 #[no_mangle]
-pub fn init() -> i32 {
+pub fn init() -> () {
 
-    let handle: AppHandle = unsafe { core::mem::zeroed() };
-    let handle = Box::new(handle);
-
-    let handle_ptr = Box::leak(handle) as *mut AppHandle;
-    let handle_addr = handle_ptr  as i32;
+    let fb_ptr = unsafe {
+        let ptr = vec![0u8; W*H*4].leak().as_mut_ptr();
+        host_set_framebuffer(ptr as i32, W as i32, H as i32);
+        ptr
+    };
 
     let state = AppState {
-        handle_ptr,
         s: "aaaa".into(),
         n: 0,
+        framebuffer: Framebuffer { ptr: fb_ptr, w: W, h: H }
     };
 
     unsafe { 
@@ -92,8 +99,6 @@ pub fn init() -> i32 {
             .set(state)
             .expect("Application was already initialized");
     };
-
-    handle_addr
 }
 
 #[no_mangle]
@@ -106,9 +111,7 @@ pub fn step() {
     };
 
     state.n += 1;
-    let handle = unsafe { core::ptr::read_volatile(state.handle_ptr) };
-
     let system_state = get_system_state();
 
-    println!("{:?} {:?} {:?}", state, handle, system_state);
+    println!("{:?} {:?}", state, system_state);
 }

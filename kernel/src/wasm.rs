@@ -1,15 +1,10 @@
+use alloc::vec::Vec;
 use alloc::vec;
 use core::mem::size_of;
 use crate::serial_println;
-use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance};
+use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext};
 
-use applib::SystemState;
-
-#[derive(Debug)]
-#[repr(C)]
-struct AppHandle {
-    n: u32
-}
+use applib::{SystemState, Framebuffer};
 
 pub struct WasmEngine {
     engine: Engine
@@ -25,7 +20,7 @@ impl WasmEngine {
     pub fn instantiate_app(&self, wasm_code: &[u8]) -> WasmApp {
 
         let module = Module::new(&self.engine, wasm_code).unwrap();
-        let store_data = None;
+        let store_data = StoreData::new();
         let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
     
         let host_print_console = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32, len: i32| {
@@ -42,7 +37,9 @@ impl WasmEngine {
 
         let host_get_system_state = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32| {
             let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
-            let system_state = caller.data().as_ref().expect("System state not available");
+            let system_state = caller.data()
+                .system_state
+                .as_ref().expect("System state not available");
             unsafe {
                 let len = size_of::<SystemState>();
                 let ptr = system_state as *const SystemState as *const u8;
@@ -51,17 +48,26 @@ impl WasmEngine {
             }
         });
 
+        let host_set_framebuffer = Func::wrap(&mut store, |mut caller: Caller<StoreData>, addr: i32, w: i32, h: i32| {
+            caller.data_mut().framebuffer = Some(WasmFramebuffer { 
+                addr: addr as usize,
+                w: w as usize,
+                h: h as usize,
+            });
+        });
+
         let mut linker = <Linker<StoreData>>::new(&self.engine);
         linker.define("env", "host_print_console", host_print_console).unwrap();
         linker.define("env", "host_get_system_state", host_get_system_state).unwrap();
+        linker.define("env", "host_set_framebuffer", host_set_framebuffer).unwrap();
         let instance = linker
             .instantiate(&mut store, &module).unwrap()
             .start(&mut store).unwrap();
     
-        let wasm_init = instance.get_typed_func::<(), i32>(&store, "init").unwrap();
+        let wasm_init = instance.get_typed_func::<(), ()>(&store, "init").unwrap();
         let wasm_step = instance.get_typed_func::<(), ()>(&store, "step").unwrap();
 
-        let handle_addr = wasm_init
+        wasm_init
             .call(&mut store, ())
             .expect("Failed to initialize WASM app");
 
@@ -69,38 +75,60 @@ impl WasmEngine {
             store,
             instance,
             wasm_step,
-            handle_addr,
         }
     }
 }
 
-type StoreData = Option<SystemState>;
+struct WasmFramebuffer {
+    addr: usize,
+    h: usize,
+    w: usize,
+}
+
+struct StoreData {
+    system_state: Option<SystemState>,
+    framebuffer: Option<WasmFramebuffer>
+}
+
+impl StoreData {
+    fn new() -> Self {
+        StoreData { system_state: None, framebuffer: None }
+    }
+}
 
 pub struct WasmApp {
     store: Store<StoreData>,
     instance: Instance,
     wasm_step: TypedFunc<(), ()>,
-    handle_addr: i32,
 }
 
 impl WasmApp {
-    pub fn step(&mut self, system_state: &SystemState) {
+    pub fn step(&mut self, system_state: &SystemState, system_fb: &mut Framebuffer) {
 
-        let mem = self.instance.get_memory(&mut self.store, "memory").unwrap();
-        let mut ctx = self.store.as_context_mut();
+        {
+            let mut ctx = self.store.as_context_mut();
 
-        *ctx.data_mut() = Some(system_state.clone());
+            ctx.data_mut().system_state = Some(system_state.clone());
+    
+            self.wasm_step
+                .call(&mut self.store, ())
+                .expect("Failed to step WASM app");
+        }
 
-        let handle = AppHandle { n: 1337 };
+        let ctx = self.store.as_context();
 
-        unsafe {
-            let ptr = &handle as *const AppHandle as *const u8;
-            let buffer = core::slice::from_raw_parts(ptr, core::mem::size_of::<AppHandle>());
-            mem.write(ctx, self.handle_addr as usize, buffer).unwrap();
-        };
+        if let Some(wasm_fb) = ctx.data().framebuffer.as_ref() {
 
-        self.wasm_step
-            .call(&mut self.store, ())
-            .expect("Failed to step WASM app");
+            let mem = self.instance.get_memory(&self.store, "memory").unwrap();
+
+            let mem_data = mem.data(&ctx);
+            for x in 0..wasm_fb.w {
+                for y in 0..wasm_fb.h {
+                    let system_i = ((y * (system_fb.w as usize) + x) * 4) as usize;
+                    let wasm_i = ((y * wasm_fb.w + x) * 4) as usize;
+                    system_fb.data[system_i..system_i+4].copy_from_slice(&mem_data[wasm_i..wasm_i+4]);
+                }
+            }
+        }
     }
 }

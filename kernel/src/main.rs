@@ -187,7 +187,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         update_apps(&mut framebuffer, &system_state, &mut applications);
 
-        wasm_app.step(&system_state);
+        wasm_app.step(&system_state, &mut framebuffer);
 
         draw_cursor(&mut framebuffer, &system_state);
         virtio_gpu.flush();

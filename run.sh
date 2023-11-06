@@ -26,6 +26,10 @@ cd cube_3d/
 cargo build --release
 cd ../
 
+cd chronometer/
+cargo build --release
+cd ../
+
 cd ../
 
 
@@ -38,6 +42,7 @@ python dump_pe.py apps/chronometer/target/x86_64-unknown-uefi/release/chronomete
 python dump_image_bytes.py fontmap.png embedded_data/fontmap.bin
 python dump_image_bytes.py wallpaper.png embedded_data/wallpaper.bin
 cp wasm_apps/cube_3d/target/wasm32-unknown-unknown/release/cube_3d.wasm embedded_data/cube_3d.wasm
+cp wasm_apps/chronometer/target/wasm32-unknown-unknown/release/chronometer.wasm embedded_data/chronometer.wasm
 
 
 #

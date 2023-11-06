@@ -9,7 +9,7 @@ use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use smoltcp::wire::{IpAddress, IpCidr};
 
-use applib::{Color, Rect, Framebuffer, AppHandle, SystemState, PointerState};
+use applib::{Color, Rect, Framebuffer, SystemState, PointerState};
 
 extern crate alloc;
 
@@ -33,18 +33,18 @@ use virtio::input::VirtioInput;
 use virtio::network::{VirtioNetwork, NetworkFeatureBits};
 use virtio::VirtioDevice;
 
-use wasm::WasmEngine;
+use wasm::{WasmEngine, WasmApp};
 
 #[derive(Clone)]
 struct AppDescriptor {
     data: &'static [u8],
-    entrypoint: u64,
     launch_rect: Rect,
     name: &'static str,
     init_win_rect: Rect,
 }
 
 struct App {
+    wasm_app: WasmApp,
     descriptor: AppDescriptor,
     is_open: bool,
     rect: Rect,
@@ -53,22 +53,18 @@ struct App {
 
 const APPLICATIONS: [AppDescriptor; 2] = [
     AppDescriptor {
-        data: include_bytes!("../../embedded_data/apps/cube_3d"),
-        entrypoint: 0x1000,
+        data: include_bytes!("../../embedded_data/cube_3d.wasm"),
         launch_rect: Rect { x0: 100, y0: 100, w: 200, h: 40 },
         name: "3D Cube",
         init_win_rect: Rect { x0: 200, y0: 200, w: 400, h: 400 }
     },
     AppDescriptor {
-        data: include_bytes!("../../embedded_data/apps/chronometer"),
-        entrypoint: 0x1000,
+        data: include_bytes!("../../embedded_data/chronometer.wasm"),
         launch_rect: Rect { x0: 100, y0: 150, w: 200, h: 40 },
         name: "Chronometer",
         init_win_rect: Rect { x0: 600, y0: 200, w: 200, h: 200 }
     },
 ];
-
-const WASM_CODE: &'static [u8] = include_bytes!("../../embedded_data/cube_3d.wasm");
 
 const FONT_BYTES: &'static [u8] = include_bytes!("../../embedded_data/fontmap.bin");
 const FONT_NB_CHARS: usize = 95;
@@ -144,8 +140,11 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let (w, h) = virtio_gpu.get_dims();
     let (w, h) = (w as i32, h as i32);
     let mut pointer_state = PointerState { x: 0, y: 0, clicked: false };
+    let wasm_engine = WasmEngine::new();
+
     let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
         descriptor: app_desc.clone(),
+        wasm_app: wasm_engine.instantiate_app(app_desc.data),
         is_open: false,
         rect: app_desc.init_win_rect.clone(),
         grab_pos: None
@@ -158,10 +157,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let mut server = HttpServer::new(virtio_net, ip_cidr, port);
 
     serial_println!("HTTP server initialized");
-
-    serial_println!("WASM test");
-    let wasm_engine = WasmEngine::new();
-    let mut wasm_app = wasm_engine.instantiate_app(WASM_CODE);
 
     let runtime_services = unsafe { system_table.runtime_services() };
     let clock = SystemClock::new(runtime_services);
@@ -186,8 +181,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         //serial_println!("{:?}", system_state);
 
         update_apps(&mut framebuffer, &system_state, &mut applications);
-
-        wasm_app.step(&system_state, &mut framebuffer);
 
         draw_cursor(&mut framebuffer, &system_state);
         virtio_gpu.flush();
@@ -252,13 +245,8 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
             draw_rect(fb, &app.rect, &Color(0x00, 0x00, 0x00), 0.5);
             draw_str(fb, app.rect.x0, app.rect.y0 - 30, app.descriptor.name, &Color(0xff, 0xff, 0xff));
 
-            let handle = AppHandle {
-                system_state: system_state.clone(),
-                app_rect: app.rect.clone(),
-                app_framebuffer: fb.get_region(&app.rect),
-            };
-
-            call_app(handle, &app.descriptor);
+            let mut fb_region = fb.get_region(&app.rect);
+            app.wasm_app.step(system_state, &mut fb_region);
         }
     }
 }
@@ -351,19 +339,6 @@ fn draw_char(fb: &mut Framebuffer, x0: i32, y0: i32, c: u8, color: &Color) {
     }
 
 }
-
-fn call_app(mut handle: AppHandle, app: &AppDescriptor) -> () {
-
-    let code_ptr =  app.data.as_ptr();
-    let entrypoint_ptr = unsafe { code_ptr.offset(app.entrypoint as isize)};
-
-    let exec_data: extern "C" fn (&mut AppHandle) = unsafe {  
-        core::mem::transmute(entrypoint_ptr)
-    };
-
-    exec_data(&mut handle);
-}
-
 
 #[panic_handler]
 fn panic(info: &PanicInfo) ->  ! {

@@ -115,7 +115,7 @@ pub struct WasmApp {
 }
 
 impl WasmApp {
-    pub fn step(&mut self, system_state: &SystemState, system_fb: &mut Framebuffer) {
+    pub fn step(&mut self, system_state: &SystemState, system_fb: &mut FrameBufRegion) {
 
         let mut ctx = self.store.as_context_mut();
 
@@ -143,7 +143,7 @@ impl WasmApp {
                 }
             };
 
-            system_fb.as_region().copy_from(&wasm_fb.as_region());
+            system_fb.copy_from(&wasm_fb.as_region());
         }
     }
 }

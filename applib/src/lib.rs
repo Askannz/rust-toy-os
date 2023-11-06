@@ -110,3 +110,69 @@ impl<'a, 'b> FrameBufRegion<'a, 'b> {
         }
     }
 }
+
+pub struct Font {
+    pub fontmap: &'static [u8],
+    pub nb_chars: usize,
+    pub char_h: usize,
+    pub char_w: usize,
+}
+
+pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: i32, y0: i32, font: &Font, color: &Color) {
+    let mut x = x0;
+    for c in s.as_bytes() {
+        draw_char(fb, *c, x, y0, font, color);
+        x += font.char_w as i32;
+    }
+}
+
+fn draw_char(fb: &mut Framebuffer, c: u8, x0: i32, y0: i32, font: &Font, color: &Color) {
+
+    // Supported chars
+    assert!(c >= 32 && c <= 126);
+
+    let mut fb = fb.as_region();
+
+    let c_index = (c - 32) as usize;
+    let Font { nb_chars, char_h, char_w, .. } = *font;
+
+    for x in 0..char_w {
+        for y in 0..char_h {
+            let i_font = y * char_w * nb_chars + x + c_index * char_w;
+            if font.fontmap[i_font] > 0 {
+                fb.set_pixel(x0 + x as i32, y0 + y as i32, color);
+            }
+        }
+    }
+
+}
+
+
+pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: &Color, alpha: u8) {
+
+    let x0 = i32::max(0, rect.x0);
+    let x1 = i32::min(fb.w-1, rect.x0+rect.w);
+    let y0 = i32::max(0, rect.y0);
+    let y1 = i32::min(fb.h-1, rect.y0+rect.h);
+
+    let Color(r, g, b) = *color;
+    for x in x0..=x1 {
+        for y in y0..=y1 {
+            let i = ((y * fb.w + x) * 4) as usize;
+            fb.data[i] = blend(fb.data[i], r, alpha);
+            fb.data[i+1] = blend(fb.data[i], g, alpha);
+            fb.data[i+2] = blend(fb.data[i], b, alpha);
+        }
+    }
+}
+
+fn blend(a: u8, b: u8, alpha: u8) -> u8 {
+
+    let a = a as u16;
+    let b = b as u16;
+    let alpha = alpha as u16;
+
+    let r = a * (256 - alpha) + b * (1 + alpha);
+
+    (r >> 8) as u8
+}

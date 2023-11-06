@@ -9,7 +9,7 @@ use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use smoltcp::wire::{IpAddress, IpCidr};
 
-use applib::{Color, Rect, Framebuffer, SystemState, PointerState};
+use applib::{Color, Rect, Framebuffer, SystemState, PointerState, Font, draw_str, draw_rect};
 
 extern crate alloc;
 
@@ -66,10 +66,12 @@ const APPLICATIONS: [AppDescriptor; 2] = [
     },
 ];
 
-const FONT_BYTES: &'static [u8] = include_bytes!("../../embedded_data/fontmap.bin");
-const FONT_NB_CHARS: usize = 95;
-const FONT_CHAR_H: usize = 24;
-const FONT_CHAR_W: usize = 12;
+const DEFAULT_FONT: Font = Font {
+    fontmap: include_bytes!("../../embedded_data/fontmap.bin"),
+    nb_chars: 95,
+    char_h: 24,
+    char_w: 12,
+};
 
 const WALLPAPER: &'static [u8] = include_bytes!("../../embedded_data/wallpaper.bin");
 
@@ -211,11 +213,11 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
             app.is_open = true;
         }
 
-        draw_rect(fb, &rect, color, 1.0);
+        draw_rect(fb, &rect, color, 255);
 
         let text_x0 = rect.x0 + TEXT_MARGIN;
         let text_y0 = rect.y0 + TEXT_MARGIN;
-        draw_str(fb, text_x0, text_y0, app.descriptor.name, &Color(0xff, 0xff, 0xff));
+        draw_str(fb, app.descriptor.name, text_x0, text_y0, &DEFAULT_FONT, &Color(0xff, 0xff, 0xff));
 
         if app.is_open {
 
@@ -241,9 +243,9 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
                 }
             }
 
-            draw_rect(fb, &deco_rect, &Color(0x88, 0x88, 0x88), 0.5);
-            draw_rect(fb, &app.rect, &Color(0x00, 0x00, 0x00), 0.5);
-            draw_str(fb, app.rect.x0, app.rect.y0 - 30, app.descriptor.name, &Color(0xff, 0xff, 0xff));
+            draw_rect(fb, &deco_rect, &Color(0x88, 0x88, 0x88), 127);
+            //draw_rect(fb, &app.rect, &Color(0x00, 0x00, 0x00), 0.5);
+            draw_str(fb, app.descriptor.name, app.rect.x0, app.rect.y0 - 30, &DEFAULT_FONT, &Color(0xff, 0xff, 0xff));
 
             let mut fb_region = fb.get_region(&app.rect);
             app.wasm_app.step(system_state, &mut fb_region);
@@ -255,7 +257,7 @@ fn draw_cursor(fb: &mut Framebuffer, system_state: &SystemState) {
     let pointer_state = &system_state.pointer;
     let x = pointer_state.x;
     let y = pointer_state.y;
-    draw_rect(fb, &Rect { x0: x, y0: y, w: 5, h: 5 }, &Color(0xff, 0xff, 0xff), 1.0)
+    draw_rect(fb, &Rect { x0: x, y0: y, w: 5, h: 5 }, &Color(0xff, 0xff, 0xff), 255)
 }
 
 fn update_pointer(virtio_input: &mut VirtioInput, dims: (i32, i32), status: PointerState) -> PointerState {
@@ -283,62 +285,7 @@ fn update_pointer(virtio_input: &mut VirtioInput, dims: (i32, i32), status: Poin
 }
 
 
-fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: &Color, alpha: f32) {
 
-    let x0 = i32::max(0, rect.x0);
-    let x1 = i32::min(fb.w-1, rect.x0+rect.w);
-    let y0 = i32::max(0, rect.y0);
-    let y1 = i32::min(fb.h-1, rect.y0+rect.h);
-
-    let Color(r, g, b) = *color;
-    for x in x0..=x1 {
-        for y in y0..=y1 {
-            let i = ((y * fb.w + x) * 4) as usize;
-            fb.data[i] = blend(fb.data[i], r, alpha);
-            fb.data[i+1] = blend(fb.data[i], g, alpha);
-            fb.data[i+2] = blend(fb.data[i], b, alpha);
-            fb.data[i+3] = 0xff;
-        }
-    }
-}
-
-fn blend(a: u8, b: u8, alpha: f32) -> u8 {
-    ((a as f32) * (1.0 - alpha) + (b as f32) * alpha) as u8
-}
-
-
-fn draw_str(fb: &mut Framebuffer, x0: i32, y0: i32, s: &str, color: &Color) {
-    let mut x = x0;
-    for c in s.as_bytes() {
-        draw_char(fb, x, y0, *c, color);
-        x += FONT_CHAR_W as i32;
-    }
-}
-
-fn draw_char(fb: &mut Framebuffer, x0: i32, y0: i32, c: u8, color: &Color) {
-
-    assert!(c >= 32 && c <= 126);
-
-    let c_index = (c - 32) as i32;
-    let Color(r, g, b) = *color;
-    let cw = FONT_CHAR_W as i32;
-    let ch = FONT_CHAR_H as i32;
-    let n_chars = FONT_NB_CHARS as i32;
-
-    for x in 0..cw {
-        for y in 0..ch {
-            let i_font = (y * cw * n_chars + x + c_index * cw) as usize;
-            if FONT_BYTES[i_font] > 0 {
-                let i = (((y0 + y) * fb.w + x + x0) * 4) as usize;
-                fb.data[i]   = r;
-                fb.data[i+1] = g;
-                fb.data[i+2] = b;
-                fb.data[i+3] = 0xff;
-            }
-        }
-    }
-
-}
 
 #[panic_handler]
 fn panic(info: &PanicInfo) ->  ! {

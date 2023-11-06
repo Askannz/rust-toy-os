@@ -3,19 +3,16 @@ name = "cube_3d"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 wee_alloc = "0.4.5"
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 applib = { path = "../../applib" }
 
-[lib]
-crate-type = ["cdylib"]
+# To avoid error about missing tests
+[[bin]]
+name = "cube_3d"
 test = false
 bench = false
 
 [profile.release]
-opt-level = 'z'
-lto = true
 panic = 'abort'

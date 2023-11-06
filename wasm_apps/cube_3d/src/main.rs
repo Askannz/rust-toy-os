@@ -1,4 +1,5 @@
 #![no_std]
+#![no_main]
 
 extern crate alloc;
 
@@ -12,7 +13,7 @@ use applib::{SystemState, Framebuffer, Color};
 
 mod drawing;
 
-use drawing::draw_chrono;
+use drawing::draw_cube;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -119,7 +120,13 @@ pub fn step() {
         }
     };
 
+    let pointer = system_state.pointer;
+    let xf = (pointer.x as f32) / ((W - 1) as f32);
+    let yf = (pointer.y as f32) / ((H - 1) as f32);
+
     let mut region = framebuffer.as_region();
     region.fill(&Color(0, 0, 0));
-    draw_chrono(&mut region, system_state.time)
+    draw_cube(&mut region, xf, yf)
+
+    //println!("{:?} {:?}", state, system_state);
 }

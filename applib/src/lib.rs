@@ -1,12 +1,5 @@
 #![no_std]
 
-#[repr(C)]
-pub struct AppHandle<'a, 'b> {
-    pub system_state: SystemState,
-    pub app_rect: Rect,
-    pub app_framebuffer: FrameBufRegion<'a, 'b>,
-} 
-
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct SystemState {
@@ -21,8 +14,6 @@ pub struct PointerState {
     pub y: i32,
     pub clicked: bool
 }
-
-
 
 #[derive(Clone)]
 pub struct Color(pub u8, pub u8, pub u8);

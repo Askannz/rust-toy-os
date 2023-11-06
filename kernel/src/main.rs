@@ -68,7 +68,7 @@ const APPLICATIONS: [AppDescriptor; 2] = [
     },
 ];
 
-const WASM_CODE: &'static [u8] = include_bytes!("../../embedded_data/wasm_test.wasm");
+const WASM_CODE: &'static [u8] = include_bytes!("../../embedded_data/cube_3d.wasm");
 
 const FONT_BYTES: &'static [u8] = include_bytes!("../../embedded_data/fontmap.bin");
 const FONT_NB_CHARS: usize = 95;

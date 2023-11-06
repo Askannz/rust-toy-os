@@ -22,7 +22,7 @@ cd ../
 
 cd wasm_apps/
 
-cd wasm-test/
+cd cube_3d/
 cargo build --release
 cd ../
 
@@ -37,7 +37,7 @@ python dump_pe.py apps/cube_3d/target/x86_64-unknown-uefi/release/cube_3d.efi em
 python dump_pe.py apps/chronometer/target/x86_64-unknown-uefi/release/chronometer.efi embedded_data/apps/chronometer
 python dump_image_bytes.py fontmap.png embedded_data/fontmap.bin
 python dump_image_bytes.py wallpaper.png embedded_data/wallpaper.bin
-cp wasm_apps/wasm-test/target/wasm32-unknown-unknown/release/wasm_test.wasm embedded_data/wasm_test.wasm
+cp wasm_apps/cube_3d/target/wasm32-unknown-unknown/release/cube_3d.wasm embedded_data/cube_3d.wasm
 
 
 #

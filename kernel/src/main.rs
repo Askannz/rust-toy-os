@@ -159,18 +159,24 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
 
     const COLOR_IDLE: Color = Color(0x44, 0x44, 0x44);
     const COLOR_HOVER: Color = Color(0x88, 0x88, 0x88);
+    const COLOR_SHADOW: Color = Color(0x0, 0x0, 0x0);
+    const COLOR_TEXT: Color = Color(0xff, 0xff, 0xff);
+    const ALPHA_APP: u8 = 255;
+    const ALPHA_SHADOW: u8 = 100;
+    const OFFSET_SHADOW: u32 = 10;
     const TEXT_MARGIN: u32 = 5;
+    const DECO_PADDING: u32 = 5;
 
     for app in applications.iter_mut() {
 
         let rect = &app.descriptor.launch_rect;
 
         let pointer_state = &system_state.pointer;
-        let hover = rect.check_contains_point(pointer_state.x, pointer_state.y);
+        let launch_hover = rect.check_contains_point(pointer_state.x, pointer_state.y);
 
-        let color = if hover { &COLOR_HOVER } else { &COLOR_IDLE };
+        let color = if launch_hover { &COLOR_HOVER } else { &COLOR_IDLE };
 
-        if hover && pointer_state.clicked && !app.is_open {
+        if launch_hover && pointer_state.clicked && !app.is_open {
             log::info!("{} is open", app.descriptor.name);
             app.is_open = true;
         }
@@ -179,15 +185,16 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
 
         let text_x0 = rect.x0 + TEXT_MARGIN;
         let text_y0 = rect.y0 + TEXT_MARGIN;
-        draw_str(fb, app.descriptor.name, text_x0, text_y0, &DEFAULT_FONT, &Color(0xff, 0xff, 0xff));
+        draw_str(fb, app.descriptor.name, text_x0, text_y0, &DEFAULT_FONT, &COLOR_TEXT);
 
         if app.is_open {
 
+            let font_h = DEFAULT_FONT.char_h as u32;
             let deco_rect = Rect {
-                x0: app.rect.x0 - 5,
-                y0: app.rect.y0 - 35,
-                w: app.rect.w + 2 * 5,
-                h: app.rect.h + 2 * 5 + 30,
+                x0: app.rect.x0 - DECO_PADDING,
+                y0: app.rect.y0 - font_h - 2 * DECO_PADDING,
+                w: app.rect.w + 2 * DECO_PADDING,
+                h: app.rect.h + 2 * DECO_PADDING + font_h,
             };
 
             if let Some((dx, dy)) = app.grab_pos {
@@ -205,9 +212,21 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
                 }
             }
 
-            draw_rect(fb, &deco_rect, &Color(0x88, 0x88, 0x88), 127);
-            //draw_rect(fb, &app.rect, &Color(0x00, 0x00, 0x00), 0.5);
-            draw_str(fb, app.descriptor.name, app.rect.x0, app.rect.y0 - 30, &DEFAULT_FONT, &Color(0xff, 0xff, 0xff));
+            let shadow_rect = Rect { 
+                x0: deco_rect.x0 + OFFSET_SHADOW,
+                y0: deco_rect.y0 + OFFSET_SHADOW,
+                w: deco_rect.w,
+                h: deco_rect.h,
+            };
+
+            draw_rect(fb, &shadow_rect, &COLOR_SHADOW, ALPHA_SHADOW);
+
+            let instance_hover = deco_rect.check_contains_point(pointer_state.x, pointer_state.y);
+            let color_app = if instance_hover { COLOR_HOVER } else { COLOR_IDLE };
+            draw_rect(fb, &deco_rect, &color_app, ALPHA_APP);
+
+            let (x_txt, y_txt) = (app.rect.x0, app.rect.y0 - font_h - DECO_PADDING);
+            draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, &COLOR_TEXT);
 
             let mut region = fb.get_region(&app.rect);
             app.wasm_app.step(system_state, &mut region);
@@ -216,10 +235,14 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
 }
 
 fn draw_cursor(fb: &mut Framebuffer, system_state: &SystemState) {
+
+    const CURSOR_SIZE: u32 = 5;
+    const CURSOR_COLOR: Color = Color(0xff, 0xff, 0xff);
+
     let pointer_state = &system_state.pointer;
     let x = pointer_state.x;
     let y = pointer_state.y;
-    draw_rect(fb, &Rect { x0: x, y0: y, w: 5, h: 5 }, &Color(0xff, 0xff, 0xff), 255)
+    draw_rect(fb, &Rect { x0: x, y0: y, w: CURSOR_SIZE, h: CURSOR_SIZE }, &CURSOR_COLOR, 255)
 }
 
 fn update_pointer(virtio_input: &mut VirtioInput, dims: (u32, u32), status: PointerState) -> PointerState {
@@ -230,6 +253,7 @@ fn update_pointer(virtio_input: &mut VirtioInput, dims: (u32, u32), status: Poin
     let mut status = status;
 
     for event in virtio_input.poll() {
+
         if event._type == 0x2 {
             if event.code == 0 {  // X axis
                 let dx = event.value as i32;

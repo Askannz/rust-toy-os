@@ -4,6 +4,7 @@
 #![feature(abi_x86_interrupt)]
 
 use core::panic::PanicInfo;
+use alloc::format;
 use alloc::vec::Vec;
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
@@ -161,6 +162,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let runtime_services = unsafe { system_table.runtime_services() };
     let clock = SystemClock::new(runtime_services);
+    let mut fps_overlay = FpsOverlay::new(clock.time());
 
     log::info!("Entering main loop");
 
@@ -182,8 +184,9 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         //log::debug!("{:?}", system_state);
 
         update_apps(&mut framebuffer, &system_state, &mut applications);
-
         draw_cursor(&mut framebuffer, &system_state);
+        fps_overlay.update(clock.time());
+        fps_overlay.draw(&mut framebuffer);
         virtio_gpu.flush();
     }
 
@@ -284,7 +287,27 @@ fn update_pointer(virtio_input: &mut VirtioInput, dims: (u32, u32), status: Poin
     status
 }
 
+struct FpsOverlay {
+    last_t: u64,
+    frametime: f64
+}
 
+impl FpsOverlay {
+    fn new(t: u64) -> Self {
+        FpsOverlay { last_t: t, frametime: 0.0 }
+    }
+    fn update(&mut self, now: u64) {
+        const SMOOTHING: f64 = 0.9;
+        let new_frametime = (now - self.last_t) as f64;
+        self.last_t = now;
+        self.frametime = SMOOTHING * self.frametime + (1.0 - SMOOTHING) * new_frametime; 
+    }
+    fn draw(&self, fb: &mut Framebuffer) {
+        let fps = 1000.0 / self.frametime;
+        let s = format!("{:.2} FPS", fps);
+        draw_str(fb, &s, 0, 0, &DEFAULT_FONT, &Color(255, 255, 255));
+    }
+}
 
 
 #[panic_handler]

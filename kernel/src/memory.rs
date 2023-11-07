@@ -18,6 +18,7 @@ pub fn init_allocator(memory_map: &MemoryMap) {
     let desc = memory_map
         .entries()
         .filter(|desc| desc.ty == MemoryType::CONVENTIONAL)
+        .filter(|desc| (desc.page_count * 4000) as usize >= HEAP_SIZE)
         .max_by_key(|desc| desc.page_count)
         .expect("Cannot find suitable memory region for heap");
 
@@ -26,7 +27,6 @@ pub fn init_allocator(memory_map: &MemoryMap) {
         desc.phys_start, desc.page_count
     );
 
-    assert!(HEAP_SIZE < (desc.page_count * 4000) as usize);
     unsafe {
         ALLOCATOR.lock().init(desc.phys_start as usize, HEAP_SIZE);
     }

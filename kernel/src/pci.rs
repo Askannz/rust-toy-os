@@ -1,17 +1,11 @@
 use alloc::borrow::ToOwned;
-use alloc::{rc::Rc, vec::Vec};
+use alloc::vec::Vec;
 use core::mem;
-use core::cell::RefCell;
 use alloc::collections::BTreeMap;
 use x86_64::instructions::port::{PortWriteOnly, Port};
 use bitvec::prelude::Lsb0;
 use bitvec::view::BitView;
 use bitvec::field::BitField;
-
-
-
-
-
 
 #[derive(Debug)]
 pub struct PciDevice {
@@ -22,7 +16,7 @@ pub struct PciDevice {
     pub class: u8,
 
     pub capabilities: Vec<PciCapability>,
-    pub bars: BTreeMap<usize, PciBar>,
+    pub bars: BTreeMap<u32, PciBar>,
 }
 
 #[derive(Debug, Clone)]
@@ -113,12 +107,9 @@ impl PciDevice {
 }
 
 
-pub fn enumerate() -> impl Iterator<Item=PciDevice> {
+pub fn enumerate() -> Vec<PciDevice> {
 
-    let pci_config_space = {
-        let pci_config_space = PciConfigSpace::new();
-        Rc::new(RefCell::new(pci_config_space))
-    };
+    let mut pci_config_space = PciConfigSpace::new();
 
     // Don't care about multi-function devices for now
     let function = 0;
@@ -130,16 +121,15 @@ pub fn enumerate() -> impl Iterator<Item=PciDevice> {
         .flat_map(move |bus| device_iter.clone().map(move |device| (bus, device)))
         .filter_map(move |(bus, device)| {
 
-            let mut config_ref = pci_config_space.borrow_mut();
             let addr = PciAddress { bus, device, function };
 
-            let word_0 = unsafe { config_ref.read(&addr, 0x0) };
+            let word_0 = unsafe { pci_config_space.read(&addr, 0x0) };
 
             // No device at this address
             if word_0 == u32::MAX { return None }
 
             // Header type
-            let word_0c = unsafe { config_ref.read(&addr, 0x0c) };
+            let word_0c = unsafe { pci_config_space.read(&addr, 0x0c) };
             let bits_0c = word_0c.view_bits::<Lsb0>();
             let mut header_bits = bits_0c[16..24].to_owned();
             header_bits.set(7, false);
@@ -152,150 +142,156 @@ pub fn enumerate() -> impl Iterator<Item=PciDevice> {
             let vendor_id = bits_0[0..16].load();
 
             // Device class
-            let word_8 = unsafe { config_ref.read(&addr, 0x8) };
+            let word_8 = unsafe { pci_config_space.read(&addr, 0x8) };
             let bits_8 = word_8.view_bits::<Lsb0>();
             let class = bits_8[24..32].load();
 
-            // PCI capabilities
-            let capabilities = {
+            let capabilities = get_capabilities(&mut pci_config_space, &addr);
+            let bars = get_bars(&mut pci_config_space, &addr);
 
-                let mut cap_ptr = {
-                    let mut word_34 = unsafe { config_ref.read(&addr, 0x34) };
-                    let bits_34 = word_34.view_bits_mut::<Lsb0>();
-                    bits_34[..2].fill(false);
-                    bits_34[..8].load::<u8>()
-                };
-
-
-                let mut capabilities = Vec::new();
-                while cap_ptr != 0x00 {
-
-                    let mut word_0 = unsafe { config_ref.read(&addr, cap_ptr) };
-                    let bits_0 = word_0.view_bits_mut::<Lsb0>();
-
-                    let vendor = bits_0[..8].load();
-    
-                    capabilities.push(PciCapability {
-                        vendor, offset: cap_ptr
-                    });
-
-                    cap_ptr = bits_0[8..16].load();
-                }
-
-                capabilities
-            };
-
-            // BARS
-            let bars = {
-
-                let mut bars = BTreeMap::new();
-                let mut it = 0..6;
-
-                while let Some(i) = it.next() {
-
-                    let offset = 0x10 + 0x4 * (i as u8);
-                    let word_bars = unsafe { config_ref.read(&addr, offset) };
-
-                    let bits_bar = word_bars.view_bits::<Lsb0>();
-
-                    let io_mapped = bits_bar[0];
-                    let n_flags = if io_mapped { 2 } else { 4 };
-
-                    // BAR size
-                    let size: u32 = {
-
-                        let mut word_size = unsafe {
-                            config_ref.write(&addr, offset, u32::MAX);
-                            let word_size = config_ref.read(&addr, offset);
-                            config_ref.write(&addr, offset, word_bars);
-                            word_size
-                        };
-
-                        let bits_size = word_size.view_bits_mut::<Lsb0>();
-                        bits_size[..n_flags].fill(false);
-                        let val: u32 = bits_size.load();
-                        
-                        if val == 0 { 0 }
-                        else { !val + 1 }
-                    };
-
-                    if size == 0 {
-                        continue;
-                    }
-            
-                    let bar = match io_mapped {
-                
-                        // Memory-mapped BAR
-                        false => {
-
-                            // 32 or 64-bit BAR?
-                            let addr_type = match bits_bar[1..3].load::<u8>() {
-                                0x00 => BarAddrType::Bar32,
-                                0x02 => BarAddrType::Bar64,
-                                val => panic!("Unsupported BAR size type: {}", val)
-                            };
-
-                            // Address (lower bits)
-                            let addr_low_bits = {
-                                let mut val: u64 = bits_bar.load();
-                                let addr_bits = val.view_bits_mut();
-                                addr_bits[..4].fill(false);
-                                addr_bits.to_owned()
-                            };
-            
-                            let base_addr = match addr_type {
-
-                                BarAddrType::Bar32 => addr_low_bits.load::<u64>(),
-
-                                BarAddrType::Bar64 => {
-
-                                    // Grabbing high bits of the address from next BAR
-                                    let next_i = it.next().expect("64-bit BAR but already in last BAR");
-                                    let next_offset = 0x10 + 0x4 * (next_i as u8);
-                                    let next_word_bars = unsafe { config_ref.read(&addr, next_offset) };
-                                    let next_word_bars: u64 = next_word_bars.into(); 
-                                    let addr_high_bits = next_word_bars.view_bits::<Lsb0>();
-
-                                    let addr_low_bits = addr_low_bits.as_bitslice();
-
-                                    let mut addr = 0u64;
-                                    let addr_bits = addr.view_bits_mut::<Lsb0>();
-                                    
-                                    addr_bits[00..32].copy_from_bitslice(&addr_low_bits[..32]);
-                                    addr_bits[32..64].copy_from_bitslice(&addr_high_bits[..32]);
-
-                                    addr_bits.load::<u64>()
-                                }
-                            };
-            
-                            PciBar::Memory {
-                                addr_type,
-                                prefetchable: bits_bar[3],
-                                base_addr,
-                                size
-                            }
-                        },
-            
-                        // I/0-mapped BAR
-                        true => {
-                            let mut addr_bits = bits_bar.to_owned();
-                            addr_bits[..2].fill(false);
-                            let base_addr = addr_bits.load::<u32>();
-                            PciBar::IO { base_addr, size }
-                        }
-                    };
-            
-                    bars.insert(i, bar);
-                }
-
-                bars
-            };
+            log::info!("Found PCI device, vendor={:#x} device={:#x}", vendor_id, device_id);
 
             Some(PciDevice {
                 addr, vendor_id, device_id, class,
                 capabilities, bars,
             })
         })
+        .collect()
+}
+
+fn get_capabilities(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) -> Vec<PciCapability> {
+    
+    let mut cap_ptr = {
+        let mut word_34 = unsafe { pci_config_space.read(&addr, 0x34) };
+        let bits_34 = word_34.view_bits_mut::<Lsb0>();
+        bits_34[..2].fill(false);
+        bits_34[..8].load::<u8>()
+    };
+
+    let mut capabilities = Vec::new();
+    while cap_ptr != 0x00 {
+
+        let mut word_0 = unsafe { pci_config_space.read(&addr, cap_ptr) };
+        let bits_0 = word_0.view_bits_mut::<Lsb0>();
+
+        let vendor = bits_0[..8].load();
+
+        capabilities.push(PciCapability {
+            vendor, offset: cap_ptr
+        });
+
+        cap_ptr = bits_0[8..16].load();
+    }
+
+    capabilities
+}
+
+
+fn get_bars(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) -> BTreeMap<u32, PciBar> {
+
+    const MAX_BARS: u32 = 6;
+
+    let mut bars = BTreeMap::new();
+    let mut it = 0..MAX_BARS;
+
+    while let Some(i) = it.next() {
+
+        let offset = 0x10 + 0x4 * (i as u8);
+        let word_bars = unsafe { pci_config_space.read(&addr, offset) };
+
+        let bits_bar = word_bars.view_bits::<Lsb0>();
+
+        let io_mapped = bits_bar[0];
+        let n_flags = if io_mapped { 2 } else { 4 };
+
+        // BAR size
+        let size: u32 = {
+
+            let mut word_size = unsafe {
+                pci_config_space.write(&addr, offset, u32::MAX);
+                let word_size = pci_config_space.read(&addr, offset);
+                pci_config_space.write(&addr, offset, word_bars);
+                word_size
+            };
+
+            let bits_size = word_size.view_bits_mut::<Lsb0>();
+            bits_size[..n_flags].fill(false);
+            let val: u32 = bits_size.load();
+            
+            if val == 0 { 0 }
+            else { !val + 1 }
+        };
+
+        if size == 0 {
+            continue;
+        }
+
+        let bar = match io_mapped {
+    
+            // Memory-mapped BAR
+            false => {
+
+                // 32 or 64-bit BAR?
+                let addr_type = match bits_bar[1..3].load::<u8>() {
+                    0x00 => BarAddrType::Bar32,
+                    0x02 => BarAddrType::Bar64,
+                    val => panic!("Unsupported BAR size type: {}", val)
+                };
+
+                // Address (lower bits)
+                let addr_low_bits = {
+                    let mut val: u64 = bits_bar.load();
+                    let addr_bits = val.view_bits_mut();
+                    addr_bits[..4].fill(false);
+                    addr_bits.to_owned()
+                };
+
+                let base_addr = match addr_type {
+
+                    BarAddrType::Bar32 => addr_low_bits.load::<u64>(),
+
+                    BarAddrType::Bar64 => {
+
+                        // Grabbing high bits of the address from next BAR
+                        let next_i = it.next().expect("64-bit BAR but already in last BAR");
+                        let next_offset = 0x10 + 0x4 * (next_i as u8);
+                        let next_word_bars = unsafe { pci_config_space.read(&addr, next_offset) };
+                        let next_word_bars: u64 = next_word_bars.into(); 
+                        let addr_high_bits = next_word_bars.view_bits::<Lsb0>();
+
+                        let addr_low_bits = addr_low_bits.as_bitslice();
+
+                        let mut addr = 0u64;
+                        let addr_bits = addr.view_bits_mut::<Lsb0>();
+                        
+                        addr_bits[00..32].copy_from_bitslice(&addr_low_bits[..32]);
+                        addr_bits[32..64].copy_from_bitslice(&addr_high_bits[..32]);
+
+                        addr_bits.load::<u64>()
+                    }
+                };
+
+                PciBar::Memory {
+                    addr_type,
+                    prefetchable: bits_bar[3],
+                    base_addr,
+                    size
+                }
+            },
+
+            // I/0-mapped BAR
+            true => {
+                let mut addr_bits = bits_bar.to_owned();
+                addr_bits[..2].fill(false);
+                let base_addr = addr_bits.load::<u32>();
+                PciBar::IO { base_addr, size }
+            }
+        };
+
+        bars.insert(i, bar);
+    }
+
+    bars
 }
 
 

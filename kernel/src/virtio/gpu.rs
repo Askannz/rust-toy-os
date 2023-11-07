@@ -1,7 +1,8 @@
-use alloc::{vec, boxed::Box};
+use alloc::{vec, vec::Vec, boxed::Box};
 
 use core::mem::MaybeUninit;
 use crate::memory;
+use crate::pci::PciDevice;
 
 use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
 
@@ -39,12 +40,17 @@ impl Default for GpuVirtioMsg {
 impl VirtqSerializable for GpuVirtioMsg {}
 
 impl VirtioGPU {
-    pub fn new(mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(pci_devices: &mut Vec<PciDevice>) -> Self {
 
-        let virtio_dev_type = virtio_dev.get_virtio_device_type();
-        if virtio_dev_type != 16 {
-            panic!("VirtIO device is not a GPU device (device type = {}, expected 16)", virtio_dev_type)
-        }
+        let i = (0..pci_devices.len())
+            .find(|&i| 
+                pci_devices[i].vendor_id == 0x1af4 &&
+                pci_devices[i].device_id == 0x1040 + 16
+            )
+            .expect("Cannot find VirtIO GPU device");
+
+        let pci_dev = pci_devices.swap_remove(i);
+        let mut virtio_dev = VirtioDevice::new(pci_dev, 0x0);
 
         let controlq = virtio_dev.initialize_queue(0);  // queue 0 (controlq)
         virtio_dev.write_status(0x04);  // DRIVER_OK

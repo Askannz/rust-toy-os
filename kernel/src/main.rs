@@ -31,8 +31,7 @@ use http::HttpServer;
 
 use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
-use virtio::network::{VirtioNetwork, NetworkFeatureBits};
-use virtio::VirtioDevice;
+use virtio::network::VirtioNetwork;
 
 use wasm::{WasmEngine, WasmApp};
 
@@ -95,43 +94,11 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     memory::init_allocator(&memory_map);
     memory::init_mapper();
 
-    pci::enumerate().for_each(|dev| log::info!("Found PCI device, vendor={:#x} device={:#x}", dev.vendor_id, dev.device_id));
+    let mut pci_devices = pci::enumerate();
 
-    let mut virtio_gpu = {
-
-        let virtio_pci_dev = pci::enumerate()
-            .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1040 + 16)
-            .expect("Cannot find VirtIO GPU device");
-
-        let virtio_dev = VirtioDevice::new(virtio_pci_dev, 0x0);
-
-        VirtioGPU::new(virtio_dev)
-    };
-    
-
-    let mut virtio_input = {
-
-        let virtio_pci_dev = pci::enumerate()
-            .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1040 + 18)
-            .expect("Cannot find VirtIO input device");
-
-        let virtio_dev = VirtioDevice::new(virtio_pci_dev, 0x0);
-
-        VirtioInput::new(virtio_dev)
-    };
-
-    let virtio_net = {
-
-        let virtio_pci_dev = pci::enumerate()
-            .find(|dev| dev.vendor_id == 0x1af4 && dev.device_id == 0x1000)  // Transitional device
-            .expect("Cannot find VirtIO network device");
-
-        let feature_bits = NetworkFeatureBits::VIRTIO_NET_F_MAC as u32;
-
-        let virtio_dev = VirtioDevice::new(virtio_pci_dev, feature_bits);
-
-        VirtioNetwork::new(virtio_dev)
-    };
+    let mut virtio_gpu = VirtioGPU::new(&mut pci_devices);
+    let mut virtio_input = VirtioInput::new(&mut pci_devices);
+    let virtio_net = VirtioNetwork::new(&mut pci_devices);
 
     log::info!("All VirtIO devices created");
 

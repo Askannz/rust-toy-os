@@ -1,6 +1,7 @@
 
 use alloc::vec;
 use alloc::vec::Vec;
+use crate::pci::PciDevice;
 use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
 
 const Q_SIZE: usize = 64;
@@ -11,12 +12,17 @@ pub struct VirtioInput {
 }
 
 impl VirtioInput {
-    pub fn new(mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(pci_devices: &mut Vec<PciDevice>) -> Self {
 
-        let virtio_dev_type = virtio_dev.get_virtio_device_type();
-        if virtio_dev_type != 18 {
-            panic!("VirtIO device is not an input device (device type = {}, expected 18)", virtio_dev_type)
-        }
+        let i = (0..pci_devices.len())
+            .find(|&i| 
+                pci_devices[i].vendor_id == 0x1af4 &&
+                pci_devices[i].device_id == 0x1040 + 18
+            )
+            .expect("Cannot find VirtIO input device");
+
+        let pci_dev = pci_devices.swap_remove(i);
+        let mut virtio_dev = VirtioDevice::new(pci_dev, 0x0);
 
         let mut eventq = virtio_dev.initialize_queue(0);  // queue 0 (eventq)
         //log::debug!("out of initialize_queue(): {:?}", eventq.descriptor_area.as_ptr());

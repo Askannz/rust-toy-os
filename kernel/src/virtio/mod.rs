@@ -464,10 +464,6 @@ impl VirtioDevice {
             .read()
     }
 
-    pub fn get_virtio_device_type(&self) -> u16 {
-        self.pci_device.device_id - 0x1040
-    }
-
     fn write_feature_bits(&mut self, select: u32, val: u32) {
 
         self.common_config

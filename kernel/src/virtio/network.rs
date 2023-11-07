@@ -3,6 +3,7 @@ use core::mem::MaybeUninit;
 
 use alloc::vec;
 use alloc::vec::Vec;
+use crate::pci::PciDevice;
 use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable};
 
 const Q_SIZE: usize = 256;
@@ -11,7 +12,7 @@ pub const MAX_PACKET_SIZE: usize = 1514;
 
 #[repr(u32)]
 #[allow(non_camel_case_types)]
-pub enum NetworkFeatureBits {
+enum NetworkFeatureBits {
     VIRTIO_NET_F_MAC = 0x1 << 5
 }
 
@@ -32,7 +33,19 @@ struct VirtioNetConfig {
 }
 
 impl VirtioNetwork {
-    pub fn new(mut virtio_dev: VirtioDevice) -> Self {
+    pub fn new(pci_devices: &mut Vec<PciDevice>) -> Self {
+
+        let i = (0..pci_devices.len())
+            .find(|&i| 
+                pci_devices[i].vendor_id == 0x1af4 &&
+                pci_devices[i].device_id == 0x1000
+            )
+            .expect("Cannot find VirtIO network device");
+
+        let pci_dev = pci_devices.swap_remove(i);
+        let feature_bits = NetworkFeatureBits::VIRTIO_NET_F_MAC as u32;
+        let mut virtio_dev = VirtioDevice::new(pci_dev, feature_bits);
+
 
         let mut receiveq1 = virtio_dev.initialize_queue(0);  // queue 0 (receiveq1)
         let transmitq1 = virtio_dev.initialize_queue(1);  // queue 1 (transmitq1)

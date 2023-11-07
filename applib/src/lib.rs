@@ -111,6 +111,14 @@ pub struct Font {
     pub char_w: usize,
 }
 
+pub const DEFAULT_FONT: Font = Font {
+    fontmap: include_bytes!("../fontmap.bin"),
+    nb_chars: 95,
+    char_h: 24,
+    char_w: 12,
+};
+
+
 pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: u32, y0: u32, font: &Font, color: &Color) {
     let mut x = x0;
     for c in s.as_bytes() {
@@ -119,10 +127,10 @@ pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: u32, y0: u32, font: &Font, co
     }
 }
 
-fn draw_char(fb: &mut Framebuffer, c: u8, x0: u32, y0: u32, font: &Font, color: &Color) {
+fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: u32, y0: u32, font: &Font, color: &Color) {
 
-    // Supported chars
-    assert!(c >= 32 && c <= 126);
+    // Replacing unsupported chars with spaces
+    if c < 32 || c > 126 { c = 32}
 
     let c_index = (c - 32) as usize;
     let Color(r, g, b) = *color;

@@ -1,8 +1,12 @@
 #![no_std]
 #![no_main]
 
+extern crate alloc;
+
 use core::cell::OnceCell;
+use alloc::format;
 use guestlib::FramebufferHandle;
+use applib::{draw_str, DEFAULT_FONT, Color};
 
 mod drawing;
 use drawing::draw_chrono;
@@ -34,5 +38,8 @@ pub fn step() {
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 
     framebuffer.fill(&[0u8; 4]);
-    draw_chrono(&mut framebuffer, system_state.time)
+    draw_chrono(&mut framebuffer, system_state.time);
+
+    let s = format!("{}", system_state.time);
+    draw_str(&mut framebuffer, &s, 0, 0, &DEFAULT_FONT, &Color(255, 255, 0));
 }

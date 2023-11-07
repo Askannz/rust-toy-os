@@ -10,7 +10,7 @@ use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use smoltcp::wire::{IpAddress, IpCidr};
 
-use applib::{Color, Rect, Framebuffer, SystemState, PointerState, Font, draw_str, draw_rect};
+use applib::{Color, Rect, Framebuffer, SystemState, PointerState, DEFAULT_FONT, draw_str, draw_rect};
 
 extern crate alloc;
 
@@ -65,13 +65,6 @@ const APPLICATIONS: [AppDescriptor; 2] = [
         init_win_rect: Rect { x0: 600, y0: 200, w: 200, h: 200 }
     },
 ];
-
-const DEFAULT_FONT: Font = Font {
-    fontmap: include_bytes!("../../embedded_data/fontmap.bin"),
-    nb_chars: 95,
-    char_h: 24,
-    char_w: 12,
-};
 
 const WALLPAPER: &'static [u8] = include_bytes!("../../embedded_data/wallpaper.bin");
 

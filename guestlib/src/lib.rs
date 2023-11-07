@@ -58,11 +58,7 @@ pub fn get_framebuffer<'a>(handle: &'a mut FramebufferHandle) -> Framebuffer<'a>
         core::slice::from_raw_parts_mut(framebuffer_ptr, w*h*4)
     };
 
-    Framebuffer  {
-        data: fb_data,
-        w: w as i32,
-        h: h as i32,
-    }
+    Framebuffer::new(fb_data, w, h)
 }
 
 #[macro_export]

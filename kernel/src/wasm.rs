@@ -1,10 +1,9 @@
-use alloc::vec::Vec;
 use alloc::vec;
 use core::mem::size_of;
 use crate::serial_println;
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext};
 
-use applib::{SystemState, Framebuffer, FrameBufRegion, Color, Rect};
+use applib::{SystemState, Framebuffer};
 
 pub struct WasmEngine {
     engine: Engine
@@ -115,7 +114,7 @@ pub struct WasmApp {
 }
 
 impl WasmApp {
-    pub fn step(&mut self, system_state: &SystemState, system_fb: &mut FrameBufRegion) {
+    pub fn step(&mut self, system_state: &SystemState, system_fb: &mut Framebuffer) {
 
         let mut ctx = self.store.as_context_mut();
 
@@ -133,17 +132,13 @@ impl WasmApp {
             let ctx = self.store.as_context_mut();
             let mem_data = mem.data_mut(ctx);
 
-            let mut wasm_fb = {
+            let wasm_fb = {
                 let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
                 let fb_data = &mut mem_data[addr..addr + w*h*4];
-                Framebuffer {
-                    data: fb_data,
-                    h: h as i32,
-                    w: w as i32
-                }
+                Framebuffer::new(fb_data, w, h)
             };
 
-            system_fb.copy_from(&wasm_fb.as_region());
+            system_fb.copy_from(&wasm_fb);
         }
     }
 }

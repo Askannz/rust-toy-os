@@ -1,6 +1,6 @@
 //use micromath::F32Ext;
 use num_traits::Float;
-use applib::{Color, FrameBufRegion};
+use applib::{Color, Framebuffer};
 
 const COLORS: [Color; 6] = [
     Color(0xff, 0x00, 0x00),
@@ -16,7 +16,7 @@ const PI: f32 = 3.14159265359;
 const NB_QUADS: usize = 6;
 
 
-pub fn draw_cube(fb: &mut FrameBufRegion, xf: f32, yf: f32) {
+pub fn draw_cube(fb: &mut Framebuffer, xf: f32, yf: f32) {
 
     let base_quad = [
         Point { x: -1.0, y: -1.0, z: -1.0 },
@@ -35,7 +35,7 @@ pub fn draw_cube(fb: &mut FrameBufRegion, xf: f32, yf: f32) {
     geometry[4] = rotate(&base_quad, Axis::X, - PI / 2.0);
     geometry[5] = rotate(&base_quad, Axis::X, PI / 2.0);
 
-    let view_yaw = xf * MOUSE_SENSITIVITY;
+    let view_yaw = -xf * MOUSE_SENSITIVITY;
     let pitch = yf * MOUSE_SENSITIVITY;
 
     geometry.iter_mut().for_each(|quad| {
@@ -81,7 +81,7 @@ fn rotate(poly: &Quad, axis: Axis, angle: f32) -> Quad {
     new_poly
 }
 
-fn rasterize(fb: &mut FrameBufRegion, geometry: &[Quad; NB_QUADS]) {
+fn rasterize(fb: &mut Framebuffer, geometry: &[Quad; NB_QUADS]) {
 
     let (mut min_x, mut min_y) = (0.0, 0.0);
     let (mut max_x, mut max_y) = (0.0, 0.0);
@@ -122,8 +122,8 @@ fn rasterize(fb: &mut FrameBufRegion, geometry: &[Quad; NB_QUADS]) {
 
             for (i, poly) in geometry.iter().enumerate() {
                 if test_in_poly(&poly, &p) {
-                    let color = &COLORS[i % COLORS.len()];
-                    fb.set_pixel(x_px, y_px, color);
+                    let Color(r, g, b) = COLORS[i % COLORS.len()];
+                    fb.get_pixel_mut(x_px, y_px).copy_from_slice(&[r, g, b, 0xff]);
                     break;
                 }
             }

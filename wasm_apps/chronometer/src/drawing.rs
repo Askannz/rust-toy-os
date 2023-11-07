@@ -1,13 +1,13 @@
 //use micromath::F32Ext;
 use num_traits::Float;
-use applib::{Color, FrameBufRegion};
+use applib::{Color, Framebuffer};
 
 const ZOOM: f32 = 0.2;
 const PI: f32 = 3.14159265359;
 const COLOR: Color = Color(0xff, 0xff, 0xff);
 
 
-pub fn draw_chrono(fb: &mut FrameBufRegion, time: u64) {
+pub fn draw_chrono(fb: &mut Framebuffer, time: u64) {
 
     const DIVIDER: u64 = 60_000;
     let angle = (((time % DIVIDER) as f32) / (DIVIDER as f32)) * 2.0 * PI;
@@ -56,7 +56,9 @@ fn rotate(poly: &Quad, axis: Axis, angle: f32) -> Quad {
     new_poly
 }
 
-fn rasterize(fb: &mut FrameBufRegion, poly: &Quad) {
+fn rasterize(fb: &mut Framebuffer, poly: &Quad) {
+
+    let Color(r, g, b) = COLOR;
 
     let (mut min_x, mut min_y) = (0.0, 0.0);
     let (mut max_x, mut max_y) = (0.0, 0.0);
@@ -94,7 +96,7 @@ fn rasterize(fb: &mut FrameBufRegion, poly: &Quad) {
             }
 
             if test_in_poly(&poly, &p) {
-                fb.set_pixel(x_px, y_px, &COLOR);
+                fb.get_pixel_mut(x_px, y_px).copy_from_slice(&[r, g, b, 0xff]);
             }
         }
     }

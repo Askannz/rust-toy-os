@@ -34,7 +34,6 @@ pub fn step() {
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 
-    let mut region = framebuffer.as_region();
-    region.fill(&Color(0, 0, 0));
-    draw_chrono(&mut region, system_state.time)
+    framebuffer.fill(&Color(0, 0, 0));
+    draw_chrono(&mut framebuffer, system_state.time)
 }

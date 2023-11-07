@@ -48,7 +48,7 @@ struct App {
     descriptor: AppDescriptor,
     is_open: bool,
     rect: Rect,
-    grab_pos: Option<(i32, i32)>
+    grab_pos: Option<(u32, u32)>
 }
 
 const APPLICATIONS: [AppDescriptor; 2] = [
@@ -140,7 +140,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     serial_println!("Display initialized");
 
     let (w, h) = virtio_gpu.get_dims();
-    let (w, h) = (w as i32, h as i32);
     let mut pointer_state = PointerState { x: 0, y: 0, clicked: false };
     let wasm_engine = WasmEngine::new();
 
@@ -167,13 +166,13 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     loop {
 
-        pointer_state = update_pointer(&mut virtio_input, (w, h), pointer_state);
+        pointer_state = update_pointer(&mut virtio_input, (w as u32, h as u32), pointer_state);
 
         server.update();
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 
-        let mut framebuffer = Framebuffer { data: &mut virtio_gpu.framebuffer[..], w, h };
+        let mut framebuffer = Framebuffer::new(virtio_gpu.framebuffer.as_mut(), w, h);
 
         let system_state = SystemState {
             pointer: pointer_state.clone(),
@@ -197,14 +196,14 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
 
     const COLOR_IDLE: Color = Color(0x44, 0x44, 0x44);
     const COLOR_HOVER: Color = Color(0x88, 0x88, 0x88);
-    const TEXT_MARGIN: i32 = 5;
+    const TEXT_MARGIN: u32 = 5;
 
     for app in applications.iter_mut() {
 
         let rect = &app.descriptor.launch_rect;
 
         let pointer_state = &system_state.pointer;
-        let hover = rect.check_in(pointer_state.x, pointer_state.y);
+        let hover = rect.check_contains_point(pointer_state.x, pointer_state.y);
 
         let color = if hover { &COLOR_HOVER } else { &COLOR_IDLE };
 
@@ -236,7 +235,7 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
                     app.grab_pos = None
                 }
             } else {
-                if pointer_state.clicked && deco_rect.check_in(pointer_state.x, pointer_state.y){
+                if pointer_state.clicked && deco_rect.check_contains_point(pointer_state.x, pointer_state.y){
                     let dx = pointer_state.x - app.rect.x0;
                     let dy = pointer_state.y - app.rect.y0;
                     app.grab_pos = Some((dx, dy));
@@ -247,8 +246,8 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
             //draw_rect(fb, &app.rect, &Color(0x00, 0x00, 0x00), 0.5);
             draw_str(fb, app.descriptor.name, app.rect.x0, app.rect.y0 - 30, &DEFAULT_FONT, &Color(0xff, 0xff, 0xff));
 
-            let mut fb_region = fb.get_region(&app.rect);
-            app.wasm_app.step(system_state, &mut fb_region);
+            let mut region = fb.get_region(&app.rect);
+            app.wasm_app.step(system_state, &mut region);
         }
     }
 }
@@ -260,9 +259,10 @@ fn draw_cursor(fb: &mut Framebuffer, system_state: &SystemState) {
     draw_rect(fb, &Rect { x0: x, y0: y, w: 5, h: 5 }, &Color(0xff, 0xff, 0xff), 255)
 }
 
-fn update_pointer(virtio_input: &mut VirtioInput, dims: (i32, i32), status: PointerState) -> PointerState {
+fn update_pointer(virtio_input: &mut VirtioInput, dims: (u32, u32), status: PointerState) -> PointerState {
 
     let (w, h) = dims;
+    let (w, h) = (w as i32, h as i32);
 
     let mut status = status;
 
@@ -270,10 +270,10 @@ fn update_pointer(virtio_input: &mut VirtioInput, dims: (i32, i32), status: Poin
         if event._type == 0x2 {
             if event.code == 0 {  // X axis
                 let dx = event.value as i32;
-                status.x = i32::max(0, i32::min(w-1, status.x + dx));
+                status.x = i32::max(0, i32::min(w-1, status.x as i32 + dx)) as u32;
             } else {  // Y axis
                 let dy = event.value as i32;
-                status.y = i32::max(0, i32::min(h-1, status.y + dy));
+                status.y = i32::max(0, i32::min(h-1, status.y as i32 + dy)) as u32;
             }
         } else if event._type == 0x1 {
             status.clicked = event.value == 1

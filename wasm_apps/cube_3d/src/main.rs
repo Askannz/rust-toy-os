@@ -38,7 +38,6 @@ pub fn step() {
     let xf = (pointer.x as f32) / ((W - 1) as f32);
     let yf = (pointer.y as f32) / ((H - 1) as f32);
 
-    let mut region = framebuffer.as_region();
-    region.fill(&Color(0, 0, 0));
-    draw_cube(&mut region, xf, yf);
+    framebuffer.fill(&Color(0, 0, 0));
+    draw_cube(&mut framebuffer, xf, yf);
 }

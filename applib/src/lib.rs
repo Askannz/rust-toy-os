@@ -73,27 +73,32 @@ impl<'a> Framebuffer<'a> {
         &self.data[i..i+4]
     }
 
-    pub fn copy_from(&mut self, src: &Framebuffer) {
+    pub fn blend(&mut self, other: &Framebuffer) {
 
-        let w = u32::min(self.rect.w, src.rect.w);
-        let h = u32::min(self.rect.h, src.rect.h);
+        let w = u32::min(self.rect.w, other.rect.w);
+        let h = u32::min(self.rect.h, other.rect.h);
 
         for x in 0..w {
             for y in 0..h {
-                let px_src = src.get_pixel(x, y);
-                self.get_pixel_mut(x, y).copy_from_slice(px_src);
+                let px_1 = self.get_pixel_mut(x, y);
+                let px_2 = other.get_pixel(x, y);
+                let alpha = px_2[3];
+                px_1[0] = blend(px_1[0], px_2[0], alpha);
+                px_1[1] = blend(px_1[1], px_2[1], alpha);
+                px_1[2] = blend(px_1[2], px_2[2], alpha);
             }
         }
     }
 
-    pub fn fill(&mut self, color: &Color) {
+    pub fn fill(&mut self, value: &[u8]) {
+
+        assert_eq!(value.len(), 4);
     
         let Rect { x0, y0, w, h } = self.rect;
-        let Color(r, g, b) = *color;
     
         for x in x0..x0+w {
             for y in y0..y0+h {
-                self.get_pixel_mut(x, y).copy_from_slice(&[r, g, b, 0xff]);
+                self.get_pixel_mut(x, y).copy_from_slice(value);
             }
         }
     }

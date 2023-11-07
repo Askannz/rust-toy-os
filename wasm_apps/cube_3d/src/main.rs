@@ -2,7 +2,6 @@
 #![no_main]
 
 use core::cell::OnceCell;
-use applib::Color;
 use guestlib::FramebufferHandle;
 
 mod drawing;
@@ -38,6 +37,6 @@ pub fn step() {
     let xf = (pointer.x as f32) / ((W - 1) as f32);
     let yf = (pointer.y as f32) / ((H - 1) as f32);
 
-    framebuffer.fill(&Color(0, 0, 0));
+    framebuffer.fill(&[0u8; 4]);
     draw_cube(&mut framebuffer, xf, yf);
 }

@@ -2,7 +2,6 @@
 #![no_main]
 
 use core::cell::OnceCell;
-use applib::Color;
 use guestlib::FramebufferHandle;
 
 mod drawing;
@@ -34,6 +33,6 @@ pub fn step() {
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 
-    framebuffer.fill(&Color(0, 0, 0));
+    framebuffer.fill(&[0u8; 4]);
     draw_chrono(&mut framebuffer, system_state.time)
 }

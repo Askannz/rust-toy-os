@@ -138,7 +138,7 @@ impl WasmApp {
                 Framebuffer::new(fb_data, w, h)
             };
 
-            system_fb.copy_from(&wasm_fb);
+            system_fb.blend(&wasm_fb);
         }
     }
 }

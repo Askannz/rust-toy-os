@@ -56,7 +56,7 @@ const APPLICATIONS: [AppDescriptor; 2] = [
         data: include_bytes!("../../embedded_data/cube_3d.wasm"),
         launch_rect: Rect { x0: 100, y0: 100, w: 200, h: 40 },
         name: "3D Cube",
-        init_win_rect: Rect { x0: 200, y0: 200, w: 400, h: 400 }
+        init_win_rect: Rect { x0: 200, y0: 200, w: 200, h: 200 }
     },
     AppDescriptor {
         data: include_bytes!("../../embedded_data/chronometer.wasm"),

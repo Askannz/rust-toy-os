@@ -41,7 +41,7 @@ pub fn get_system_state() -> SystemState {
 }
 
 pub fn create_framebuffer(w: usize, h: usize) -> FramebufferHandle {
-    let ptr = vec![128u8; w*h*4].leak().as_mut_ptr();
+    let ptr = vec![0u8; w*h*4].leak().as_mut_ptr();
     unsafe { host_set_framebuffer(ptr as i32, w as i32, h as i32) };
     FramebufferHandle {
         framebuffer_ptr: ptr,

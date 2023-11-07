@@ -1,6 +1,5 @@
 use alloc::vec;
 use core::mem::size_of;
-use crate::serial_println;
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext};
 
 use applib::{SystemState, Framebuffer};
@@ -34,7 +33,7 @@ impl WasmEngine {
                 buffer
             };
             let s = core::str::from_utf8(&buffer).unwrap();
-            serial_println!("Received from WASM: {}", s);
+            log::debug!("Received from WASM: {}", s);
         });
 
         let host_get_system_state = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32| {

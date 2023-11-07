@@ -10,7 +10,6 @@ use smoltcp::socket::tcp;
 use smoltcp::time:: Instant;
 use smoltcp::wire::{EthernetAddress, IpCidr};
 
-use crate::serial_println;
 use crate::smoltcp_virtio::SmolTcpVirtio;
 use crate::virtio::network::VirtioNetwork;
 
@@ -76,13 +75,13 @@ impl<'a> HttpServer<'a> {
 
         if !socket.is_active() && !socket.is_listening() {
             socket.listen(self.port).unwrap();
-            serial_println!("Listening is enabled");
+            log::debug!("Listening is enabled");
         }
 
         if socket.can_send() {
-            serial_println!("Sending data");
+            log::debug!("Sending data");
             socket.send_slice(HTML_DATA).unwrap();
-            serial_println!("Closing socket");
+            log::debug!("Closing socket");
             socket.close();
         }
     }

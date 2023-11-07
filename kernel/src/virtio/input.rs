@@ -19,7 +19,7 @@ impl VirtioInput {
         }
 
         let mut eventq = virtio_dev.initialize_queue(0);  // queue 0 (eventq)
-        //serial_println!("out of initialize_queue(): {:?}", eventq.descriptor_area.as_ptr());
+        //log::debug!("out of initialize_queue(): {:?}", eventq.descriptor_area.as_ptr());
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
 

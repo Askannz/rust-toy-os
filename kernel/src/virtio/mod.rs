@@ -228,7 +228,7 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
         let idx: usize = self.pop_index.try_into().unwrap();
         let it: VirtqUsedElem = self.storage.device_area.ring[idx % Q_SIZE];
-        //serial_println!("Received element: {:?}", it);
+        //log::debug!("Received element: {:?}", it);
 
         let mut out = Vec::new();
         let mut desc_index: usize = it.id.try_into().unwrap();
@@ -236,7 +236,7 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
         loop {
 
             let descriptor = self.storage.descriptor_area.get(desc_index).unwrap();
-            //serial_println!("Received descriptor: {:?}", descriptor);
+            //log::debug!("Received descriptor: {:?}", descriptor);
             let buffer = unsafe { 
                 let virt_addr = mapper.phys_to_virt(PhysAddr::new(descriptor.addr));
                 Box::from_raw(virt_addr.as_mut_ptr())
@@ -388,9 +388,9 @@ impl VirtioDevice {
         let driver_area_addr = mapper.ref_to_phys(&storage.driver_area).as_u64();
         let dev_area_addr = mapper.ref_to_phys(&storage.device_area).as_u64();
 
-        // serial_println!("descr_area_addr={:x}", descr_area_addr);
-        // serial_println!("driver_area_addr={:x}", driver_area_addr);
-        // serial_println!("dev_area_addr={:x}", dev_area_addr);
+        // log::debug!("descr_area_addr={:x}", descr_area_addr);
+        // log::debug!("driver_area_addr={:x}", driver_area_addr);
+        // log::debug!("dev_area_addr={:x}", dev_area_addr);
 
         {
 

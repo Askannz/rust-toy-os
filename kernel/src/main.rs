@@ -94,7 +94,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     memory::init_allocator(&memory_map);
     memory::init_mapper();
 
-    pci::enumerate().for_each(|dev| serial_println!("Found PCI device, vendor={:#x} device={:#x}", dev.vendor_id, dev.device_id));
+    pci::enumerate().for_each(|dev| log::info!("Found PCI device, vendor={:#x} device={:#x}", dev.vendor_id, dev.device_id));
 
     let mut virtio_gpu = {
 
@@ -132,12 +132,12 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         VirtioNetwork::new(virtio_dev)
     };
 
-    serial_println!("All VirtIO devices created");
+    log::info!("All VirtIO devices created");
 
     virtio_gpu.init_framebuffer();
     virtio_gpu.flush();
 
-    serial_println!("Display initialized");
+    log::info!("Display initialized");
 
     let (w, h) = virtio_gpu.get_dims();
     let mut pointer_state = PointerState { x: 0, y: 0, clicked: false };
@@ -151,18 +151,18 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         grab_pos: None
     }).collect();
 
-    serial_println!("Applications loaded");
+    log::info!("Applications loaded");
 
     let port = 1234;
     let ip_cidr = IpCidr::new(IpAddress::v4(10, 0, 0, 1), 24);
     let mut server = HttpServer::new(virtio_net, ip_cidr, port);
 
-    serial_println!("HTTP server initialized");
+    log::info!("HTTP server initialized");
 
     let runtime_services = unsafe { system_table.runtime_services() };
     let clock = SystemClock::new(runtime_services);
 
-    serial_println!("Entering main loop");
+    log::info!("Entering main loop");
 
     loop {
 
@@ -179,7 +179,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             time: clock.time()
         };
 
-        //serial_println!("{:?}", system_state);
+        //log::debug!("{:?}", system_state);
 
         update_apps(&mut framebuffer, &system_state, &mut applications);
 
@@ -208,7 +208,7 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
         let color = if hover { &COLOR_HOVER } else { &COLOR_IDLE };
 
         if hover && pointer_state.clicked && !app.is_open {
-            serial_println!("{} is open", app.descriptor.name);
+            log::info!("{} is open", app.descriptor.name);
             app.is_open = true;
         }
 
@@ -278,7 +278,7 @@ fn update_pointer(virtio_input: &mut VirtioInput, dims: (u32, u32), status: Poin
         } else if event._type == 0x1 {
             status.clicked = event.value == 1
         }
-        //serial_println!("{:?}", status);
+        //log::debug!("{:?}", status);
     }
 
     status
@@ -289,6 +289,6 @@ fn update_pointer(virtio_input: &mut VirtioInput, dims: (u32, u32), status: Poin
 
 #[panic_handler]
 fn panic(info: &PanicInfo) ->  ! {
-    serial_println!("{}", info);
+    log::error!("{}", info);
     loop {}
 }

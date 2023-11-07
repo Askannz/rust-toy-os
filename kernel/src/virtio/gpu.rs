@@ -1,7 +1,6 @@
 use alloc::{vec, boxed::Box};
 
 use core::mem::MaybeUninit;
-use crate::serial_println;
 use crate::memory;
 
 use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
@@ -130,7 +129,7 @@ impl VirtioGPU {
         if resp._type == VirtioGpuCtrlType::VIRTIO_GPU_RESP_OK_NODATA as u32 {
             Some(())
         } else {
-            serial_println!("Resp type: 0x{:x}", resp._type);
+            log::debug!("Resp type: 0x{:x}", resp._type);
             None
         }
     }

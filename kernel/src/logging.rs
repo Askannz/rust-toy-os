@@ -1,4 +1,5 @@
 use log::{Log, Metadata, Record};
+
 use crate::serial_println;
 
 pub struct SerialLogger;

@@ -1,4 +1,3 @@
-use alloc::vec;
 use core::mem::size_of;
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext};
 
@@ -26,13 +25,10 @@ impl WasmEngine {
     
         let host_print_console = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32, len: i32| {
             let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+            let mem_data = mem.data(&caller);
             let len = len as usize;
-            let buffer = {
-                let mut buffer = vec![0u8; len];
-                mem.read(caller, addr as usize, buffer.as_mut()).unwrap();
-                buffer
-            };
-            let s = core::str::from_utf8(&buffer).unwrap();
+            let addr = addr as usize;
+            let s = core::str::from_utf8(&mem_data[addr..addr+len]).unwrap();
             log::debug!("Received from WASM: {}", s);
         });
 

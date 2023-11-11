@@ -1,5 +1,6 @@
 #[derive(PartialEq, Eq, Debug, Clone, Copy, enumn::N)]
 #[repr(u16)]
+#[allow(non_camel_case_types)]
 pub enum EventType {
     EV_SYN = 0x0,
     EV_KEY = 0x1,
@@ -8,6 +9,7 @@ pub enum EventType {
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy, enumn::N)]
 #[repr(u16)]
+#[allow(non_camel_case_types)]
 pub enum Keycode {
     BTN_MOUSE = 272,
     KEY_Q = 16,
@@ -15,3 +17,4 @@ pub enum Keycode {
     KEY_E = 18,
     KEY_LEFTSHIFT = 42,
 }
+

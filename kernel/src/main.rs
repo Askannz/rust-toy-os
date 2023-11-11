@@ -277,12 +277,14 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                                 .for_each(|c| *c = None),
     
                         // New key pressed, finding a slot for it
-                        1 => match system_state.keyboard.iter_mut().find(|c| c.is_none()) {
+                        1 => if !system_state.keyboard.contains(&Some(keycode)) {
+                            match system_state.keyboard.iter_mut().find(|c| c.is_none()) {
                                 Some(slot) => *slot = Some(keycode),
                                 None => log::warn!(
                                     "Dropping keyboard event (all {} slots taken)",
                                     system_state.keyboard.len()
                                 )
+                            }
                         }
     
                         val => log::warn!("Unknown key state {}", val)

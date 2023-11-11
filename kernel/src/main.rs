@@ -10,7 +10,7 @@ use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use smoltcp::wire::{IpAddress, IpCidr};
 
-use applib::{Color, Rect, Framebuffer, SystemState, PointerState, DEFAULT_FONT, draw_str, draw_rect};
+use applib::{Color, Rect, Framebuffer, SystemState, PointerState, KeyboardState, DEFAULT_FONT, draw_str, draw_rect};
 
 extern crate alloc;
 
@@ -22,7 +22,6 @@ mod pci;
 mod virtio;
 mod smoltcp_virtio;
 mod http;
-
 mod wasm;
 
 use time::SystemClock;
@@ -33,6 +32,7 @@ use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
 use virtio::network::VirtioNetwork;
 
+use applib::keymap::{EventType, Keycode, MAX_KEYCODES};
 use wasm::{WasmEngine, WasmApp};
 
 #[derive(Clone)]
@@ -90,7 +90,10 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let mut pci_devices = pci::enumerate();
 
     let mut virtio_gpu = VirtioGPU::new(&mut pci_devices);
-    let mut virtio_input = VirtioInput::new(&mut pci_devices);
+    let mut virtio_inputs = [
+        VirtioInput::new(&mut pci_devices),
+        VirtioInput::new(&mut pci_devices),
+    ];
     let virtio_net = VirtioNetwork::new(&mut pci_devices);
 
     log::info!("All VirtIO devices created");
@@ -101,7 +104,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("Display initialized");
 
     let (w, h) = virtio_gpu.get_dims();
-    let mut pointer_state = PointerState { x: 0, y: 0, clicked: false };
     let wasm_engine = WasmEngine::new();
 
     let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
@@ -124,22 +126,24 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let clock = SystemClock::new(runtime_services);
     let mut fps_overlay = FpsOverlay::new(clock.time());
 
+    let mut system_state = SystemState {
+        pointer: PointerState { x: 0, y: 0, clicked: false },
+        keyboard: [false; MAX_KEYCODES],
+        time: clock.time()
+    };
+
     log::info!("Entering main loop");
 
     loop {
 
-        pointer_state = update_pointer(&mut virtio_input, (w as u32, h as u32), pointer_state);
+        system_state.time = clock.time();
+        update_input_state(&mut system_state, (w as u32, h as u32), &mut virtio_inputs);
 
         server.update();
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 
         let mut framebuffer = Framebuffer::new(virtio_gpu.framebuffer.as_mut(), w, h);
-
-        let system_state = SystemState {
-            pointer: pointer_state.clone(),
-            time: clock.time()
-        };
 
         //log::debug!("{:?}", system_state);
 
@@ -245,30 +249,48 @@ fn draw_cursor(fb: &mut Framebuffer, system_state: &SystemState) {
     draw_rect(fb, &Rect { x0: x, y0: y, w: CURSOR_SIZE, h: CURSOR_SIZE }, &CURSOR_COLOR, 255)
 }
 
-fn update_pointer(virtio_input: &mut VirtioInput, dims: (u32, u32), status: PointerState) -> PointerState {
+fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_inputs: &mut [VirtioInput]) {
 
     let (w, h) = dims;
     let (w, h) = (w as i32, h as i32);
 
-    let mut status = status;
+    for virtio_inp in virtio_inputs.iter_mut() {
+        for event in virtio_inp.poll() {
 
-    for event in virtio_input.poll() {
+            //log::debug!("{:?}", event);
 
-        if event._type == 0x2 {
-            if event.code == 0 {  // X axis
-                let dx = event.value as i32;
-                status.x = i32::max(0, i32::min(w-1, status.x as i32 + dx)) as u32;
-            } else {  // Y axis
-                let dy = event.value as i32;
-                status.y = i32::max(0, i32::min(h-1, status.y as i32 + dy)) as u32;
-            }
-        } else if event._type == 0x1 {
-            status.clicked = event.value == 1
+            match EventType::n(event._type) {
+
+                Some(EventType::EV_SYN) => {},
+
+                Some(EventType::EV_KEY) => match Keycode::n(event.code) {
+                    Some(Keycode::BTN_MOUSE) => system_state.pointer.clicked = event.value == 1,
+                    Some(keycode) => match system_state.keyboard.get_mut(keycode as usize) {
+                        Some(key_state) => *key_state = event.value == 1,
+                        None => log::warn!("Keycode {} ignored", event.code),
+                    },
+                    None => log::warn!("Unknown keycode {} for keyboard event", event.code)
+                },
+
+                // Not sure why VirtIO sends mouse movement as EV_REL, maybe driver bug?
+                Some(EventType::EV_REL) => match event.code {
+                    0 => {  // X axis
+                        let dx = event.value as i32;
+                        let pointer_state = &mut system_state.pointer;
+                        pointer_state.x = i32::max(0, i32::min(w-1, pointer_state.x as i32 + dx)) as u32;
+                    }
+                    1 => {  // Y axis
+                        let dy = event.value as i32;
+                        let pointer_state = &mut system_state.pointer;
+                        pointer_state.y = i32::max(0, i32::min(h-1, pointer_state.y as i32 + dy)) as u32;
+                    },
+                    _ => log::warn!("Unknown event code {} for pointer event", event.code)
+                },
+
+                _ => log::warn!("Unknown event type {}", event._type)
+            };
         }
-        //log::debug!("{:?}", status);
     }
-
-    status
 }
 
 struct FpsOverlay {

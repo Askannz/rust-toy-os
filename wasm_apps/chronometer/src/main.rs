@@ -5,8 +5,9 @@ extern crate alloc;
 
 use core::cell::OnceCell;
 use alloc::format;
-use guestlib::FramebufferHandle;
-use applib::{draw_str, DEFAULT_FONT, Color};
+use alloc::vec::Vec;
+use guestlib::{FramebufferHandle, println};
+use applib::{draw_str, DEFAULT_FONT, Color, keymap::Keycode};
 
 mod drawing;
 use drawing::draw_chrono;
@@ -34,6 +35,16 @@ pub fn step() {
     let state = unsafe { APP_STATE.get_mut().expect("App not initialized") };
 
     let system_state = guestlib::get_system_state();
+
+    let active_keys: Vec<Keycode> = system_state.keyboard
+        .iter().enumerate()
+        .filter(|(_i, &state)| state)
+        .map(|(i, _state)| Keycode::n(i as u16).unwrap())
+        .collect();
+
+    if active_keys.len() > 0 {
+        println!("{:?}", active_keys);
+    }
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 

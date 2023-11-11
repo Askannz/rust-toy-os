@@ -1,9 +1,16 @@
 #![no_std]
 
+pub mod keymap;
+
+use keymap::MAX_KEYCODES;
+
+pub type KeyboardState = [bool; MAX_KEYCODES];
+
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct SystemState {
     pub pointer: PointerState,
+    pub keyboard: KeyboardState,
     pub time: u64,
 }
 

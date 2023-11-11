@@ -46,6 +46,7 @@ sudo qemu-system-x86_64 -enable-kvm \
     -drive if=pflash,format=raw,readonly=on,file=uefi_firmware/code.fd \
     -drive if=pflash,format=raw,readonly=on,file=uefi_firmware/vars.fd \
     -drive format=raw,file=fat:rw:esp \
+    -device virtio-keyboard \
     -device virtio-mouse \
     -vga virtio \
     -display gtk,zoom-to-fit=off \

@@ -10,7 +10,7 @@ use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use smoltcp::wire::{IpAddress, IpCidr};
 
-use applib::{Color, Rect, Framebuffer, SystemState, PointerState, KeyboardState, DEFAULT_FONT, draw_str, draw_rect};
+use applib::{Color, Rect, Framebuffer, SystemState, PointerState, KeyboardState, MAX_KEYS_PRESSED, DEFAULT_FONT, draw_str, draw_rect};
 
 extern crate alloc;
 
@@ -32,7 +32,7 @@ use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
 use virtio::network::VirtioNetwork;
 
-use applib::keymap::{EventType, Keycode, MAX_KEYCODES};
+use applib::keymap::{EventType, Keycode};
 use wasm::{WasmEngine, WasmApp};
 
 #[derive(Clone)]
@@ -128,7 +128,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut system_state = SystemState {
         pointer: PointerState { x: 0, y: 0, clicked: false },
-        keyboard: [false; MAX_KEYCODES],
+        keyboard: [None; MAX_KEYS_PRESSED],
         time: clock.time()
     };
 
@@ -264,15 +264,33 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                 Some(EventType::EV_SYN) => {},
 
                 Some(EventType::EV_KEY) => match Keycode::n(event.code) {
+
+                    // Mouse click
                     Some(Keycode::BTN_MOUSE) => system_state.pointer.clicked = event.value == 1,
-                    Some(keycode) => match system_state.keyboard.get_mut(keycode as usize) {
-                        Some(key_state) => *key_state = event.value == 1,
-                        None => log::warn!("Keycode {} ignored", event.code),
+
+                    // Keyboard
+                    Some(keycode) => match event.value {
+
+                        // Key was released, freeing its slot
+                        0 => system_state.keyboard.iter_mut()
+                                .filter(|c| *c == &Some(keycode))
+                                .for_each(|c| *c = None),
+    
+                        // New key pressed, finding a slot for it
+                        1 => match system_state.keyboard.iter_mut().find(|c| c.is_none()) {
+                                Some(slot) => *slot = Some(keycode),
+                                None => log::warn!(
+                                    "Dropping keyboard event (all {} slots taken)",
+                                    system_state.keyboard.len()
+                                )
+                        }
+    
+                        val => log::warn!("Unknown key state {}", val)
                     },
                     None => log::warn!("Unknown keycode {} for keyboard event", event.code)
                 },
 
-                // Not sure why VirtIO sends mouse movement as EV_REL, maybe driver bug?
+                // Mouse movement
                 Some(EventType::EV_REL) => match event.code {
                     0 => {  // X axis
                         let dx = event.value as i32;

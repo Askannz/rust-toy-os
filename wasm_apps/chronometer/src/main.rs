@@ -36,15 +36,7 @@ pub fn step() {
 
     let system_state = guestlib::get_system_state();
 
-    let active_keys: Vec<Keycode> = system_state.keyboard
-        .iter().enumerate()
-        .filter(|(_i, &state)| state)
-        .map(|(i, _state)| Keycode::n(i as u16).unwrap())
-        .collect();
-
-    if active_keys.len() > 0 {
-        println!("{:?}", active_keys);
-    }
+    //println!("{:?}", system_state.keyboard);
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 

@@ -2,9 +2,10 @@
 
 pub mod keymap;
 
-use keymap::MAX_KEYCODES;
+use keymap::Keycode;
 
-pub type KeyboardState = [bool; MAX_KEYCODES];
+pub const MAX_KEYS_PRESSED: usize = 3;
+pub type KeyboardState = [Option<Keycode>; MAX_KEYS_PRESSED];
 
 #[derive(Debug, Clone)]
 #[repr(C)]

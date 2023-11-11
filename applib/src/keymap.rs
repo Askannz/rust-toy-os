@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, Copy, enumn::N)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, enumn::N)]
 #[repr(u16)]
 pub enum EventType {
     EV_SYN = 0x0,
@@ -6,9 +6,7 @@ pub enum EventType {
     EV_REL = 0x2,
 }
 
-pub const MAX_KEYCODES: usize = 255;
-
-#[derive(Debug, Clone, Copy, enumn::N)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, enumn::N)]
 #[repr(u16)]
 pub enum Keycode {
     BTN_MOUSE = 272,

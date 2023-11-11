@@ -4,7 +4,7 @@ extern crate alloc;
 use core::panic::PanicInfo;
 use core::fmt::Debug;
 use core::mem::size_of;
-use alloc::{string::String, format, vec};
+use alloc::{format, vec};
 use applib::{SystemState, Framebuffer};
 
 #[global_allocator]
@@ -24,7 +24,7 @@ pub struct FramebufferHandle {
     h: usize,
 }
 
-pub fn print_console(s: String) {
+pub fn print_console(s: &str) {
     let buf = s.as_bytes();
     let addr = buf.as_ptr() as i32;
     let len = buf.len() as i32;
@@ -64,7 +64,7 @@ pub fn get_framebuffer<'a>(handle: &'a mut FramebufferHandle) -> Framebuffer<'a>
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => {
-        $crate::print_console(format!($($arg)*))
+        $crate::print_console(&format!($($arg)*))
     };
 }
 

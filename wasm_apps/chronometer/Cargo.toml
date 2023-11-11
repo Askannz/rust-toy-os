@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wee_alloc = "0.4.5"
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 applib = { path = "../../applib" }
 guestlib = { path = "../../guestlib" }

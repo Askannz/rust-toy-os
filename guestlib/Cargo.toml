@@ -20,5 +20,5 @@ test = false
 bench = false
 
 [dependencies]
-wee_alloc = "0.4.5"
+dlmalloc = { version = "0.2.4", features = ["global"] }
 applib = { path = "../applib" }

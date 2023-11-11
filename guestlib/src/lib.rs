@@ -8,7 +8,7 @@ use alloc::{string::String, format, vec};
 use applib::{SystemState, Framebuffer};
 
 #[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
 
 extern "C" {
     fn host_print_console(addr: i32, len: i32);

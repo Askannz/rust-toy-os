@@ -1,3 +1,6 @@
+use alloc::collections::BTreeMap;
+use lazy_static::lazy_static;
+
 #[derive(PartialEq, Eq, Debug, Clone, Copy, enumn::N)]
 #[repr(u16)]
 #[allow(non_camel_case_types)]
@@ -7,7 +10,7 @@ pub enum EventType {
     EV_REL = 0x2,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Copy, enumn::N)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, enumn::N)]
 #[repr(u16)]
 #[allow(non_camel_case_types)]
 pub enum Keycode {
@@ -16,5 +19,13 @@ pub enum Keycode {
     KEY_W = 17,
     KEY_E = 18,
     KEY_LEFTSHIFT = 42,
+}
+
+
+lazy_static! {
+    pub static ref CHARMAP: BTreeMap<Keycode, (Option<char>, Option<char>)> = [
+        (Keycode::KEY_Q, (Some('q'), Some('Q'))),
+        (Keycode::KEY_W, (Some('w'), Some('W'))),
+    ].into();
 }
 

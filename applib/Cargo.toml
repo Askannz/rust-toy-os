@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 enumn = "0.1.12"
+lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 
 # the profile used for `cargo build`
 [profile.dev]

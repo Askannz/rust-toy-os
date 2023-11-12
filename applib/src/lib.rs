@@ -1,5 +1,7 @@
 #![no_std]
 
+extern crate alloc;
+
 pub mod keymap;
 
 use keymap::Keycode;

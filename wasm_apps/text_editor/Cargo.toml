@@ -1,0 +1,18 @@
+[package]
+name = "text_editor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
+applib = { path = "../../applib" }
+guestlib = { path = "../../guestlib" }
+
+# To avoid error about missing tests
+[[bin]]
+name = "text_editor"
+test = false
+bench = false
+
+[profile.release]
+panic = 'abort'

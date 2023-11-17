@@ -51,7 +51,7 @@ struct App {
     grab_pos: Option<(u32, u32)>
 }
 
-const APPLICATIONS: [AppDescriptor; 2] = [
+const APPLICATIONS: [AppDescriptor; 3] = [
     AppDescriptor {
         data: include_bytes!("../../embedded_data/cube_3d.wasm"),
         launch_rect: Rect { x0: 100, y0: 100, w: 200, h: 40 },
@@ -63,6 +63,12 @@ const APPLICATIONS: [AppDescriptor; 2] = [
         launch_rect: Rect { x0: 100, y0: 150, w: 200, h: 40 },
         name: "Chronometer",
         init_win_rect: Rect { x0: 600, y0: 200, w: 200, h: 200 }
+    },
+    AppDescriptor {
+        data: include_bytes!("../../embedded_data/text_editor.wasm"),
+        launch_rect: Rect { x0: 100, y0: 200, w: 200, h: 40 },
+        name: "Text Editor",
+        init_win_rect: Rect { x0: 400, y0: 300, w: 200, h: 200 }
     },
 ];
 

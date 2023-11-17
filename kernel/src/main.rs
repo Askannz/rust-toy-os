@@ -108,7 +108,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
         descriptor: app_desc.clone(),
-        wasm_app: wasm_engine.instantiate_app(app_desc.data),
+        wasm_app: wasm_engine.instantiate_app(app_desc.data, app_desc.name),
         is_open: false,
         rect: app_desc.init_win_rect.clone(),
         grab_pos: None

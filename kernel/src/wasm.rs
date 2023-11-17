@@ -1,4 +1,5 @@
 use core::mem::size_of;
+use alloc::{string::{String, ToString}, borrow::ToOwned};
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext};
 
 use applib::{SystemState, Framebuffer};
@@ -14,22 +15,27 @@ impl WasmEngine {
         WasmEngine { engine }
     }
 
-    pub fn instantiate_app(&self, wasm_code: &[u8]) -> WasmApp {
+    pub fn instantiate_app(&self, wasm_code: &[u8], app_name: &str) -> WasmApp {
 
         let module = Module::new(&self.engine, wasm_code).unwrap();
-        let store_data = StoreData::new();
+        let store_data = StoreData::new(app_name);
         let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
 
         //
         // WASM<->System API functions
     
         let host_print_console = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32, len: i32| {
+    
+            let ctx = caller.as_context();
+            let app_name = &ctx.data().app_name;
+
             let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
             let mem_data = mem.data(&caller);
             let len = len as usize;
             let addr = addr as usize;
-            let s = core::str::from_utf8(&mem_data[addr..addr+len]).unwrap();
-            log::debug!("Received from WASM: {}", s);
+            let s = core::str::from_utf8(&mem_data[addr..addr+len]).unwrap().trim_end();
+
+            log::debug!("{}: {}", app_name, s);
         });
 
         let host_get_system_state = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32| {
@@ -92,13 +98,14 @@ struct WasmFramebufferDef {
 }
 
 struct StoreData {
+    app_name: String,
     system_state: Option<SystemState>,
     framebuffer: Option<WasmFramebufferDef>
 }
 
 impl StoreData {
-    fn new() -> Self {
-        StoreData { system_state: None, framebuffer: None }
+    fn new(app_name: &str) -> Self {
+        StoreData { app_name: app_name.to_owned(), system_state: None, framebuffer: None }
     }
 }
 

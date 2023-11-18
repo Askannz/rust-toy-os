@@ -1,5 +1,5 @@
 [package]
-name = "text_editor"
+name = "terminal"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,7 +10,7 @@ guestlib = { path = "../../guestlib" }
 
 # To avoid error about missing tests
 [[bin]]
-name = "text_editor"
+name = "terminal"
 test = false
 bench = false
 

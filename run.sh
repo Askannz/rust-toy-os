@@ -15,7 +15,7 @@ cd chronometer/
 cargo build --release
 cd ../
 
-cd text_editor/
+cd terminal/
 cargo build --release
 cd ../
 
@@ -29,7 +29,7 @@ python dump_image_bytes.py applib/fontmap.png applib/fontmap.bin
 python dump_image_bytes.py wallpaper.png embedded_data/wallpaper.bin
 cp wasm_apps/cube_3d/target/wasm32-unknown-unknown/release/cube_3d.wasm embedded_data/cube_3d.wasm
 cp wasm_apps/chronometer/target/wasm32-unknown-unknown/release/chronometer.wasm embedded_data/chronometer.wasm
-cp wasm_apps/text_editor/target/wasm32-unknown-unknown/release/text_editor.wasm embedded_data/text_editor.wasm
+cp wasm_apps/terminal/target/wasm32-unknown-unknown/release/terminal.wasm embedded_data/terminal.wasm
 
 
 #

@@ -2,8 +2,6 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
-
 pub mod keymap;
 
 use keymap::Keycode;

@@ -68,7 +68,7 @@ const APPLICATIONS: [AppDescriptor; 3] = [
         data: include_bytes!("../../embedded_data/text_editor.wasm"),
         launch_rect: Rect { x0: 100, y0: 200, w: 200, h: 40 },
         name: "Text Editor",
-        init_win_rect: Rect { x0: 400, y0: 300, w: 200, h: 200 }
+        init_win_rect: Rect { x0: 400, y0: 300, w: 400, h: 200 }
     },
 ];
 

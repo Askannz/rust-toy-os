@@ -325,13 +325,14 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
 struct FpsManager {
     fps_target: f64,
     frame_start_t: f64,
-    frametime: f64
+    frametime: f64,
+    used: f64,
 }
 
 impl FpsManager {
 
     fn new(fps_target: f64) -> Self {
-        FpsManager { fps_target, frame_start_t: 0.0, frametime: 1000.0 / fps_target }
+        FpsManager { fps_target, frame_start_t: 0.0, frametime: 1000.0 / fps_target, used: 0.0 }
     }
 
     fn start_frame(&mut self, clock: &SystemClock) {
@@ -340,7 +341,7 @@ impl FpsManager {
 
     fn end_frame(&mut self, clock: &SystemClock, fb: &mut Framebuffer) {
 
-        const SMOOTHING: f64 = 0.99;
+        const SMOOTHING: f64 = 0.8;
 
         let frametime_target = 1000.0 / self.fps_target;
 
@@ -348,16 +349,34 @@ impl FpsManager {
         let s = format!("{:.2} FPS", fps);
         draw_str(fb, &s, 0, 0, &DEFAULT_FONT, &Color(255, 255, 255));
 
+        let char_h = DEFAULT_FONT.char_h as u32;
+        let graph_w = 12 * 9;
+        let graph_h = 6;
+        let used_frac = self.used / frametime_target;
+        let used_w = (used_frac * graph_w as f64) as u32;
+        let graph_color = {
+            if 0.0 <= used_frac && used_frac < 0.50  { Color(0, 255, 0) }
+            else if 0.50 <= used_frac && used_frac < 0.75  { Color(255, 255, 0) }
+            else { Color(255, 0, 0) }
+        };
+        draw_rect(fb, &Rect { x0: 0, y0: char_h, w: graph_w, h: 12 }, &Color(0, 0, 0), 128);
+        draw_rect(fb, &Rect { x0: 0, y0: char_h + 3, w: used_w, h: graph_h }, &graph_color, 255);
+
+        let available = frametime_target - self.used;
+        let budget_color = if available > 0.0 { Color(255, 255, 255) } else {  Color(255, 0, 0) };
+        let budget_txt = format!("{:>6.2} ms", available);
+        draw_str(fb, &budget_txt, 0, char_h + graph_h + 6, &DEFAULT_FONT, &budget_color);
+
         let frame_end_t = clock.time();
 
-        let used = frame_end_t - self.frame_start_t;
+        self.used = frame_end_t - self.frame_start_t;
 
-        let new_frametime = match used < frametime_target {
+        let new_frametime = match self.used < frametime_target {
             true => {
-                clock.spin_delay(frametime_target - used);
+                clock.spin_delay(frametime_target - self.used);
                 frametime_target
             },
-            false => used
+            false => self.used
         };
 
         self.frametime = SMOOTHING * self.frametime + (1.0 - SMOOTHING) * new_frametime;

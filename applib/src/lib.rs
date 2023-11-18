@@ -22,7 +22,8 @@ pub struct SystemState {
 pub struct PointerState {
     pub x: u32,
     pub y: u32,
-    pub clicked: bool
+    pub left_clicked: bool,
+    pub right_clicked: bool
 }
 
 #[derive(Clone)]

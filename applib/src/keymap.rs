@@ -14,7 +14,8 @@ pub enum EventType {
 #[repr(u16)]
 #[allow(non_camel_case_types)]
 pub enum Keycode {
-    BTN_MOUSE = 272,
+    BTN_MOUSE_LEFT = 272,
+    BTN_MOUSE_RIGHT = 273,
     KEY_Q = 16,
     KEY_W = 17,
     KEY_E = 18,

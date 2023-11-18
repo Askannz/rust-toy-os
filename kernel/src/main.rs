@@ -134,7 +134,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let mut fps_manager = FpsManager::new(FPS_TARGET);
 
     let mut system_state = SystemState {
-        pointer: PointerState { x: 0, y: 0, clicked: false },
+        pointer: PointerState { x: 0, y: 0, left_clicked: false, right_clicked: false },
         keyboard: [None; MAX_KEYS_PRESSED],
         time: clock.time()
     };
@@ -189,7 +189,7 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
 
         let color = if launch_hover { &COLOR_HOVER } else { &COLOR_IDLE };
 
-        if launch_hover && pointer_state.clicked && !app.is_open {
+        if launch_hover && pointer_state.left_clicked && !app.is_open {
             log::info!("{} is open", app.descriptor.name);
             app.is_open = true;
         }
@@ -211,17 +211,20 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
             };
 
             if let Some((dx, dy)) = app.grab_pos {
-                if pointer_state.clicked {
+                if pointer_state.left_clicked {
                     app.rect.x0 = pointer_state.x - dx;
                     app.rect.y0 = pointer_state.y - dy;
                 } else {
                     app.grab_pos = None
                 }
             } else {
-                if pointer_state.clicked && deco_rect.check_contains_point(pointer_state.x, pointer_state.y){
+                let app_hover = deco_rect.check_contains_point(pointer_state.x, pointer_state.y);
+                if app_hover && pointer_state.left_clicked {
                     let dx = pointer_state.x - app.rect.x0;
                     let dy = pointer_state.y - app.rect.y0;
                     app.grab_pos = Some((dx, dy));
+                } else if app_hover && pointer_state.right_clicked {
+                    app.is_open = false;
                 }
             }
 
@@ -275,7 +278,8 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                 Some(EventType::EV_KEY) => match Keycode::n(event.code) {
 
                     // Mouse click
-                    Some(Keycode::BTN_MOUSE) => system_state.pointer.clicked = event.value == 1,
+                    Some(Keycode::BTN_MOUSE_LEFT) => system_state.pointer.left_clicked = event.value == 1,
+                    Some(Keycode::BTN_MOUSE_RIGHT) => system_state.pointer.right_clicked = event.value == 1,
 
                     // Keyboard
                     Some(keycode) => match event.value {

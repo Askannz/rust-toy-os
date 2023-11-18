@@ -13,7 +13,7 @@ use applib::{draw_str, DEFAULT_FONT, Color, keymap::{Keycode, CHARMAP}};
 struct AppState {
     fb_handle: FramebufferHandle,
     s: String,
-    last_input_t: u64,
+    last_input_t: f64,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -21,12 +21,12 @@ static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 const W: usize = 200;
 const H: usize = 200;
 
-const INPUT_RATE_PERIOD: u64 = 100;
+const INPUT_RATE_PERIOD: f64 = 100.0;
 
 #[no_mangle]
 pub fn init() -> () {
     let fb_handle = guestlib::create_framebuffer(W, H);
-    let state = AppState { fb_handle, s: String::with_capacity(800), last_input_t: 0};
+    let state = AppState { fb_handle, s: String::with_capacity(800), last_input_t: 0.0};
     unsafe { APP_STATE.set(state).expect("App already initialized"); }
 }
 

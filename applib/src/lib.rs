@@ -14,7 +14,7 @@ pub type KeyboardState = [Option<Keycode>; MAX_KEYS_PRESSED];
 pub struct SystemState {
     pub pointer: PointerState,
     pub keyboard: KeyboardState,
-    pub time: u64,
+    pub time: f64,
 }
 
 #[derive(Debug, Clone)]

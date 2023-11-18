@@ -32,8 +32,13 @@ impl SystemClock {
         SystemClock { period_s }
     }
 
-    pub fn time(&self) -> u64 {  // in milliseconds
+    pub fn time(&self) -> f64 {  // in milliseconds
         let n = unsafe { core::arch::x86_64::_rdtsc()};
-        (1000f64 * (n as f64) * self.period_s) as u64
+        1000f64 * (n as f64) * self.period_s
+    }
+
+    pub fn spin_delay(&self, duration: f64) {
+        let t0 = self.time();
+        while self.time() - t0 < duration {}
     }
 }

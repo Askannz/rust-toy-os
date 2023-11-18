@@ -72,6 +72,7 @@ const APPLICATIONS: [AppDescriptor; 3] = [
     },
 ];
 
+const FPS_TARGET: f64 = 60.0;
 const WALLPAPER: &'static [u8] = include_bytes!("../../embedded_data/wallpaper.bin");
 
 static LOGGER: logging::SerialLogger = logging::SerialLogger;
@@ -130,7 +131,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let runtime_services = unsafe { system_table.runtime_services() };
     let clock = SystemClock::new(runtime_services);
-    let mut fps_overlay = FpsOverlay::new(clock.time());
+    let mut fps_manager = FpsManager::new(FPS_TARGET);
 
     let mut system_state = SystemState {
         pointer: PointerState { x: 0, y: 0, clicked: false },
@@ -141,6 +142,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("Entering main loop");
 
     loop {
+
+        fps_manager.start_frame(&clock);
 
         system_state.time = clock.time();
         update_input_state(&mut system_state, (w as u32, h as u32), &mut virtio_inputs);
@@ -155,8 +158,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         update_apps(&mut framebuffer, &system_state, &mut applications);
         draw_cursor(&mut framebuffer, &system_state);
-        fps_overlay.update(clock.time());
-        fps_overlay.draw(&mut framebuffer);
+
+        fps_manager.end_frame(&clock, &mut framebuffer);
         virtio_gpu.flush();
     }
 
@@ -319,28 +322,47 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
     }
 }
 
-struct FpsOverlay {
-    last_t: u64,
+struct FpsManager {
+    fps_target: f64,
+    frame_start_t: f64,
     frametime: f64
 }
 
-impl FpsOverlay {
-    fn new(t: u64) -> Self {
-        FpsOverlay { last_t: t, frametime: 0.0 }
+impl FpsManager {
+
+    fn new(fps_target: f64) -> Self {
+        FpsManager { fps_target, frame_start_t: 0.0, frametime: 1000.0 / fps_target }
     }
-    fn update(&mut self, now: u64) {
-        const SMOOTHING: f64 = 0.9;
-        let new_frametime = (now - self.last_t) as f64;
-        self.last_t = now;
-        self.frametime = SMOOTHING * self.frametime + (1.0 - SMOOTHING) * new_frametime; 
+
+    fn start_frame(&mut self, clock: &SystemClock) {
+        self.frame_start_t = clock.time();
     }
-    fn draw(&self, fb: &mut Framebuffer) {
+
+    fn end_frame(&mut self, clock: &SystemClock, fb: &mut Framebuffer) {
+
+        const SMOOTHING: f64 = 0.99;
+
+        let frametime_target = 1000.0 / self.fps_target;
+
         let fps = 1000.0 / self.frametime;
         let s = format!("{:.2} FPS", fps);
         draw_str(fb, &s, 0, 0, &DEFAULT_FONT, &Color(255, 255, 255));
+
+        let frame_end_t = clock.time();
+
+        let used = frame_end_t - self.frame_start_t;
+
+        let new_frametime = match used < frametime_target {
+            true => {
+                clock.spin_delay(frametime_target - used);
+                frametime_target
+            },
+            false => used
+        };
+
+        self.frametime = SMOOTHING * self.frametime + (1.0 - SMOOTHING) * new_frametime;
     }
 }
-
 
 #[panic_handler]
 fn panic(info: &PanicInfo) ->  ! {

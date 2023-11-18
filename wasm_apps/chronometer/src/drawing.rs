@@ -7,10 +7,10 @@ const PI: f32 = 3.14159265359;
 const COLOR: Color = Color(0xff, 0xff, 0xff);
 
 
-pub fn draw_chrono(fb: &mut Framebuffer, time: u64) {
+pub fn draw_chrono(fb: &mut Framebuffer, time: f64) {
 
     const DIVIDER: u64 = 60_000;
-    let angle = (((time % DIVIDER) as f32) / (DIVIDER as f32)) * 2.0 * PI;
+    let angle = (((time as u64 % DIVIDER) as f32) / (DIVIDER as f32)) * 2.0 * PI;
 
     let quad = [
         Point { x: -0.5, y: 0.0, z: 0.0 },

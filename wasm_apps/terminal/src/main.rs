@@ -4,7 +4,7 @@
 extern crate alloc;
 
 use core::cell::OnceCell;
-use alloc::format;
+use alloc::{format, borrow::ToOwned};
 use alloc::string::String;
 use alloc::collections::VecDeque;
 use guestlib::{FramebufferHandle, println};
@@ -16,6 +16,7 @@ struct AppState {
     input_buffer: String,
     console_buffer: String,
     last_input_t: f64,
+    rhai_engine: rhai::Engine,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -32,7 +33,8 @@ pub fn init() -> () {
         fb_handle,
         input_buffer: String::with_capacity(20),
         console_buffer: String::with_capacity(800),
-        last_input_t: 0.0
+        last_input_t: 0.0,
+        rhai_engine: rhai::Engine::new(),
     };
     unsafe { APP_STATE.set(state).expect("App already initialized"); }
 }
@@ -68,7 +70,13 @@ pub fn step() {
     } 
 
     if enter_pressed && !state.input_buffer.is_empty() {
-        state.console_buffer.push_str(&format!("{}\n", state.input_buffer));
+
+        let result: String = match state.rhai_engine.eval::<rhai::Dynamic>(&state.input_buffer).ok() {
+            Some(res) => format!("{:?}", res),
+            None => "ERROR".to_owned(),
+        };
+        
+        state.console_buffer.push_str(&format!("$ {}\n  > {}\n", state.input_buffer, result));
         state.input_buffer.clear();
     }
 

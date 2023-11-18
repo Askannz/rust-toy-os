@@ -8,6 +8,14 @@ num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 applib = { path = "../../applib" }
 guestlib = { path = "../../guestlib" }
 
+
+# Patched version of Rhai that allows no_std on WASM targets
+[dependencies.rhai]
+git = "https://github.com/Askannz/rhai"
+rev = "323e08f92649bc06b4527360b9b62aa26c06e320"
+default-features = false
+features = ["no_std"]
+
 # To avoid error about missing tests
 [[bin]]
 name = "terminal"

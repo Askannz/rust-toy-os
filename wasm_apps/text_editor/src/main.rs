@@ -7,7 +7,7 @@ use core::cell::OnceCell;
 use alloc::format;
 use alloc::string::String;
 use guestlib::{FramebufferHandle, println};
-use applib::{draw_str, DEFAULT_FONT, Color, keymap::{Keycode, CHARMAP}};
+use applib::{draw_str, draw_text_rect, DEFAULT_FONT, Color, keymap::{Keycode, CHARMAP}, Rect};
 
 #[derive(Debug)]
 struct AppState {
@@ -37,27 +37,27 @@ pub fn step() {
 
     let system_state = guestlib::get_system_state();
 
-    let curr_input_t = system_state.time;
-    if curr_input_t - state.last_input_t > INPUT_RATE_PERIOD {
+    println!("{:?} {}", system_state.keyboard, state.s);
 
-        let mut updated = false;
-        let shift = system_state.keyboard.contains(&Some(Keycode::KEY_LEFTSHIFT));
-        for keycode in system_state.keyboard.iter() {
-            if let Some(keycode) = keycode {
-    
-                let c = CHARMAP
-                    .get(keycode)
+    let shift = system_state.keyboard.contains(&Some(Keycode::KEY_LEFTSHIFT));
+    for keycode in system_state.keyboard.iter() {
+
+        let new_char = match keycode {
+            &Some(Keycode::KEY_ENTER) => Some('\n'),
+            &Some(keycode) => CHARMAP
+                    .get(&keycode)
                     .map(|(low_c, up_c)| if shift { *up_c } else { *low_c })
-                    .flatten();
-    
-                if let Some(c) = c {
-                    updated = true;
-                    state.s.push(c);
-                }
+                    .flatten(),
+            None => None
+        };
+
+        if let Some(new_char) = new_char {
+            let curr_input_t = system_state.time;
+            if curr_input_t - state.last_input_t > INPUT_RATE_PERIOD {
+                state.s.push(new_char);
+                state.last_input_t = curr_input_t;
             }
         }
-
-        if updated { state.last_input_t = curr_input_t; }
     }
 
     //println!("{} {}", state.s, state.s.len());
@@ -66,5 +66,8 @@ pub fn step() {
 
     framebuffer.fill(&[0u8; 4]);
 
-    draw_str(&mut framebuffer, &state.s, 0, DEFAULT_FONT.char_h as u32, &DEFAULT_FONT, &Color(255, 255, 255));
+    let rect = Rect  { x0: 0, y0: 0, w: W as u32, h: H as u32 };
+
+    //draw_str(&mut framebuffer, &state.s, 0, DEFAULT_FONT.char_h as u32, &DEFAULT_FONT, &Color(255, 255, 255));
+    draw_text_rect(&mut framebuffer, &state.s, &rect, &DEFAULT_FONT, &Color(255, 255, 255));
 }

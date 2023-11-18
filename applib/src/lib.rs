@@ -2,6 +2,8 @@
 
 extern crate alloc;
 
+use alloc::vec::Vec;
+
 pub mod keymap;
 
 use keymap::Keycode;
@@ -129,6 +131,30 @@ pub const DEFAULT_FONT: Font = Font {
     char_w: 12,
 };
 
+pub fn draw_text_rect(fb: &mut Framebuffer, s: &str, rect: &Rect, font: &Font, color: &Color) {
+    
+    let Rect { x0, y0, w, h } = *rect;
+    let char_h = font.char_h;
+
+    let max_per_line = w as usize / font.char_w;
+
+    let mut i0 = 0;
+    let mut y = y0;
+    for (i, c) in s.chars().enumerate() {
+
+        let i1 = {
+            if c == '\n' { Some(i) }
+            else if i - i0 + 1 >= max_per_line || i == s.len() - 1 { Some(i+1) }
+            else { None }
+        };
+
+        if let Some(i1) = i1 {
+            draw_str(fb, &s[i0..i1], x0, y, font, color);
+            i0 = i + 1;
+            y += char_h as u32;
+        }
+    }
+}
 
 pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: u32, y0: u32, font: &Font, color: &Color) {
     let mut x = x0;

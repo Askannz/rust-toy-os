@@ -84,6 +84,15 @@ impl<'a> Framebuffer<'a> {
         &self.data[i..i+4]
     }
 
+    pub fn set_pixel(&mut self, x: u32, y: u32, color: &Color) {
+        let Color(r, g, b) = *color;
+        let i = self.get_offset(x, y);
+        self.data[i] = r;
+        self.data[i+1] = g;
+        self.data[i+2] = b;
+        self.data[i+3] = 0xFF;
+    }
+
     pub fn blend(&mut self, other: &Framebuffer) {
 
         let w = u32::min(self.rect.w, other.rect.w);

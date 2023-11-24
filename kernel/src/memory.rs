@@ -4,7 +4,7 @@ use x86_64::{VirtAddr, PhysAddr};
 use x86_64::structures::paging::{Translate, PageTable, OffsetPageTable, mapper::TranslateResult};
 use linked_list_allocator::LockedHeap;
 
-const HEAP_SIZE: usize = 10000 * 4 * 1024;
+const HEAP_SIZE: usize = 20000 * 4 * 1024;
 
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();

@@ -78,6 +78,7 @@ impl WasmEngine {
         //
         // App init
 
+        log::info!("Initializing {}", app_name);
         wasm_init
             .call(&mut store, ())
             .expect("Failed to initialize WASM app");

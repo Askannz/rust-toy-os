@@ -1,4 +1,3 @@
-//use micromath::F32Ext;
 use num_traits::Float;
 use applib::{Color, Framebuffer};
 
@@ -15,35 +14,33 @@ const MOUSE_SENSITIVITY: f32 = 5.0;
 const PI: f32 = 3.14159265359;
 const NB_QUADS: usize = 6;
 
+const BASE_QUAD: [Point; 4] = [
+    Point { x: -1.0, y: -1.0, z: -1.0 },
+    Point { x: 1.0, y: -1.0, z: -1.0 },
+    Point { x: 1.0, y: 1.0, z: -1.0 },
+    Point { x: -1.0, y: 1.0, z: -1.0 }
+];
+
 
 pub fn draw_cube(fb: &mut Framebuffer, xf: f32, yf: f32) {
 
-    let base_quad = [
-        Point { x: -1.0, y: -1.0, z: -1.0 },
-        Point { x: 1.0, y: -1.0, z: -1.0 },
-        Point { x: 1.0, y: 1.0, z: -1.0 },
-        Point { x: -1.0, y: 1.0, z: -1.0 }
-    ];
+    let geometry = [
+        rotate(&BASE_QUAD, Axis::Y, 0.0 * PI / 2.0),
+        rotate(&BASE_QUAD, Axis::Y, 1.0 * PI / 2.0),
+        rotate(&BASE_QUAD, Axis::Y, 2.0 * PI / 2.0),
+        rotate(&BASE_QUAD, Axis::Y, 3.0 * PI / 2.0),
 
-    let zero_point = Point {x: 0.0, y: 0.0, z: 0.0};
-    let zero_quad = [zero_point; 4];
-    let mut geometry = [zero_quad; NB_QUADS];
-    for i in 0..4 {
-        let i_f = i as f32;
-        geometry[i] = rotate(&base_quad, Axis::Y, i_f * PI / 2.0);
-    }
-    geometry[4] = rotate(&base_quad, Axis::X, - PI / 2.0);
-    geometry[5] = rotate(&base_quad, Axis::X, PI / 2.0);
+        rotate(&BASE_QUAD, Axis::X, - PI / 2.0),
+        rotate(&BASE_QUAD, Axis::X, PI / 2.0)
+    ];
 
     let view_yaw = -xf * MOUSE_SENSITIVITY;
     let pitch = yf * MOUSE_SENSITIVITY;
-
-    geometry.iter_mut().for_each(|quad| {
-        *quad = rotate(quad, Axis::Y, view_yaw);
-    });
-
-    geometry.iter_mut().for_each(|quad| {
-        *quad = rotate(quad, Axis::X, pitch);
+    
+    let geometry = geometry.map(|mut quad| {
+        quad = rotate(&quad, Axis::Y, view_yaw);
+        quad = rotate(&quad, Axis::X, pitch);
+        quad
     });
 
     rasterize(fb, &geometry);
@@ -71,82 +68,96 @@ fn rotate(poly: &Quad, axis: Axis, angle: f32) -> Quad {
         ]
     };
 
-    let mut new_poly: Quad = [Point {x: 0.0, y: 0.0, z: 0.0}; 4];
-
-    for (i, p) in poly.iter().enumerate() {
-        let new_p = matmul(&mat, p);
-        new_poly[i] = new_p;
-    }
-
-    new_poly
+    poly.clone().map(|p| matmul(&mat, &p))
 }
 
 fn rasterize(fb: &mut Framebuffer, geometry: &[Quad; NB_QUADS]) {
 
-    let (mut min_x, mut min_y) = (0.0, 0.0);
-    let (mut max_x, mut max_y) = (0.0, 0.0);
-
-    for poly in geometry.iter() {
-        for p in poly.iter() {
-            min_x = f32::min(min_x, p.x);
-            min_y = f32::min(min_y, p.y);
-            max_x = f32::max(max_x, p.x);
-            max_y = f32::max(max_y, p.y);
-        }
-    }
-
     let w = fb.rect.w as f32;
     let h = fb.rect.h as f32;
 
-    for x_px in 0..fb.rect.w {
-        for y_px in 0..fb.rect.h {
+    geometry_to_screen_space(w, h, geometry)
+        .iter()
+        .enumerate()
+        .for_each(|(i, quad)| {
+            let color = &COLORS[i % COLORS.len()];
+            rasterize_quad(fb, quad, color);
+        });
+}
 
-            let p = {
-   
-                let x_px = x_px as f32;
-                let y_px = y_px as f32;
+fn rasterize_quad(fb: &mut Framebuffer, quad: &IntQuad, color: &Color) {
 
-                let rx = 2.0 * (x_px - (w - h) / 2.0) / (h - 1.0);
-                let ry = 2.0 * y_px / (h - 1.0);
+    if get_direction(quad) < 0 { return; }
 
-                Point {
-                    x: (rx - 1.0) / ZOOM,
-                    y: (ry - 1.0) / ZOOM,
-                    z: 0.0
-                }
-            };
+    let [p0, p1, p2, p3] = quad;
+    rasterize_triangle(fb, [p0, p1, p2], color);
+    rasterize_triangle(fb, [p2, p3, p0], color);
 
-            if p.x < min_x || p.x > max_x || p.y < min_y || p.y > max_y {
-                continue;
+}
+
+fn rasterize_triangle(fb: &mut Framebuffer, tri: [&IntPoint; 3], color: &Color) {
+
+    let (i, p0) = tri.iter().enumerate().min_by_key(|(_i, p)| p.y).unwrap();
+    let p2 = tri[(i + 1) % 3];
+    let p1 = tri[(i + 2) % 3];
+
+    let f_left = (p1.x - p0.x) as f32 / (p1.y - p0.y) as f32;
+    let f_right = (p2.x - p0.x) as f32 / (p2.y - p0.y) as f32;
+    
+    let y_max = i64::min(p1.y, p2.y);
+
+    for y in p0.y..=y_max {
+        let x_min = ((y - p0.y) as f32 * f_left) as i64 + p0.x;
+        let x_max = ((y - p0.y) as f32 * f_right) as i64 + p0.x;
+        for x in x_min..=x_max {
+            fb.set_pixel(x as u32, y as u32, color);
+        }
+    }
+
+    if p1.y < p2.y {
+        let f_bottom = (p2.x - p1.x) as f32 / (p2.y - p1.y) as f32;
+        for y in y_max..=p2.y {
+            let x_min = ((y - p1.y) as f32 * f_bottom) as i64 + p1.x;
+            let x_max = ((y - p0.y) as f32 * f_right) as i64 + p0.x;
+            for x in x_min..=x_max {
+                fb.set_pixel(x as u32, y as u32, color);
             }
-
-            for (i, poly) in geometry.iter().enumerate() {
-                if test_in_poly(&poly, &p) {
-                    let Color(r, g, b) = COLORS[i % COLORS.len()];
-                    fb.get_pixel_mut(x_px, y_px).copy_from_slice(&[r, g, b, 0xff]);
-                    break;
-                }
+        }
+    } else {
+        let f_bottom = (p1.x - p2.x) as f32 / (p1.y - p2.y) as f32;
+        for y in y_max..=p1.y {
+            let x_min = ((y - p0.y) as f32 * f_left) as i64 + p0.x;
+            let x_max = ((y - p2.y) as f32 * f_bottom) as i64 + p2.x;
+            for x in x_min..=x_max {
+                fb.set_pixel(x as u32, y as u32, color);
             }
         }
     }
 
 }
 
-fn test_in_poly(poly: &Quad, p: &Point) -> bool {
 
-    let n = poly.len();
+fn get_direction(quad: &IntQuad) -> i64 {
 
-    for i1 in 0..n {
+    let p0 = &quad[0];
+    let p1 = &quad[1];
+    let p3 = &quad[3];
 
-        let p1 = poly[i1];
-        let p2 = poly[(i1 + 1) % n];
+    (p1.x - p0.x) * (p3.y - p0.y) - (p3.x - p0.x) * (p1.y - p0.y)
+}
 
-        let d = (p2.x - p1.x) * (p.y - p1.y) - (p2.y - p1.y) * (p.x - p1.x);
+fn geometry_to_screen_space(w: f32, h: f32, quads: &[Quad; NB_QUADS]) -> [IntQuad; NB_QUADS] {
+    quads.clone().map(|quad| quad_to_screen_space(w, h, &quad))
+}
 
-        if d < 0.0 { return false; }
-    }
+fn quad_to_screen_space(w: f32, h: f32, quad: &Quad) -> IntQuad {
+    quad.clone().map(|p| point_to_screen_space(w, h, &p))
+}
 
-    return true;
+fn point_to_screen_space(w: f32, h: f32, p: &Point) -> IntPoint {
+    let y_px = (h - 1.0) * (ZOOM * p.y + 1.0) / 2.0;
+    let x_px = (h - 1.0) * (ZOOM * p.x + 1.0) / 2.0 + (w - h) / 2.0;
+    IntPoint { x: x_px as i64, y: y_px as i64 }
 }
 
 fn matmul(m: &Matrix, vec: &Vector) -> Vector {
@@ -160,10 +171,16 @@ fn matmul(m: &Matrix, vec: &Vector) -> Vector {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Vector { x: f32, y: f32, z: f32 }
+
+#[derive(Debug, Clone)]
+struct IntVector { x: i64, y: i64 }
+
 type Point = Vector;
+type IntPoint = IntVector;
 type Quad = [Point; 4];
+type IntQuad = [IntPoint; 4];
 type Matrix = [f32; 9];
 
 #[derive(Debug, Clone, Copy)]

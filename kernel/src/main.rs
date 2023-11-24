@@ -48,7 +48,8 @@ struct App {
     descriptor: AppDescriptor,
     is_open: bool,
     rect: Rect,
-    grab_pos: Option<(u32, u32)>
+    grab_pos: Option<(u32, u32)>,
+    time_used: f64,
 }
 
 const APPLICATIONS: [AppDescriptor; 3] = [
@@ -118,7 +119,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         wasm_app: wasm_engine.instantiate_app(app_desc.data, app_desc.name),
         is_open: false,
         rect: app_desc.init_win_rect.clone(),
-        grab_pos: None
+        grab_pos: None,
+        time_used: 0.0,
     }).collect();
 
     log::info!("Applications loaded");
@@ -156,8 +158,10 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         //log::debug!("{:?}", system_state);
 
-        update_apps(&mut framebuffer, &system_state, &mut applications);
+        update_apps(&mut framebuffer, &clock, &system_state, &mut applications);
         draw_cursor(&mut framebuffer, &system_state);
+
+        applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
         fps_manager.end_frame(&clock, &mut framebuffer);
         virtio_gpu.flush();
@@ -168,7 +172,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
 }
 
-fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &mut Vec<App>) {
+fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemState, applications: &mut Vec<App>) {
 
     const COLOR_IDLE: Color = Color(0x44, 0x44, 0x44);
     const COLOR_HOVER: Color = Color(0x88, 0x88, 0x88);
@@ -245,7 +249,11 @@ fn update_apps(fb: &mut Framebuffer, system_state: &SystemState, applications: &
             draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, &COLOR_TEXT);
 
             let mut region = fb.get_region(&app.rect);
+            let t0 = clock.time();
             app.wasm_app.step(system_state, &mut region);
+            let t1 = clock.time();
+            const SMOOTHING: f64 = 0.9;
+            app.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * app.time_used;
         }
     }
 }

@@ -15,4 +15,7 @@ test = false
 bench = false
 
 [profile.release]
-panic = 'abort'
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

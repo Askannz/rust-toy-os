@@ -5,11 +5,12 @@ use core::cell::OnceCell;
 use guestlib::FramebufferHandle;
 
 mod drawing;
-use drawing::draw_cube;
+use drawing::{draw_scene, Scene, load_scene};
 
 #[derive(Debug)]
 struct AppState {
-    fb_handle: FramebufferHandle
+    fb_handle: FramebufferHandle,
+    scene: Scene,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -20,7 +21,7 @@ const H: usize = 200;
 #[no_mangle]
 pub fn init() -> () {
     let fb_handle = guestlib::create_framebuffer(W, H);
-    let state = AppState { fb_handle };
+    let state = AppState { fb_handle, scene: load_scene() };
     unsafe { APP_STATE.set(state).expect("App already initialized"); }
 }
 
@@ -37,6 +38,6 @@ pub fn step() {
     let xf = (pointer.x as f32) / ((W - 1) as f32);
     let yf = (pointer.y as f32) / ((H - 1) as f32);
 
-    framebuffer.fill(&[0u8; 4]);
-    draw_cube(&mut framebuffer, xf, yf);
+    framebuffer.fill(0u32);
+    draw_scene(&mut framebuffer, &state.scene, xf, yf);
 }

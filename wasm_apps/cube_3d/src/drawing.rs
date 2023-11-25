@@ -1,3 +1,7 @@
+extern crate alloc;
+
+use alloc::format;
+use guestlib::println;
 use num_traits::Float;
 use applib::{Color, Framebuffer};
 
@@ -21,32 +25,40 @@ const BASE_QUAD: [Point; 4] = [
     Point { x: -1.0, y: 1.0, z: -1.0 }
 ];
 
+#[derive(Debug)]
+pub struct Scene([Quad; NB_QUADS]);
 
-pub fn draw_cube(fb: &mut Framebuffer, xf: f32, yf: f32) {
+pub fn load_scene() -> Scene {
 
-    let geometry = [
-        rotate(&BASE_QUAD, Axis::Y, 0.0 * PI / 2.0),
-        rotate(&BASE_QUAD, Axis::Y, 1.0 * PI / 2.0),
-        rotate(&BASE_QUAD, Axis::Y, 2.0 * PI / 2.0),
-        rotate(&BASE_QUAD, Axis::Y, 3.0 * PI / 2.0),
+    let mut geometry = [BASE_QUAD; NB_QUADS];
 
-        rotate(&BASE_QUAD, Axis::X, - PI / 2.0),
-        rotate(&BASE_QUAD, Axis::X, PI / 2.0)
-    ];
+    rotate(&mut geometry[0], Axis::Y, 0.0 * PI / 2.0);
+    rotate(&mut geometry[1], Axis::Y, 1.0 * PI / 2.0);
+    rotate(&mut geometry[2], Axis::Y, 2.0 * PI / 2.0);
+    rotate(&mut geometry[3], Axis::Y, 3.0 * PI / 2.0);
+
+    rotate(&mut geometry[4], Axis::X, - PI / 2.0);
+    rotate(&mut geometry[5], Axis::X, PI / 2.0);
+
+    Scene(geometry)
+}
+
+pub fn draw_scene(fb: &mut Framebuffer, scene: &Scene, xf: f32, yf: f32) {
+
+    let mut geometry = scene.0.clone();
 
     let view_yaw = -xf * MOUSE_SENSITIVITY;
     let pitch = yf * MOUSE_SENSITIVITY;
-    
-    let geometry = geometry.map(|mut quad| {
-        quad = rotate(&quad, Axis::Y, view_yaw);
-        quad = rotate(&quad, Axis::X, pitch);
-        quad
+
+    geometry.iter_mut().for_each(|quad| {
+        rotate(quad, Axis::Y, view_yaw);
+        rotate(quad, Axis::X, pitch);
     });
 
     rasterize(fb, &geometry);
 }
 
-fn rotate(poly: &Quad, axis: Axis, angle: f32) -> Quad {
+fn rotate(poly: &mut Quad, axis: Axis, angle: f32) {
 
     let mat = match axis {
         Axis::X => [
@@ -68,7 +80,7 @@ fn rotate(poly: &Quad, axis: Axis, angle: f32) -> Quad {
         ]
     };
 
-    poly.clone().map(|p| matmul(&mat, &p))
+    poly.iter_mut().for_each(|p| *p = matmul(&mat, p));
 }
 
 fn rasterize(fb: &mut Framebuffer, geometry: &[Quad; NB_QUADS]) {
@@ -97,43 +109,52 @@ fn rasterize_quad(fb: &mut Framebuffer, quad: &IntQuad, color: &Color) {
 
 fn rasterize_triangle(fb: &mut Framebuffer, tri: [&IntPoint; 3], color: &Color) {
 
-    let (i, p0) = tri.iter().enumerate().min_by_key(|(_i, p)| p.y).unwrap();
+    let value = color.as_u32();
+
+    let i = {
+        if tri[0].y <= i64::min(tri[1].y, tri[2].y) { 0 }
+        else if tri[1].y <= i64::min(tri[0].y, tri[2].y) { 1 }
+        else { 2 }
+    };
+
+    let p0 = tri[i];
     let p2 = tri[(i + 1) % 3];
     let p1 = tri[(i + 2) % 3];
 
-    let f_left = (p1.x - p0.x) as f32 / (p1.y - p0.y) as f32;
-    let f_right = (p2.x - p0.x) as f32 / (p2.y - p0.y) as f32;
-    
-    let y_max = i64::min(p1.y, p2.y);
-
-    for y in p0.y..=y_max {
-        let x_min = ((y - p0.y) as f32 * f_left) as i64 + p0.x;
-        let x_max = ((y - p0.y) as f32 * f_right) as i64 + p0.x;
-        for x in x_min..=x_max {
-            fb.set_pixel(x as u32, y as u32, color);
-        }
-    }
+    let y_half = i64::min(p1.y, p2.y);
+    fill_half_triangle(fb, (p0, p1), (p0, p2), (p0.y, y_half), value);
 
     if p1.y < p2.y {
-        let f_bottom = (p2.x - p1.x) as f32 / (p2.y - p1.y) as f32;
-        for y in y_max..=p2.y {
-            let x_min = ((y - p1.y) as f32 * f_bottom) as i64 + p1.x;
-            let x_max = ((y - p0.y) as f32 * f_right) as i64 + p0.x;
-            for x in x_min..=x_max {
-                fb.set_pixel(x as u32, y as u32, color);
-            }
-        }
+        fill_half_triangle(fb, (p1, p2), (p0, p2), (y_half, p2.y), value);
     } else {
-        let f_bottom = (p1.x - p2.x) as f32 / (p1.y - p2.y) as f32;
-        for y in y_max..=p1.y {
-            let x_min = ((y - p0.y) as f32 * f_left) as i64 + p0.x;
-            let x_max = ((y - p2.y) as f32 * f_bottom) as i64 + p2.x;
-            for x in x_min..=x_max {
-                fb.set_pixel(x as u32, y as u32, color);
-            }
+        fill_half_triangle(fb, (p0, p1), (p2, p1), (y_half, p1.y), value);
+    }
+}
+
+#[inline]
+fn fill_half_triangle(
+    fb: &mut Framebuffer,
+    left: (&IntPoint, &IntPoint), right: (&IntPoint, &IntPoint),
+    range: (i64, i64),
+    value: u32
+) {
+
+    let (pl0, pl1) = left;
+    let (pr0, pr1) = right;
+    let (y_min, y_max) = range;
+
+    if pl0.y == pl1.y || pr0.y == pr1.y { return; }
+
+    let f_left = (pl1.x - pl0.x) as f32 / (pl1.y - pl0.y) as f32;
+    let f_right = (pr1.x - pr0.x) as f32 / (pr1.y - pr0.y) as f32;
+
+    for y in y_min..=y_max {
+        let x_min = ((y - pl0.y) as f32 * f_left) as i64 + pl0.x;
+        let x_max = ((y - pr0.y) as f32 * f_right) as i64 + pr0.x;
+        if x_min <= x_max {
+            fb.fill_line(x_min as u32, x_max as u32, y as u32, value);
         }
     }
-
 }
 
 

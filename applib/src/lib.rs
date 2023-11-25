@@ -28,6 +28,23 @@ pub struct PointerState {
 
 #[derive(Clone)]
 pub struct Color(pub u8, pub u8, pub u8);
+
+impl Color {
+    pub fn as_u32(&self) -> u32 {
+        let Color(r, g, b) = *self;
+        let (r, g, b) = (r as u32, g as u32, b as u32);
+        let a = 0xFFu32;
+        
+        let val =
+            (a << (3 * 8)) + 
+            (b << (2 * 8)) + 
+            (g << (1 * 8)) +
+            (r << (0 * 8));
+
+        val
+    }
+}
+
 #[derive(Clone)]
 pub struct Rect { pub x0: u32, pub y0: u32, pub w: u32, pub h: u32 }
 
@@ -93,6 +110,35 @@ impl<'a> Framebuffer<'a> {
         self.data[i+3] = 0xFF;
     }
 
+    pub fn set_pixel_u32(&mut self, x: u32, y: u32, value: u32) {
+
+        let i = self.get_offset(x, y) / 4;
+
+        let data = unsafe {
+            let (prefix, shorts, suffix) = self.data.align_to_mut::<u32>();
+            assert_eq!(prefix.len(), 0);
+            assert_eq!(suffix.len(), 0);
+            shorts
+        };
+
+        data[i] = value;
+    }
+
+    pub fn fill_line(&mut self, x1: u32, x2: u32, y: u32, value: u32) {
+
+        let i1 = self.get_offset(x1, y) / 4;
+        let i2 = self.get_offset(x2, y) / 4;
+    
+        let data = unsafe {
+            let (prefix, shorts, suffix) = self.data.align_to_mut::<u32>();
+            assert_eq!(prefix.len(), 0);
+            assert_eq!(suffix.len(), 0);
+            shorts
+        };
+    
+        data[i1..=i2].fill(value);
+    }
+
     pub fn blend(&mut self, other: &Framebuffer) {
 
         let w = u32::min(self.rect.w, other.rect.w);
@@ -110,16 +156,12 @@ impl<'a> Framebuffer<'a> {
         }
     }
 
-    pub fn fill(&mut self, value: &[u8]) {
-
-        assert_eq!(value.len(), 4);
+    pub fn fill(&mut self, value: u32) {
     
         let Rect { x0, y0, w, h } = self.rect;
     
-        for x in x0..x0+w {
-            for y in y0..y0+h {
-                self.get_pixel_mut(x, y).copy_from_slice(value);
-            }
+        for y in y0..y0+h {
+            self.fill_line(x0, x0+w-1, y, value)
         }
     }
 }

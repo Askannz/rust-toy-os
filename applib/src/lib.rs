@@ -100,10 +100,6 @@ impl<'a> Framebuffer<'a> {
     }
 
     pub fn get_offset(&self, x: u32, y: u32) -> usize {
-        if !(x < self.rect.w && y < self.rect.h) {
-            panic!("{:?} {:?}", (x, y), self.rect);
-        }
-        assert!(x < self.rect.w && y < self.rect.h);
         let Rect { x0, y0, .. } = self.rect;
         (y0 + y) as usize * self.w + (x0 + x) as usize
     }
@@ -118,10 +114,10 @@ impl<'a> Framebuffer<'a> {
         self.data[i] = color.0;
     }
 
-    pub fn fill_line(&mut self, x1: u32, x2: u32, y: u32, color: Color) {
-        let i1 = self.get_offset(x1, y);
-        let i2 = self.get_offset(x2, y);
-        self.data[i1..=i2].fill(color.0);
+    pub fn fill_line(&mut self, x: u32, w: u32, y: u32, color: Color) {
+        let i1 = self.get_offset(x, y);
+        let i2 = self.get_offset(x+w, y);
+        self.data[i1..i2].fill(color.0);
     }
 
     pub fn blend(&mut self, other: &Framebuffer) {
@@ -157,7 +153,7 @@ impl<'a> Framebuffer<'a> {
         let Rect { x0, y0, w, h } = self.rect;
     
         for y in y0..y0+h {
-            self.fill_line(x0, x0+w-1, y, color)
+            self.fill_line(x0, w, y, color)
         }
     }
 }
@@ -230,14 +226,21 @@ fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: u32, y0: u32, font: &Font, col
 
 
 pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
+    let Rect { x0, y0, w, h } = *rect;
+    for y in y0..y0+h {
+        fb.fill_line(x0, w, y, color);
+    }
+}
+
+pub fn blend_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
 
     let Rect { x0, y0, w, h } = *rect;
 
-    for x in x0..x0+w {
-        for y in y0..y0+h {
-            let curr_color = fb.get_pixel(x, y);
-            let new_color = blend_colors(color, curr_color);
-            fb.set_pixel(x, y, new_color);
+    for y in y0..y0+h {
+        for x in x0..x0+w {
+            let current = fb.get_pixel(x, y);
+            let new = blend_colors(color, current);
+            fb.set_pixel(x, y, new);
         }
     }
 }

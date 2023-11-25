@@ -150,7 +150,8 @@ fn fill_half_triangle(
         let x_min = ((y - pl0.y) as f32 * f_left) as i64 + pl0.x;
         let x_max = ((y - pr0.y) as f32 * f_right) as i64 + pr0.x;
         if x_min <= x_max {
-            fb.fill_line(x_min as u32, x_max as u32, y as u32, color);
+            let line_w = x_max - x_min + 1;
+            fb.fill_line(x_min as u32, line_w as u32, y as u32, color);
         }
     }
 }

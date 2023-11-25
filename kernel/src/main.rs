@@ -10,7 +10,7 @@ use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use smoltcp::wire::{IpAddress, IpCidr};
 
-use applib::{Color, Rect, Framebuffer, SystemState, PointerState, MAX_KEYS_PRESSED, DEFAULT_FONT, draw_str, draw_rect};
+use applib::{Color, Rect, Framebuffer, SystemState, PointerState, MAX_KEYS_PRESSED, DEFAULT_FONT, draw_str, draw_rect, blend_rect};
 
 extern crate alloc;
 
@@ -164,7 +164,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         update_apps(&mut framebuffer, &clock, &system_state, &mut applications);
         draw_cursor(&mut framebuffer, &system_state);
 
-        applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
+        //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
         fps_manager.end_frame(&clock, &mut framebuffer);
         virtio_gpu.flush();
@@ -243,7 +243,7 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
                 h: deco_rect.h,
             };
 
-            draw_rect(fb, &shadow_rect, COLOR_SHADOW);
+            blend_rect(fb, &shadow_rect, COLOR_SHADOW);
 
             let instance_hover = deco_rect.check_contains_point(pointer_state.x, pointer_state.y);
             let color_app = if instance_hover { COLOR_HOVER } else { COLOR_IDLE };

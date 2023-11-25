@@ -19,7 +19,7 @@ extern "C" {
 
 #[derive(Debug)]
 pub struct FramebufferHandle {
-    framebuffer_ptr: *mut u8,
+    framebuffer_ptr: *mut u32,
     w: usize,
     h: usize,
 }
@@ -41,7 +41,7 @@ pub fn get_system_state() -> SystemState {
 }
 
 pub fn create_framebuffer(w: usize, h: usize) -> FramebufferHandle {
-    let ptr = vec![0u8; w*h*4].leak().as_mut_ptr();
+    let ptr = vec![0u32; w*h].leak().as_mut_ptr();
     unsafe { host_set_framebuffer(ptr as i32, w as i32, h as i32) };
     FramebufferHandle {
         framebuffer_ptr: ptr,
@@ -55,7 +55,7 @@ pub fn get_framebuffer<'a>(handle: &'a mut FramebufferHandle) -> Framebuffer<'a>
     let FramebufferHandle { framebuffer_ptr, w, h } = *handle;
 
     let fb_data = unsafe {
-        core::slice::from_raw_parts_mut(framebuffer_ptr, w*h*4)
+        core::slice::from_raw_parts_mut(framebuffer_ptr, w*h)
     };
 
     Framebuffer::new(fb_data, w, h)

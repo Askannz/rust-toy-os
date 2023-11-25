@@ -10,7 +10,7 @@ use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use smoltcp::wire::{IpAddress, IpCidr};
 
-use applib::{Color, Rect, Framebuffer, SystemState, PointerState, KeyboardState, MAX_KEYS_PRESSED, DEFAULT_FONT, draw_str, draw_rect};
+use applib::{Color, Rect, Framebuffer, SystemState, PointerState, MAX_KEYS_PRESSED, DEFAULT_FONT, draw_str, draw_rect};
 
 extern crate alloc;
 
@@ -154,7 +154,10 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 
-        let mut framebuffer = Framebuffer::new(virtio_gpu.framebuffer.as_mut(), w, h);
+        let fb_data = unsafe {
+            virtio_gpu.framebuffer.as_mut().align_to_mut::<u32>().1
+        };
+        let mut framebuffer = Framebuffer::new(fb_data, w, h);
 
         //log::debug!("{:?}", system_state);
 
@@ -174,12 +177,13 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
 fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemState, applications: &mut Vec<App>) {
 
-    const COLOR_IDLE: Color = Color(0x44, 0x44, 0x44);
-    const COLOR_HOVER: Color = Color(0x88, 0x88, 0x88);
-    const COLOR_SHADOW: Color = Color(0x0, 0x0, 0x0);
-    const COLOR_TEXT: Color = Color(0xff, 0xff, 0xff);
-    const ALPHA_APP: u8 = 255;
     const ALPHA_SHADOW: u8 = 100;
+
+    const COLOR_IDLE: Color = Color::from_rgba(0x44, 0x44, 0x44, 0xff);
+    const COLOR_HOVER: Color = Color::from_rgba(0x88, 0x88, 0x88, 0xff);
+    const COLOR_SHADOW: Color = Color::from_rgba(0x0, 0x0, 0x0, ALPHA_SHADOW);
+    const COLOR_TEXT: Color = Color::from_rgba(0xff, 0xff, 0xff, 0xff);
+
     const OFFSET_SHADOW: u32 = 10;
     const TEXT_MARGIN: u32 = 5;
     const DECO_PADDING: u32 = 5;
@@ -191,18 +195,18 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
         let pointer_state = &system_state.pointer;
         let launch_hover = rect.check_contains_point(pointer_state.x, pointer_state.y);
 
-        let color = if launch_hover { &COLOR_HOVER } else { &COLOR_IDLE };
+        let color = if launch_hover { COLOR_HOVER } else { COLOR_IDLE };
 
         if launch_hover && pointer_state.left_clicked && !app.is_open {
             log::info!("{} is open", app.descriptor.name);
             app.is_open = true;
         }
 
-        draw_rect(fb, &rect, color, 255);
+        draw_rect(fb, &rect, color);
 
         let text_x0 = rect.x0 + TEXT_MARGIN;
         let text_y0 = rect.y0 + TEXT_MARGIN;
-        draw_str(fb, app.descriptor.name, text_x0, text_y0, &DEFAULT_FONT, &COLOR_TEXT);
+        draw_str(fb, app.descriptor.name, text_x0, text_y0, &DEFAULT_FONT, COLOR_TEXT);
 
         if app.is_open {
 
@@ -211,7 +215,7 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
                 x0: app.rect.x0 - DECO_PADDING,
                 y0: app.rect.y0 - font_h - 2 * DECO_PADDING,
                 w: app.rect.w + 2 * DECO_PADDING,
-                h: app.rect.h + 2 * DECO_PADDING + font_h,
+                h: app.rect.h + 3 * DECO_PADDING + font_h,
             };
 
             if let Some((dx, dy)) = app.grab_pos {
@@ -239,14 +243,14 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
                 h: deco_rect.h,
             };
 
-            draw_rect(fb, &shadow_rect, &COLOR_SHADOW, ALPHA_SHADOW);
+            draw_rect(fb, &shadow_rect, COLOR_SHADOW);
 
             let instance_hover = deco_rect.check_contains_point(pointer_state.x, pointer_state.y);
             let color_app = if instance_hover { COLOR_HOVER } else { COLOR_IDLE };
-            draw_rect(fb, &deco_rect, &color_app, ALPHA_APP);
+            draw_rect(fb, &deco_rect, color_app);
 
             let (x_txt, y_txt) = (app.rect.x0, app.rect.y0 - font_h - DECO_PADDING);
-            draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, &COLOR_TEXT);
+            draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, COLOR_TEXT);
 
             let mut region = fb.get_region(&app.rect);
             let t0 = clock.time();
@@ -261,12 +265,12 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 fn draw_cursor(fb: &mut Framebuffer, system_state: &SystemState) {
 
     const CURSOR_SIZE: u32 = 5;
-    const CURSOR_COLOR: Color = Color(0xff, 0xff, 0xff);
+    const CURSOR_COLOR: Color = Color::from_rgba(0xff, 0xff, 0xff, 0xff);
 
     let pointer_state = &system_state.pointer;
     let x = pointer_state.x;
     let y = pointer_state.y;
-    draw_rect(fb, &Rect { x0: x, y0: y, w: CURSOR_SIZE, h: CURSOR_SIZE }, &CURSOR_COLOR, 255)
+    draw_rect(fb, &Rect { x0: x, y0: y, w: CURSOR_SIZE, h: CURSOR_SIZE }, CURSOR_COLOR)
 }
 
 fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_inputs: &mut [VirtioInput]) {
@@ -355,11 +359,17 @@ impl FpsManager {
 
         const SMOOTHING: f64 = 0.8;
 
+        const WHITE: Color = Color::from_rgba(255, 255, 255, 255);
+        const BLACK: Color = Color::from_rgba(0, 0, 0, 255);
+        const GREEN: Color = Color::from_rgba(0, 255, 0, 255);
+        const RED: Color = Color::from_rgba(255, 0, 0, 255);
+        const YELLOW: Color = Color::from_rgba(255, 255, 0, 255);
+
         let frametime_target = 1000.0 / self.fps_target;
 
         let fps = 1000.0 / self.frametime;
         let s = format!("{:.2} FPS", fps);
-        draw_str(fb, &s, 0, 0, &DEFAULT_FONT, &Color(255, 255, 255));
+        draw_str(fb, &s, 0, 0, &DEFAULT_FONT, WHITE);
 
         let char_h = DEFAULT_FONT.char_h as u32;
         let graph_w = 12 * 9;
@@ -367,17 +377,17 @@ impl FpsManager {
         let used_frac = self.used / frametime_target;
         let used_w = (used_frac * graph_w as f64) as u32;
         let graph_color = {
-            if 0.0 <= used_frac && used_frac < 0.50  { Color(0, 255, 0) }
-            else if 0.50 <= used_frac && used_frac < 0.75  { Color(255, 255, 0) }
-            else { Color(255, 0, 0) }
+            if 0.0 <= used_frac && used_frac < 0.50  { GREEN }
+            else if 0.50 <= used_frac && used_frac < 0.75  { YELLOW }
+            else { RED }
         };
-        draw_rect(fb, &Rect { x0: 0, y0: char_h, w: graph_w, h: 12 }, &Color(0, 0, 0), 128);
-        draw_rect(fb, &Rect { x0: 0, y0: char_h + 3, w: used_w, h: graph_h }, &graph_color, 255);
+        draw_rect(fb, &Rect { x0: 0, y0: char_h, w: graph_w, h: 12 }, BLACK);
+        draw_rect(fb, &Rect { x0: 0, y0: char_h + 3, w: used_w, h: graph_h }, graph_color);
 
         let available = frametime_target - self.used;
-        let budget_color = if available > 0.0 { Color(255, 255, 255) } else {  Color(255, 0, 0) };
+        let budget_color = if available > 0.0 { WHITE } else {  RED };
         let budget_txt = format!("{:>6.2} ms", available);
-        draw_str(fb, &budget_txt, 0, char_h + graph_h + 6, &DEFAULT_FONT, &budget_color);
+        draw_str(fb, &budget_txt, 0, char_h + graph_h + 6, &DEFAULT_FONT, budget_color);
 
         let frame_end_t = clock.time();
 

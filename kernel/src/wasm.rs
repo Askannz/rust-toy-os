@@ -138,10 +138,11 @@ impl WasmApp {
             let wasm_fb = {
                 let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
                 let fb_data = &mut mem_data[addr..addr + w*h*4];
+                let fb_data = unsafe { fb_data.align_to_mut::<u32>().1 };
                 Framebuffer::new(fb_data, w, h)
             };
 
-            system_fb.blend(&wasm_fb);
+            system_fb.copy_from(&wasm_fb);
         }
     }
 }

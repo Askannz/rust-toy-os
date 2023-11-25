@@ -26,26 +26,40 @@ pub struct PointerState {
     pub right_clicked: bool
 }
 
-#[derive(Clone)]
-pub struct Color(pub u8, pub u8, pub u8);
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct Color(pub u32);
 
 impl Color {
-    pub fn as_u32(&self) -> u32 {
-        let Color(r, g, b) = *self;
-        let (r, g, b) = (r as u32, g as u32, b as u32);
-        let a = 0xFFu32;
-        
-        let val =
-            (a << (3 * 8)) + 
-            (b << (2 * 8)) + 
-            (g << (1 * 8)) +
-            (r << (0 * 8));
 
-        val
+    pub const fn from_rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
+
+        let (r, g, b, a) = (r as u32, g as u32, b as u32, a as u32);
+
+        let val =
+            (a << 3 * 8) +
+            (b << 2 * 8) +
+            (g << 1 * 8) +
+            (r << 0 * 8);
+
+        Color(val)
+    }
+
+    pub fn as_rgba(&self) -> (u8, u8, u8, u8) {
+
+        let mask = 0xFFu32;
+        let val = self.0;
+
+        let r = ((mask << 0 * 8) & val) >> 0 * 8;
+        let g = ((mask << 1 * 8) & val) >> 1 * 8;
+        let b = ((mask << 2 * 8) & val) >> 2 * 8;
+        let a = ((mask << 3 * 8) & val) >> 3 * 8;
+
+        (r as u8, g as u8, b as u8, a as u8)
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Rect { pub x0: u32, pub y0: u32, pub w: u32, pub h: u32 }
 
 impl Rect {
@@ -62,15 +76,15 @@ impl Rect {
 }
 
 pub struct Framebuffer<'a> {
-    pub data: &'a mut [u8],
+    pub data: &'a mut [u32],
     pub w: usize,
     pub h: usize,
     pub rect: Rect,
 }
 
 impl<'a> Framebuffer<'a> {
-    pub fn new(data: &'a mut [u8], w: usize, h: usize) -> Self {
-        assert_eq!(data.len(), w * h * 4);
+    pub fn new(data: &'a mut [u32], w: usize, h: usize) -> Self {
+        assert_eq!(data.len(), w * h);
         let rect = Rect { x0: 0, y0: 0, w: w as u32, h: h as u32 };
         Framebuffer { data, w, h, rect }
     }
@@ -86,57 +100,28 @@ impl<'a> Framebuffer<'a> {
     }
 
     pub fn get_offset(&self, x: u32, y: u32) -> usize {
+        if !(x < self.rect.w && y < self.rect.h) {
+            panic!("{:?} {:?}", (x, y), self.rect);
+        }
         assert!(x < self.rect.w && y < self.rect.h);
         let Rect { x0, y0, .. } = self.rect;
-        ((y0 + y) as usize * self.w + (x0 + x) as usize) * 4
+        (y0 + y) as usize * self.w + (x0 + x) as usize
     }
 
-    pub fn get_pixel_mut(&mut self, x: u32, y: u32) -> &mut [u8] {
+    pub fn get_pixel(&self, x: u32, y: u32) -> Color {
         let i = self.get_offset(x, y);
-        &mut self.data[i..i+4]
+        Color(self.data[i])
     }
 
-    pub fn get_pixel(&self, x: u32, y: u32) -> &[u8] {
+    pub fn set_pixel(&mut self, x: u32, y: u32, color: Color) {
         let i = self.get_offset(x, y);
-        &self.data[i..i+4]
+        self.data[i] = color.0;
     }
 
-    pub fn set_pixel(&mut self, x: u32, y: u32, color: &Color) {
-        let Color(r, g, b) = *color;
-        let i = self.get_offset(x, y);
-        self.data[i] = r;
-        self.data[i+1] = g;
-        self.data[i+2] = b;
-        self.data[i+3] = 0xFF;
-    }
-
-    pub fn set_pixel_u32(&mut self, x: u32, y: u32, value: u32) {
-
-        let i = self.get_offset(x, y) / 4;
-
-        let data = unsafe {
-            let (prefix, shorts, suffix) = self.data.align_to_mut::<u32>();
-            assert_eq!(prefix.len(), 0);
-            assert_eq!(suffix.len(), 0);
-            shorts
-        };
-
-        data[i] = value;
-    }
-
-    pub fn fill_line(&mut self, x1: u32, x2: u32, y: u32, value: u32) {
-
-        let i1 = self.get_offset(x1, y) / 4;
-        let i2 = self.get_offset(x2, y) / 4;
-    
-        let data = unsafe {
-            let (prefix, shorts, suffix) = self.data.align_to_mut::<u32>();
-            assert_eq!(prefix.len(), 0);
-            assert_eq!(suffix.len(), 0);
-            shorts
-        };
-    
-        data[i1..=i2].fill(value);
+    pub fn fill_line(&mut self, x1: u32, x2: u32, y: u32, color: Color) {
+        let i1 = self.get_offset(x1, y);
+        let i2 = self.get_offset(x2, y);
+        self.data[i1..=i2].fill(color.0);
     }
 
     pub fn blend(&mut self, other: &Framebuffer) {
@@ -146,22 +131,33 @@ impl<'a> Framebuffer<'a> {
 
         for x in 0..w {
             for y in 0..h {
-                let px_1 = self.get_pixel_mut(x, y);
+                let px_1 = self.get_pixel(x, y);
                 let px_2 = other.get_pixel(x, y);
-                let alpha = px_2[3];
-                px_1[0] = blend(px_1[0], px_2[0], alpha);
-                px_1[1] = blend(px_1[1], px_2[1], alpha);
-                px_1[2] = blend(px_1[2], px_2[2], alpha);
+                let blended = blend_colors(px_2, px_1);
+                self.set_pixel(x, y, blended);
             }
         }
     }
 
-    pub fn fill(&mut self, value: u32) {
+    pub fn copy_from(&mut self, other: &Framebuffer) {
+        let w = u32::min(self.rect.w, other.rect.w);
+        let h = u32::min(self.rect.h, other.rect.h);
+
+        for y in 0..h {
+            let ia1 = self.get_offset(0, y);
+            let ia2 = self.get_offset(w-1, y);
+            let ib1 = other.get_offset(0, y);
+            let ib2 = other.get_offset(w-1, y);
+            self.data[ia1..=ia2].copy_from_slice(&other.data[ib1..=ib2]);
+        }
+    }
+
+    pub fn fill(&mut self, color: Color) {
     
         let Rect { x0, y0, w, h } = self.rect;
     
         for y in y0..y0+h {
-            self.fill_line(x0, x0+w-1, y, value)
+            self.fill_line(x0, x0+w-1, y, color)
         }
     }
 }
@@ -180,7 +176,7 @@ pub const DEFAULT_FONT: Font = Font {
     char_w: 12,
 };
 
-pub fn draw_text_rect(fb: &mut Framebuffer, s: &str, rect: &Rect, font: &Font, color: &Color) {
+pub fn draw_text_rect(fb: &mut Framebuffer, s: &str, rect: &Rect, font: &Font, color: Color) {
     
     let Rect { x0, y0, w, h } = *rect;
     let char_h = font.char_h;
@@ -205,7 +201,7 @@ pub fn draw_text_rect(fb: &mut Framebuffer, s: &str, rect: &Rect, font: &Font, c
     }
 }
 
-pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: u32, y0: u32, font: &Font, color: &Color) {
+pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: u32, y0: u32, font: &Font, color: Color) {
     let mut x = x0;
     for c in s.as_bytes() {
         draw_char(fb, *c, x, y0, font, color);
@@ -213,20 +209,19 @@ pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: u32, y0: u32, font: &Font, co
     }
 }
 
-fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: u32, y0: u32, font: &Font, color: &Color) {
+fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: u32, y0: u32, font: &Font, color: Color) {
 
     // Replacing unsupported chars with spaces
     if c < 32 || c > 126 { c = 32}
 
     let c_index = (c - 32) as usize;
-    let Color(r, g, b) = *color;
     let Font { nb_chars, char_h, char_w, .. } = *font;
 
     for x in 0..char_w {
         for y in 0..char_h {
             let i_font = y * char_w * nb_chars + x + c_index * char_w;
             if font.fontmap[i_font] > 0 {
-                fb.get_pixel_mut(x0 + x as u32, y0 + y as u32).copy_from_slice(&[r, g, b, 0xff]);
+                fb.set_pixel(x0 + x as u32, y0 + y as u32, color);
             }
         }
     }
@@ -234,28 +229,38 @@ fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: u32, y0: u32, font: &Font, col
 }
 
 
-pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: &Color, alpha: u8) {
+pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
 
     let Rect { x0, y0, w, h } = *rect;
-    let Color(r, g, b) = *color;
 
     for x in x0..x0+w {
         for y in y0..y0+h {
-            let pixel = fb.get_pixel_mut(x, y);
-            pixel[0] = blend(pixel[0], r, alpha);
-            pixel[1] = blend(pixel[1], g, alpha);
-            pixel[2] = blend(pixel[2], b, alpha);
+            let curr_color = fb.get_pixel(x, y);
+            let new_color = blend_colors(color, curr_color);
+            fb.set_pixel(x, y, new_color);
         }
     }
 }
 
-fn blend(a: u8, b: u8, alpha: u8) -> u8 {
+fn blend_colors(c1: Color, c2: Color) -> Color{
 
-    let a = a as u16;
-    let b = b as u16;
+    let (r1, g1, b1, a1) = c1.as_rgba();
+    let (r2, g2, b2, a2) = c2.as_rgba();
+
+    let r = blend_channel(r2, r1, a1);
+    let g = blend_channel(g2, g1, a1);
+    let b = blend_channel(b2, b1, a1);
+    
+    Color::from_rgba(r, g, b, a2)
+}
+
+fn blend_channel(val_a: u8, val_b: u8, alpha: u8) -> u8 {
+
+    let val_a = val_a as u16;
+    let val_b = val_b as u16;
     let alpha = alpha as u16;
 
-    let r = a * (256 - alpha) + b * (1 + alpha);
+    let r = val_a * (256 - alpha) + val_b * (1 + alpha);
 
     (r >> 8) as u8
 }

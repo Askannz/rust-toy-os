@@ -6,12 +6,12 @@ use num_traits::Float;
 use applib::{Color, Framebuffer};
 
 const COLORS: [Color; 6] = [
-    Color(0xff, 0x00, 0x00),
-    Color(0x00, 0xff, 0x00),
-    Color(0x00, 0x00, 0xff),
-    Color(0xff, 0xff, 0x00),
-    Color(0xff, 0x00, 0xff),
-    Color(0x00, 0xff, 0xff),
+    Color::from_rgba(0xff, 0x00, 0x00, 0xFF),
+    Color::from_rgba(0x00, 0xff, 0x00, 0xFF),
+    Color::from_rgba(0x00, 0x00, 0xff, 0xFF),
+    Color::from_rgba(0xff, 0xff, 0x00, 0xFF),
+    Color::from_rgba(0xff, 0x00, 0xff, 0xFF),
+    Color::from_rgba(0x00, 0xff, 0xff, 0xFF),
 ];
 const ZOOM: f32 = 0.4;
 const MOUSE_SENSITIVITY: f32 = 5.0;
@@ -92,12 +92,12 @@ fn rasterize(fb: &mut Framebuffer, geometry: &[Quad; NB_QUADS]) {
         .iter()
         .enumerate()
         .for_each(|(i, quad)| {
-            let color = &COLORS[i % COLORS.len()];
+            let color = COLORS[i % COLORS.len()];
             rasterize_quad(fb, quad, color);
         });
 }
 
-fn rasterize_quad(fb: &mut Framebuffer, quad: &IntQuad, color: &Color) {
+fn rasterize_quad(fb: &mut Framebuffer, quad: &IntQuad, color: Color) {
 
     if get_direction(quad) < 0 { return; }
 
@@ -107,9 +107,7 @@ fn rasterize_quad(fb: &mut Framebuffer, quad: &IntQuad, color: &Color) {
 
 }
 
-fn rasterize_triangle(fb: &mut Framebuffer, tri: [&IntPoint; 3], color: &Color) {
-
-    let value = color.as_u32();
+fn rasterize_triangle(fb: &mut Framebuffer, tri: [&IntPoint; 3], color: Color) {
 
     let i = {
         if tri[0].y <= i64::min(tri[1].y, tri[2].y) { 0 }
@@ -122,12 +120,12 @@ fn rasterize_triangle(fb: &mut Framebuffer, tri: [&IntPoint; 3], color: &Color) 
     let p1 = tri[(i + 2) % 3];
 
     let y_half = i64::min(p1.y, p2.y);
-    fill_half_triangle(fb, (p0, p1), (p0, p2), (p0.y, y_half), value);
+    fill_half_triangle(fb, (p0, p1), (p0, p2), (p0.y, y_half), color);
 
     if p1.y < p2.y {
-        fill_half_triangle(fb, (p1, p2), (p0, p2), (y_half, p2.y), value);
+        fill_half_triangle(fb, (p1, p2), (p0, p2), (y_half, p2.y), color);
     } else {
-        fill_half_triangle(fb, (p0, p1), (p2, p1), (y_half, p1.y), value);
+        fill_half_triangle(fb, (p0, p1), (p2, p1), (y_half, p1.y), color);
     }
 }
 
@@ -136,7 +134,7 @@ fn fill_half_triangle(
     fb: &mut Framebuffer,
     left: (&IntPoint, &IntPoint), right: (&IntPoint, &IntPoint),
     range: (i64, i64),
-    value: u32
+    color: Color
 ) {
 
     let (pl0, pl1) = left;
@@ -152,7 +150,7 @@ fn fill_half_triangle(
         let x_min = ((y - pl0.y) as f32 * f_left) as i64 + pl0.x;
         let x_max = ((y - pr0.y) as f32 * f_right) as i64 + pr0.x;
         if x_min <= x_max {
-            fb.fill_line(x_min as u32, x_max as u32, y as u32, value);
+            fb.fill_line(x_min as u32, x_max as u32, y as u32, color);
         }
     }
 }

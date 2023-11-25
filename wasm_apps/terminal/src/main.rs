@@ -82,15 +82,15 @@ pub fn step() {
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 
-    framebuffer.fill(0u32);
+    framebuffer.fill(Color::from_rgba(0, 0, 0, 0xff));
 
     let char_h = DEFAULT_FONT.char_h as u32;
     let rect_console = Rect  { x0: 0, y0: 0, w: W as u32, h: H as u32 - char_h};
     let rect_input = Rect  { x0: 0, y0: H as u32 - char_h, w: W as u32, h: char_h};
 
     //draw_str(&mut framebuffer, &state.s, 0, DEFAULT_FONT.char_h as u32, &DEFAULT_FONT, &Color(255, 255, 255));
-    draw_text_rect(&mut framebuffer, &state.console_buffer, &rect_console, &DEFAULT_FONT, &Color(255, 255, 255));
+    draw_text_rect(&mut framebuffer, &state.console_buffer, &rect_console, &DEFAULT_FONT, Color::from_rgba(255, 255, 255, 255));
 
     let input_fmt = format!("> {}", state.input_buffer);
-    draw_text_rect(&mut framebuffer, &input_fmt, &rect_input, &DEFAULT_FONT, &Color(255, 255, 255));
+    draw_text_rect(&mut framebuffer, &input_fmt, &rect_input, &DEFAULT_FONT, Color::from_rgba(255, 255, 255, 255));
 }

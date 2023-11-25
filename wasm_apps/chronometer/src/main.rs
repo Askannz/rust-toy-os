@@ -37,9 +37,9 @@ pub fn step() {
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 
-    framebuffer.fill(0u32);
+    framebuffer.fill(Color::from_rgba(0, 0, 0, 0xFF));
     draw_chrono(&mut framebuffer, system_state.time);
 
     let s = format!("{:.1}", system_state.time);
-    draw_str(&mut framebuffer, &s, 0, 0, &DEFAULT_FONT, &Color(255, 255, 0));
+    draw_str(&mut framebuffer, &s, 0, 0, &DEFAULT_FONT, Color::from_rgba(255, 255, 0, 0xFF));
 }

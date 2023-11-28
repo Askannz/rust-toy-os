@@ -5,7 +5,7 @@ use core::panic::PanicInfo;
 use core::fmt::Debug;
 use core::mem::size_of;
 use alloc::{format, vec};
-use applib::{SystemState, Framebuffer};
+use applib::{SystemState, Framebuffer, Rect};
 
 #[global_allocator]
 static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
@@ -13,6 +13,7 @@ static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
 extern "C" {
     fn host_print_console(addr: i32, len: i32);
     fn host_get_system_state(addr: i32);
+    fn host_get_win_rect(addr: i32);
     fn host_set_framebuffer(addr: i32, w: i32, h: i32);
 }
 
@@ -36,6 +37,15 @@ pub fn get_system_state() -> SystemState {
     let addr = buf.as_mut_ptr() as i32;
     unsafe { 
         host_get_system_state(addr);
+        core::mem::transmute(buf)
+    }
+}
+
+pub fn get_win_rect() -> Rect {
+    let mut buf = [0u8; size_of::<Rect>()];
+    let addr = buf.as_mut_ptr() as i32;
+    unsafe { 
+        host_get_win_rect(addr);
         core::mem::transmute(buf)
     }
 }

@@ -116,7 +116,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
         descriptor: app_desc.clone(),
-        wasm_app: wasm_engine.instantiate_app(app_desc.data, app_desc.name),
+        wasm_app: wasm_engine.instantiate_app(app_desc.data, app_desc.name, &app_desc.init_win_rect),
         is_open: false,
         rect: app_desc.init_win_rect.clone(),
         grab_pos: None,
@@ -254,7 +254,7 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 
             let mut region = fb.get_region(&app.rect);
             let t0 = clock.time();
-            app.wasm_app.step(system_state, &mut region);
+            app.wasm_app.step(system_state, &mut region, &app.rect);
             let t1 = clock.time();
             const SMOOTHING: f64 = 0.9;
             app.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * app.time_used;

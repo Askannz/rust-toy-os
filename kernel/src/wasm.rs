@@ -2,7 +2,7 @@ use core::mem::size_of;
 use alloc::{string::{String, ToString}, borrow::ToOwned};
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext};
 
-use applib::{SystemState, Framebuffer};
+use applib::{SystemState, Framebuffer, Rect};
 
 pub struct WasmEngine {
     engine: Engine
@@ -15,10 +15,10 @@ impl WasmEngine {
         WasmEngine { engine }
     }
 
-    pub fn instantiate_app(&self, wasm_code: &[u8], app_name: &str) -> WasmApp {
+    pub fn instantiate_app(&self, wasm_code: &[u8], app_name: &str, init_rect: &Rect) -> WasmApp {
 
         let module = Module::new(&self.engine, wasm_code).unwrap();
-        let store_data = StoreData::new(app_name);
+        let store_data = StoreData::new(app_name, init_rect);
         let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
 
         //
@@ -51,6 +51,18 @@ impl WasmEngine {
             }
         });
 
+        let host_get_win_rect = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32| {
+            let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+            let win_rect = &caller.data().win_rect;
+
+            unsafe {
+                let len = size_of::<Rect>();
+                let ptr = win_rect as *const Rect as *const u8;
+                let mem_slice = core::slice::from_raw_parts(ptr, len);
+                mem.write(caller, addr as usize, mem_slice).unwrap();
+            }
+        });
+
         let host_set_framebuffer = Func::wrap(&mut store, |mut caller: Caller<StoreData>, addr: i32, w: i32, h: i32| {
             caller.data_mut().framebuffer = Some(WasmFramebufferDef { 
                 addr: addr as usize,
@@ -66,6 +78,7 @@ impl WasmEngine {
         let mut linker = <Linker<StoreData>>::new(&self.engine);
         linker.define("env", "host_print_console", host_print_console).unwrap();
         linker.define("env", "host_get_system_state", host_get_system_state).unwrap();
+        linker.define("env", "host_get_win_rect", host_get_win_rect).unwrap();
         linker.define("env", "host_set_framebuffer", host_set_framebuffer).unwrap();
         let instance = linker
             .instantiate(&mut store, &module).unwrap()
@@ -101,12 +114,13 @@ struct WasmFramebufferDef {
 struct StoreData {
     app_name: String,
     system_state: Option<SystemState>,
+    win_rect: Rect,
     framebuffer: Option<WasmFramebufferDef>
 }
 
 impl StoreData {
-    fn new(app_name: &str) -> Self {
-        StoreData { app_name: app_name.to_owned(), system_state: None, framebuffer: None }
+    fn new(app_name: &str, init_rect: &Rect) -> Self {
+        StoreData { app_name: app_name.to_owned(), system_state: None, framebuffer: None, win_rect: init_rect.clone() }
     }
 }
 
@@ -117,11 +131,12 @@ pub struct WasmApp {
 }
 
 impl WasmApp {
-    pub fn step(&mut self, system_state: &SystemState, system_fb: &mut Framebuffer) {
+    pub fn step(&mut self, system_state: &SystemState, system_fb: &mut Framebuffer, win_rect: &Rect) {
 
         let mut ctx = self.store.as_context_mut();
 
         ctx.data_mut().system_state = Some(system_state.clone());
+        ctx.data_mut().win_rect = win_rect.clone();
 
         self.wasm_step
             .call(&mut self.store, ())
@@ -142,7 +157,7 @@ impl WasmApp {
                 Framebuffer::new(fb_data, w, h)
             };
 
-            system_fb.copy_from(&wasm_fb);
+            system_fb.get_region(&win_rect).copy_from(&wasm_fb);
         }
     }
 }

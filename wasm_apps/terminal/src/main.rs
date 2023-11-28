@@ -6,9 +6,8 @@ extern crate alloc;
 use core::cell::OnceCell;
 use alloc::{format, borrow::ToOwned};
 use alloc::string::String;
-use alloc::collections::VecDeque;
-use guestlib::{FramebufferHandle, println};
-use applib::{draw_str, draw_text_rect, DEFAULT_FONT, Color, keymap::{Keycode, CHARMAP}, Rect};
+use guestlib::FramebufferHandle;
+use applib::{draw_text_rect, DEFAULT_FONT, Color, keymap::{Keycode, CHARMAP}, Rect};
 
 #[derive(Debug)]
 struct AppState {
@@ -21,14 +20,12 @@ struct AppState {
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
-const W: usize = 400;
-const H: usize = 200;
-
 const INPUT_RATE_PERIOD: f64 = 100.0;
 
 #[no_mangle]
 pub fn init() -> () {
-    let fb_handle = guestlib::create_framebuffer(W, H);
+    let win_rect = guestlib::get_win_rect();
+    let fb_handle = guestlib::create_framebuffer(win_rect.w as usize, win_rect.h as usize);
     let state = AppState { 
         fb_handle,
         input_buffer: String::with_capacity(20),
@@ -45,6 +42,7 @@ pub fn step() {
     let state = unsafe { APP_STATE.get_mut().expect("App not initialized") };
 
     let system_state = guestlib::get_system_state();
+    let Rect { w: win_w, h: win_h, .. } = guestlib::get_win_rect();
 
     //println!("{:?} {}", system_state.keyboard, state.s);
 
@@ -85,8 +83,8 @@ pub fn step() {
     framebuffer.fill(Color::from_rgba(0, 0, 0, 0xff));
 
     let char_h = DEFAULT_FONT.char_h as u32;
-    let rect_console = Rect  { x0: 0, y0: 0, w: W as u32, h: H as u32 - char_h};
-    let rect_input = Rect  { x0: 0, y0: H as u32 - char_h, w: W as u32, h: char_h};
+    let rect_console = Rect  { x0: 0, y0: 0, w: win_w, h: win_h - char_h};
+    let rect_input = Rect  { x0: 0, y0: win_h - char_h, w: win_w, h: char_h};
 
     //draw_str(&mut framebuffer, &state.s, 0, DEFAULT_FONT.char_h as u32, &DEFAULT_FONT, &Color(255, 255, 255));
     draw_text_rect(&mut framebuffer, &state.console_buffer, &rect_console, &DEFAULT_FONT, Color::from_rgba(255, 255, 255, 255));

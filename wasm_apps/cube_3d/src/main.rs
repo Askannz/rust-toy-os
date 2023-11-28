@@ -21,7 +21,8 @@ const H: usize = 200;
 
 #[no_mangle]
 pub fn init() -> () {
-    let fb_handle = guestlib::create_framebuffer(W, H);
+    let win_rect = guestlib::get_win_rect();
+    let fb_handle = guestlib::create_framebuffer(win_rect.w as usize, win_rect.h as usize);
     let state = AppState { fb_handle, scene: load_scene() };
     unsafe { APP_STATE.set(state).expect("App already initialized"); }
 }

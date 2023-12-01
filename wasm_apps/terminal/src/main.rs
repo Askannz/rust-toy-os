@@ -7,7 +7,9 @@ use core::cell::OnceCell;
 use alloc::{format, borrow::ToOwned};
 use alloc::string::String;
 use guestlib::FramebufferHandle;
-use applib::{draw_text_rect, DEFAULT_FONT, Color, keymap::{Keycode, CHARMAP}, Rect};
+use applib::{Color, Rect};
+use applib::keymap::{Keycode, CHARMAP};
+use applib::drawing::{draw_text_rect, DEFAULT_FONT};
 
 #[derive(Debug)]
 struct AppState {

@@ -3,6 +3,7 @@
 extern crate alloc;
 
 pub mod keymap;
+pub mod drawing;
 
 use keymap::Keycode;
 
@@ -154,93 +155,6 @@ impl<'a> Framebuffer<'a> {
     
         for y in y0..y0+h {
             self.fill_line(x0, w, y, color)
-        }
-    }
-}
-
-pub struct Font {
-    pub fontmap: &'static [u8],
-    pub nb_chars: usize,
-    pub char_h: usize,
-    pub char_w: usize,
-}
-
-pub const DEFAULT_FONT: Font = Font {
-    fontmap: include_bytes!("../fontmap.bin"),
-    nb_chars: 95,
-    char_h: 24,
-    char_w: 12,
-};
-
-pub fn draw_text_rect(fb: &mut Framebuffer, s: &str, rect: &Rect, font: &Font, color: Color) {
-    
-    let Rect { x0, y0, w, h } = *rect;
-    let char_h = font.char_h;
-
-    let max_per_line = w as usize / font.char_w;
-
-    let mut i0 = 0;
-    let mut y = y0;
-    for (i, c) in s.chars().enumerate() {
-
-        let i1 = {
-            if c == '\n' { Some(i) }
-            else if i - i0 + 1 >= max_per_line || i == s.len() - 1 { Some(i+1) }
-            else { None }
-        };
-
-        if let Some(i1) = i1 {
-            draw_str(fb, &s[i0..i1], x0, y, font, color);
-            i0 = i + 1;
-            y += char_h as u32;
-        }
-    }
-}
-
-pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: u32, y0: u32, font: &Font, color: Color) {
-    let mut x = x0;
-    for c in s.as_bytes() {
-        draw_char(fb, *c, x, y0, font, color);
-        x += font.char_w as u32;
-    }
-}
-
-fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: u32, y0: u32, font: &Font, color: Color) {
-
-    // Replacing unsupported chars with spaces
-    if c < 32 || c > 126 { c = 32}
-
-    let c_index = (c - 32) as usize;
-    let Font { nb_chars, char_h, char_w, .. } = *font;
-
-    for x in 0..char_w {
-        for y in 0..char_h {
-            let i_font = y * char_w * nb_chars + x + c_index * char_w;
-            if font.fontmap[i_font] > 0 {
-                fb.set_pixel(x0 + x as u32, y0 + y as u32, color);
-            }
-        }
-    }
-
-}
-
-
-pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
-    let Rect { x0, y0, w, h } = *rect;
-    for y in y0..y0+h {
-        fb.fill_line(x0, w, y, color);
-    }
-}
-
-pub fn blend_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
-
-    let Rect { x0, y0, w, h } = *rect;
-
-    for y in y0..y0+h {
-        for x in x0..x0+w {
-            let current = fb.get_pixel(x, y);
-            let new = blend_colors(color, current);
-            fb.set_pixel(x, y, new);
         }
     }
 }

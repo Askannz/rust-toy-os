@@ -6,7 +6,8 @@ extern crate alloc;
 use core::cell::OnceCell;
 use alloc::format;
 use guestlib::FramebufferHandle;
-use applib::{draw_str, DEFAULT_FONT, Color};
+use applib::Color;
+use applib::drawing::{draw_str, DEFAULT_FONT};
 
 mod drawing;
 use drawing::draw_chrono;

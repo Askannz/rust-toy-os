@@ -1,9 +1,8 @@
 extern crate alloc;
 
-use alloc::format;
-use guestlib::println;
 use num_traits::Float;
 use applib::{Color, Framebuffer};
+use applib::drawing::{draw_triangle, ScreenPoint};
 
 const COLORS: [Color; 6] = [
     Color::from_rgba(0xff, 0x00, 0x00, 0xFF),
@@ -102,58 +101,13 @@ fn rasterize_quad(fb: &mut Framebuffer, quad: &IntQuad, color: Color) {
     if get_direction(quad) < 0 { return; }
 
     let [p0, p1, p2, p3] = quad;
-    rasterize_triangle(fb, [p0, p1, p2], color);
-    rasterize_triangle(fb, [p2, p3, p0], color);
 
-}
+    let tri_1 = [p0, p1, p2].map(|v|v.clone());
+    let tri_2 = [p2, p3, p0].map(|v|v.clone());
 
-fn rasterize_triangle(fb: &mut Framebuffer, tri: [&IntPoint; 3], color: Color) {
+    draw_triangle(fb, &tri_1, color);
+    draw_triangle(fb, &tri_2, color);
 
-    let i = {
-        if tri[0].y <= i64::min(tri[1].y, tri[2].y) { 0 }
-        else if tri[1].y <= i64::min(tri[0].y, tri[2].y) { 1 }
-        else { 2 }
-    };
-
-    let p0 = tri[i];
-    let p2 = tri[(i + 1) % 3];
-    let p1 = tri[(i + 2) % 3];
-
-    let y_half = i64::min(p1.y, p2.y);
-    fill_half_triangle(fb, (p0, p1), (p0, p2), (p0.y, y_half), color);
-
-    if p1.y < p2.y {
-        fill_half_triangle(fb, (p1, p2), (p0, p2), (y_half, p2.y), color);
-    } else {
-        fill_half_triangle(fb, (p0, p1), (p2, p1), (y_half, p1.y), color);
-    }
-}
-
-#[inline]
-fn fill_half_triangle(
-    fb: &mut Framebuffer,
-    left: (&IntPoint, &IntPoint), right: (&IntPoint, &IntPoint),
-    range: (i64, i64),
-    color: Color
-) {
-
-    let (pl0, pl1) = left;
-    let (pr0, pr1) = right;
-    let (y_min, y_max) = range;
-
-    if pl0.y == pl1.y || pr0.y == pr1.y { return; }
-
-    let f_left = (pl1.x - pl0.x) as f32 / (pl1.y - pl0.y) as f32;
-    let f_right = (pr1.x - pr0.x) as f32 / (pr1.y - pr0.y) as f32;
-
-    for y in y_min..=y_max {
-        let x_min = ((y - pl0.y) as f32 * f_left) as i64 + pl0.x;
-        let x_max = ((y - pr0.y) as f32 * f_right) as i64 + pr0.x;
-        if x_min <= x_max {
-            let line_w = x_max - x_min + 1;
-            fb.fill_line(x_min as u32, line_w as u32, y as u32, color);
-        }
-    }
 }
 
 
@@ -174,10 +128,10 @@ fn quad_to_screen_space(w: f32, h: f32, quad: &Quad) -> IntQuad {
     quad.clone().map(|p| point_to_screen_space(w, h, &p))
 }
 
-fn point_to_screen_space(w: f32, h: f32, p: &Point) -> IntPoint {
+fn point_to_screen_space(w: f32, h: f32, p: &Point) -> ScreenPoint {
     let y_px = (h - 1.0) * (ZOOM * p.y + 1.0) / 2.0;
     let x_px = (h - 1.0) * (ZOOM * p.x + 1.0) / 2.0 + (w - h) / 2.0;
-    IntPoint { x: x_px as i64, y: y_px as i64 }
+    ScreenPoint { x: x_px as i64, y: y_px as i64 }
 }
 
 fn matmul(m: &Matrix, vec: &Vector) -> Vector {
@@ -194,13 +148,9 @@ fn matmul(m: &Matrix, vec: &Vector) -> Vector {
 #[derive(Debug, Clone)]
 struct Vector { x: f32, y: f32, z: f32 }
 
-#[derive(Debug, Clone)]
-struct IntVector { x: i64, y: i64 }
-
 type Point = Vector;
-type IntPoint = IntVector;
 type Quad = [Point; 4];
-type IntQuad = [IntPoint; 4];
+type IntQuad = [ScreenPoint; 4];
 type Matrix = [f32; 9];
 
 #[derive(Debug, Clone, Copy)]

@@ -1,5 +1,5 @@
 use core::mem::size_of;
-use alloc::{string::{String, ToString}, borrow::ToOwned};
+use alloc::{string::String, borrow::ToOwned};
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext};
 
 use applib::{SystemState, Framebuffer, Rect};

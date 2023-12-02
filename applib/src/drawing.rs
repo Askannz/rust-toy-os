@@ -1,3 +1,6 @@
+use alloc::vec::Vec;
+use lazy_static::lazy_static;
+use zune_png::PngDecoder;
 use crate::{Framebuffer, Color, Rect, blend_colors};
 
 #[derive(Debug, Clone)]
@@ -52,20 +55,46 @@ fn fill_half_triangle(
     }
 }
 
+struct FontSpec {
+    bitmap_png: &'static [u8],
+    nb_chars: usize,
+    char_h: usize,
+    char_w: usize,
+}
+
+impl FontSpec {
+    fn load(&self) -> Font {
+
+        let FontSpec { nb_chars, char_h, char_w, .. } = *self;
+
+        let bitmap = PngDecoder::new(self.bitmap_png)
+            .decode().expect("Invalid PNG bitmap")
+            .u8().expect("Invalid PNG bitmap");
+
+        if bitmap.len() != nb_chars * char_w * char_h {
+            panic!("Invalid font bitmap size");
+        }
+
+        Font { bitmap, nb_chars, char_h, char_w }
+    }
+}
 
 pub struct Font {
-    pub fontmap: &'static [u8],
+    bitmap: Vec<u8>,
     pub nb_chars: usize,
     pub char_h: usize,
     pub char_w: usize,
 }
 
-pub const DEFAULT_FONT: Font = Font {
-    fontmap: include_bytes!("../fontmap.bin"),
-    nb_chars: 95,
-    char_h: 24,
-    char_w: 12,
-};
+
+lazy_static! {
+    pub static ref DEFAULT_FONT: Font = FontSpec {
+        bitmap_png: include_bytes!("../fontmap.png"),
+        nb_chars: 95,
+        char_h: 24,
+        char_w: 12,
+    }.load();
+}
 
 pub fn draw_text_rect(fb: &mut Framebuffer, s: &str, rect: &Rect, font: &Font, color: Color) {
     
@@ -111,7 +140,7 @@ fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: u32, y0: u32, font: &Font, col
     for x in 0..char_w {
         for y in 0..char_h {
             let i_font = y * char_w * nb_chars + x + c_index * char_w;
-            if font.fontmap[i_font] > 0 {
+            if font.bitmap[i_font] > 0 {
                 fb.set_pixel(x0 + x as u32, y0 + y as u32, color);
             }
         }

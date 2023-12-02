@@ -2,7 +2,7 @@ extern crate alloc;
 
 use num_traits::Float;
 use applib::{Color, Framebuffer};
-use applib::drawing::{draw_triangle, ScreenPoint};
+use applib::drawing::primitives::{draw_triangle, ScreenPoint};
 
 const COLORS: [Color; 6] = [
     Color::from_rgba(0xff, 0x00, 0x00, 0xFF),

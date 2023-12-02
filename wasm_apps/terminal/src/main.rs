@@ -9,7 +9,7 @@ use alloc::string::String;
 use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
 use applib::keymap::{Keycode, CHARMAP};
-use applib::drawing::{draw_text_rect, DEFAULT_FONT};
+use applib::drawing::text::{draw_text_rect, DEFAULT_FONT};
 
 #[derive(Debug)]
 struct AppState {

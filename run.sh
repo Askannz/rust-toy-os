@@ -25,7 +25,6 @@ cd ../
 #
 # Embedding binary data
 
-python dump_image_bytes.py applib/fontmap.png applib/fontmap.bin
 python dump_image_bytes.py wallpaper.png embedded_data/wallpaper.bin
 cp wasm_apps/cube_3d/target/wasm32-unknown-unknown/release/cube_3d.wasm embedded_data/cube_3d.wasm
 cp wasm_apps/chronometer/target/wasm32-unknown-unknown/release/chronometer.wasm embedded_data/chronometer.wasm

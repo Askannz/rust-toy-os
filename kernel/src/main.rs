@@ -11,7 +11,8 @@ use uefi::table::boot::MemoryType;
 use smoltcp::wire::{IpAddress, IpCidr};
 
 use applib::{Color, Rect, Framebuffer, SystemState, PointerState, MAX_KEYS_PRESSED};
-use applib::drawing::{DEFAULT_FONT, draw_str, draw_rect, blend_rect};
+use applib::drawing::text::{DEFAULT_FONT, draw_str};
+use applib::drawing::primitives::{draw_rect, blend_rect};
 
 extern crate alloc;
 
@@ -165,7 +166,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         update_apps(&mut framebuffer, &clock, &system_state, &mut applications);
         draw_cursor(&mut framebuffer, &system_state);
 
-        applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
+        //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
         fps_manager.end_frame(&clock, &mut framebuffer);
         virtio_gpu.flush();

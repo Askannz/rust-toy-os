@@ -1,6 +1,6 @@
 use num_traits::Float;
 use applib::{Color, Framebuffer};
-use applib::drawing::{ScreenPoint, draw_triangle};
+use applib::drawing::primitives::{ScreenPoint, draw_triangle};
 
 
 const PI: f64 = 3.14159265359;

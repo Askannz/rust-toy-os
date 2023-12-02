@@ -39,6 +39,13 @@ lazy_static! {
         char_h: 24,
         char_w: 12,
     }.load();
+
+    pub static ref HACK_15: Font = FontSpec {
+        bitmap_png: include_bytes!("../../fonts/hack_15.png"),
+        nb_chars: 95,
+        char_h: 18,
+        char_w: 10,
+    }.load();
 }
 
 pub fn draw_text_rect(fb: &mut Framebuffer, s: &str, rect: &Rect, font: &Font, color: Color) {

@@ -9,7 +9,7 @@ use alloc::string::String;
 use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
 use applib::keymap::{Keycode, CHARMAP};
-use applib::drawing::text::{draw_text_rect, DEFAULT_FONT};
+use applib::drawing::text::{draw_text_rect, DEFAULT_FONT, HACK_15};
 
 #[derive(Debug)]
 struct AppState {
@@ -84,13 +84,14 @@ pub fn step() {
 
     framebuffer.fill(Color::from_rgba(0, 0, 0, 0xff));
 
-    let char_h = DEFAULT_FONT.char_h as u32;
+    let font = &HACK_15;
+
+    let char_h = font.char_h as u32;
     let rect_console = Rect  { x0: 0, y0: 0, w: win_w, h: win_h - char_h};
     let rect_input = Rect  { x0: 0, y0: win_h - char_h, w: win_w, h: char_h};
 
-    //draw_str(&mut framebuffer, &state.s, 0, DEFAULT_FONT.char_h as u32, &DEFAULT_FONT, &Color(255, 255, 255));
-    draw_text_rect(&mut framebuffer, &state.console_buffer, &rect_console, &DEFAULT_FONT, Color::from_rgba(255, 255, 255, 255));
+    draw_text_rect(&mut framebuffer, &state.console_buffer, &rect_console, font, Color::from_rgba(255, 255, 255, 255));
 
     let input_fmt = format!("> {}", state.input_buffer);
-    draw_text_rect(&mut framebuffer, &input_fmt, &rect_input, &DEFAULT_FONT, Color::from_rgba(255, 255, 255, 255));
+    draw_text_rect(&mut framebuffer, &input_fmt, &rect_input, font, Color::from_rgba(255, 255, 255, 255));
 }

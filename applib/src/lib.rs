@@ -2,9 +2,12 @@
 
 extern crate alloc;
 
+use zune_png::PngDecoder;
+
 pub mod keymap;
 pub mod drawing;
 
+use alloc::vec::Vec;
 use keymap::Keycode;
 
 pub const MAX_KEYS_PRESSED: usize = 3;
@@ -180,4 +183,10 @@ fn blend_channel(val_a: u8, val_b: u8, alpha: u8) -> u8 {
     let r = val_a * (256 - alpha) + val_b * (1 + alpha);
 
     (r >> 8) as u8
+}
+
+pub fn decode_png(png_bytes: &[u8]) -> Vec<u8> {
+    PngDecoder::new(png_bytes)
+        .decode().expect("Invalid PNG bitmap")
+        .u8().expect("Invalid PNG bitmap")
 }

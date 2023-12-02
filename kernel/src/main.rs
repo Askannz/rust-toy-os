@@ -6,11 +6,12 @@
 use core::panic::PanicInfo;
 use alloc::format;
 use alloc::vec::Vec;
+use lazy_static::lazy_static;
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use smoltcp::wire::{IpAddress, IpCidr};
 
-use applib::{Color, Rect, Framebuffer, SystemState, PointerState, MAX_KEYS_PRESSED};
+use applib::{Color, Rect, Framebuffer, SystemState, PointerState, MAX_KEYS_PRESSED, decode_png};
 use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
 
@@ -76,7 +77,10 @@ const APPLICATIONS: [AppDescriptor; 3] = [
 ];
 
 const FPS_TARGET: f64 = 60.0;
-const WALLPAPER: &'static [u8] = include_bytes!("../../embedded_data/wallpaper.bin");
+
+lazy_static! {
+    static ref WALLPAPER: Vec<u8> = decode_png(include_bytes!("../../wallpaper.png"));
+}
 
 static LOGGER: logging::SerialLogger = logging::SerialLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;

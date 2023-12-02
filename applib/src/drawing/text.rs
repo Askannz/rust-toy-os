@@ -1,7 +1,6 @@
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
-use zune_png::PngDecoder;
-use crate::{Framebuffer, Color, Rect};
+use crate::{Framebuffer, Color, Rect, blend_colors, decode_png};
 
 struct FontSpec {
     bitmap_png: &'static [u8],
@@ -15,9 +14,7 @@ impl FontSpec {
 
         let FontSpec { nb_chars, char_h, char_w, .. } = *self;
 
-        let bitmap = PngDecoder::new(self.bitmap_png)
-            .decode().expect("Invalid PNG bitmap")
-            .u8().expect("Invalid PNG bitmap");
+        let bitmap = decode_png(self.bitmap_png);
 
         if bitmap.len() != nb_chars * char_w * char_h {
             panic!("Invalid font bitmap size");
@@ -84,12 +81,18 @@ fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: u32, y0: u32, font: &Font, col
 
     let c_index = (c - 32) as usize;
     let Font { nb_chars, char_h, char_w, .. } = *font;
+    let (r, g, b, _a ) = color.as_rgba();
 
     for x in 0..char_w {
         for y in 0..char_h {
             let i_font = y * char_w * nb_chars + x + c_index * char_w;
-            if font.bitmap[i_font] > 0 {
-                fb.set_pixel(x0 + x as u32, y0 + y as u32, color);
+            let val_font = font.bitmap[i_font];
+
+            if val_font > 0 {
+                let (x_px, y_px) = (x0 + x as u32, y0 + y as u32);
+                let curr_color = fb.get_pixel(x_px, y_px);
+                let new_color = blend_colors(Color::from_rgba(r, g, b, val_font), curr_color);
+                fb.set_pixel(x_px, y_px, new_color);
             }
         }
     }

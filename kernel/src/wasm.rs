@@ -157,7 +157,9 @@ impl WasmApp {
                 Framebuffer::new(fb_data, w, h)
             };
 
-            system_fb.get_region(&win_rect).copy_from(&wasm_fb);
+            if let Some(mut fb_region) = system_fb.get_region(win_rect) {
+                fb_region.copy_from(&wasm_fb);
+            }
         }
     }
 }

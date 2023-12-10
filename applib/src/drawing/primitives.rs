@@ -53,21 +53,27 @@ fn fill_half_triangle(
 }
 
 pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
-    let Rect { x0, y0, w, h } = *rect;
-    for y in y0..y0+h {
-        fb.fill_line(x0, w, y, color);
+
+    let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb.w as u32, h: fb.h as u32});
+
+    if let Some(Rect { x0, y0, w, h }) = rect {
+        for y in y0..y0+h {
+            fb.fill_line(x0, w, y, color);
+        }
     }
 }
 
 pub fn blend_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
 
-    let Rect { x0, y0, w, h } = *rect;
+    let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb.w as u32, h: fb.h as u32});
 
-    for y in y0..y0+h {
-        for x in x0..x0+w {
-            let current = fb.get_pixel(x, y);
-            let new = blend_colors(color, current);
-            fb.set_pixel(x, y, new);
+    if let Some(Rect { x0, y0, w, h }) = rect {
+        for y in y0..y0+h {
+            for x in x0..x0+w {
+                let current = fb.get_pixel(x, y);
+                let new = blend_colors(color, current);
+                fb.set_pixel(x, y, new);
+            }
         }
     }
 }

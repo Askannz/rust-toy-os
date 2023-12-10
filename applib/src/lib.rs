@@ -77,6 +77,23 @@ impl Rect {
             other.x0 >= self.x0 && other.x0 + other.w <= self.x0 + self.w &&
             other.y0 >= self.y0 && other.y0 + other.h <= self.y0 + self.h
     }
+    pub fn intersection(&self, other: &Rect) -> Option<Rect> {
+
+        let Rect { x0: xa0, y0: ya0, w: wa, h: ha } = *self;
+        let Rect { x0: xb0, y0: yb0, w: wb, h: hb } = *other;
+
+        let x0 = u32::max(xa0, xb0);
+        let y0 = u32::max(ya0, yb0);
+
+        let x1 = u32::min(xa0+wa-1, xb0+wb-1);
+        let y1 = u32::min(ya0+ha-1, yb0+hb-1);
+
+        if x0 <= x1 && y0 <= y1 {
+            Some(Rect { x0, y0, w: x1-x0+1, h: y1-y0+1 })
+        } else {
+            None
+        }
+    }
 }
 
 pub struct Framebuffer<'a> {
@@ -97,10 +114,19 @@ impl<'a> Framebuffer<'a> {
 
 impl<'a> Framebuffer<'a> {
 
-    pub fn get_region(&mut self, rect: &Rect) -> Framebuffer {
-        assert!(self.rect.check_contains_rect(rect));
+    pub fn get_region(&mut self, rect: &Rect) -> Option<Framebuffer> {
+
+        let clipped = self.clip_rect(rect)?;
+
+        let new_view = Rect { 
+            x0: self.rect.x0 + clipped.x0,
+            y0: self.rect.y0 + clipped.y0,
+            w: clipped.w,
+            h: clipped.h,
+        };
+
         let Framebuffer { w, h, .. } = *self;
-        Framebuffer {  data: self.data, w, h, rect: rect.clone() }
+        Some(Framebuffer {  data: self.data, w, h, rect: new_view })
     }
 
     pub fn get_offset(&self, x: u32, y: u32) -> usize {
@@ -137,6 +163,11 @@ impl<'a> Framebuffer<'a> {
                 self.set_pixel(x, y, blended);
             }
         }
+    }
+
+    pub fn clip_rect(&self, rect: &Rect) -> Option<Rect> {
+        let view_rect = Rect { x0: 0, y0: 0, w: self.rect.w, h: self.rect.h };
+        view_rect.intersection(rect)
     }
 
     pub fn copy_from(&mut self, other: &Framebuffer) {

@@ -258,9 +258,9 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
             let (x_txt, y_txt) = (app.rect.x0, app.rect.y0 - font_h - DECO_PADDING);
             draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, COLOR_TEXT);
 
-            let mut region = fb.get_region(&app.rect);
+
             let t0 = clock.time();
-            app.wasm_app.step(system_state, &mut region, &app.rect);
+            app.wasm_app.step(system_state, fb, &app.rect);
             let t1 = clock.time();
             const SMOOTHING: f64 = 0.9;
             app.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * app.time_used;

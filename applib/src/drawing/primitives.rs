@@ -57,6 +57,7 @@ pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
     let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb.w as u32, h: fb.h as u32});
 
     if let Some(Rect { x0, y0, w, h }) = rect {
+        let (x0, y0) = (x0 as u32, y0 as u32);
         for y in y0..y0+h {
             fb.fill_line(x0, w, y, color);
         }
@@ -68,6 +69,7 @@ pub fn blend_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
     let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb.w as u32, h: fb.h as u32});
 
     if let Some(Rect { x0, y0, w, h }) = rect {
+        let (x0, y0) = (x0 as u32, y0 as u32);
         for y in y0..y0+h {
             for x in x0..x0+w {
                 let current = fb.get_pixel(x, y);

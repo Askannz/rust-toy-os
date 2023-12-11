@@ -51,7 +51,7 @@ struct App {
     descriptor: AppDescriptor,
     is_open: bool,
     rect: Rect,
-    grab_pos: Option<(u32, u32)>,
+    grab_pos: Option<(i64, i64)>,
     time_used: f64,
 }
 
@@ -190,9 +190,9 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
     const COLOR_SHADOW: Color = Color::from_rgba(0x0, 0x0, 0x0, ALPHA_SHADOW);
     const COLOR_TEXT: Color = Color::from_rgba(0xff, 0xff, 0xff, 0xff);
 
-    const OFFSET_SHADOW: u32 = 10;
-    const TEXT_MARGIN: u32 = 5;
-    const DECO_PADDING: u32 = 5;
+    const OFFSET_SHADOW: i64 = 10;
+    const TEXT_MARGIN: i64 = 5;
+    const DECO_PADDING: i64 = 5;
 
     for app in applications.iter_mut() {
 
@@ -219,9 +219,9 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
             let font_h = DEFAULT_FONT.char_h as u32;
             let deco_rect = Rect {
                 x0: app.rect.x0 - DECO_PADDING,
-                y0: app.rect.y0 - font_h - 2 * DECO_PADDING,
-                w: app.rect.w + 2 * DECO_PADDING,
-                h: app.rect.h + 3 * DECO_PADDING + font_h,
+                y0: app.rect.y0 - font_h as i64 - 2 * DECO_PADDING,
+                w: app.rect.w + 2 * DECO_PADDING as u32,
+                h: app.rect.h + 3 * DECO_PADDING as u32 + font_h,
             };
 
             if let Some((dx, dy)) = app.grab_pos {
@@ -255,7 +255,7 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
             let color_app = if instance_hover { COLOR_HOVER } else { COLOR_IDLE };
             draw_rect(fb, &deco_rect, color_app);
 
-            let (x_txt, y_txt) = (app.rect.x0, app.rect.y0 - font_h - DECO_PADDING);
+            let (x_txt, y_txt) = (app.rect.x0, app.rect.y0 - font_h as i64 - DECO_PADDING);
             draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, COLOR_TEXT);
 
 
@@ -326,14 +326,14 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                 // Mouse movement
                 Some(EventType::EV_REL) => match event.code {
                     0 => {  // X axis
-                        let dx = event.value as i32;
+                        let dx = (event.value as i32) as i64;
                         let pointer_state = &mut system_state.pointer;
-                        pointer_state.x = i32::max(0, i32::min(w-1, pointer_state.x as i32 + dx)) as u32;
+                        pointer_state.x = i64::max(0, i64::min(w as i64 - 1, pointer_state.x as i64 + dx));
                     }
                     1 => {  // Y axis
-                        let dy = event.value as i32;
+                        let dy = (event.value as i32) as i64;
                         let pointer_state = &mut system_state.pointer;
-                        pointer_state.y = i32::max(0, i32::min(h-1, pointer_state.y as i32 + dy)) as u32;
+                        pointer_state.y = i64::max(0, i64::min(h as i64 - 1, pointer_state.y as i64 + dy));
                     },
                     _ => log::warn!("Unknown event code {} for pointer event", event.code)
                 },
@@ -387,13 +387,13 @@ impl FpsManager {
             else if 0.50 <= used_frac && used_frac < 0.75  { YELLOW }
             else { RED }
         };
-        draw_rect(fb, &Rect { x0: 0, y0: char_h, w: graph_w, h: 12 }, BLACK);
-        draw_rect(fb, &Rect { x0: 0, y0: char_h + 3, w: used_w, h: graph_h }, graph_color);
+        draw_rect(fb, &Rect { x0: 0, y0: char_h as i64, w: graph_w, h: 12 }, BLACK);
+        draw_rect(fb, &Rect { x0: 0, y0: char_h as i64 + 3, w: used_w, h: graph_h }, graph_color);
 
         let available = frametime_target - self.used;
         let budget_color = if available > 0.0 { WHITE } else {  RED };
         let budget_txt = format!("{:>6.2} ms", available);
-        draw_str(fb, &budget_txt, 0, char_h + graph_h + 6, &DEFAULT_FONT, budget_color);
+        draw_str(fb, &budget_txt, 0, (char_h + graph_h + 6) as i64, &DEFAULT_FONT, budget_color);
 
         let frame_end_t = clock.time();
 

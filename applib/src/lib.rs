@@ -24,8 +24,8 @@ pub struct SystemState {
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct PointerState {
-    pub x: u32,
-    pub y: u32,
+    pub x: i64,
+    pub y: i64,
     pub left_clicked: bool,
     pub right_clicked: bool
 }
@@ -64,35 +64,48 @@ impl Color {
 }
 
 #[derive(Clone, Debug)]
-pub struct Rect { pub x0: u32, pub y0: u32, pub w: u32, pub h: u32 }
+pub struct Rect { pub x0: i64, pub y0: i64, pub w: u32, pub h: u32 }
 
 impl Rect {
-    pub fn check_contains_point(&self, x: u32, y: u32) -> bool {
+    pub fn check_contains_point(&self, x: i64, y: i64) -> bool {
+
+        let [x0, y0, x1, y1] = self.as_xyxy();
+
         return 
-            x >= self.x0 && x < self.x0 + self.w &&
-            y >= self.y0 && y < self.y0 + self.h
+            x >= x0 && x <= x1 &&
+            y >= y0 && y <= y1
     }
     pub fn check_contains_rect(&self, other: &Rect) -> bool {
+
+        let [xa0, ya0, xa1, ya1] = self.as_xyxy();
+        let [xb0, yb0, xb1, yb1] = other.as_xyxy();
+
         return 
-            other.x0 >= self.x0 && other.x0 + other.w <= self.x0 + self.w &&
-            other.y0 >= self.y0 && other.y0 + other.h <= self.y0 + self.h
+            xb0 >= xa0 && xb1 <= xa1 &&
+            yb0 >= ya0 && yb1 <= ya1
     }
     pub fn intersection(&self, other: &Rect) -> Option<Rect> {
 
-        let Rect { x0: xa0, y0: ya0, w: wa, h: ha } = *self;
-        let Rect { x0: xb0, y0: yb0, w: wb, h: hb } = *other;
+        let [xa0, ya0, xa1, ya1] = self.as_xyxy();
+        let [xb0, yb0, xb1, yb1] = other.as_xyxy();
 
-        let x0 = u32::max(xa0, xb0);
-        let y0 = u32::max(ya0, yb0);
+        let x0 = i64::max(xa0, xb0);
+        let y0 = i64::max(ya0, yb0);
 
-        let x1 = u32::min(xa0+wa-1, xb0+wb-1);
-        let y1 = u32::min(ya0+ha-1, yb0+hb-1);
+        let x1 = i64::min(xa1, xb1);
+        let y1 = i64::min(ya1, yb1);
 
         if x0 <= x1 && y0 <= y1 {
-            Some(Rect { x0, y0, w: x1-x0+1, h: y1-y0+1 })
+            Some(Rect { x0, y0, w: (x1-x0+1) as u32, h: (y1-y0+1) as u32 })
         } else {
             None
         }
+    }
+
+    pub fn as_xyxy(&self) -> [i64; 4] {
+        let Rect { x0, y0, w, h } = *self;
+        let (w, h) = (w as i64, h as i64);
+        [x0, y0, x0+w-1, y0+h-1]
     }
 }
 
@@ -125,12 +138,16 @@ impl<'a> Framebuffer<'a> {
             h: clipped.h,
         };
 
+        let [x0, y0, x1, y1] = new_view.as_xyxy();
+        assert!(x0 >= 0 && x0 < self.w as i64 && y0 >= 0 && y0 < self.h as i64);
+
         let Framebuffer { w, h, .. } = *self;
         Some(Framebuffer {  data: self.data, w, h, rect: new_view })
     }
 
     pub fn get_offset(&self, x: u32, y: u32) -> usize {
         let Rect { x0, y0, .. } = self.rect;
+        let (x0, y0) = (x0 as u32, y0 as u32);
         (y0 + y) as usize * self.w + (x0 + x) as usize
     }
 
@@ -187,6 +204,8 @@ impl<'a> Framebuffer<'a> {
     
         let Rect { x0, y0, w, h } = self.rect;
     
+        let (x0, y0) = (x0 as u32, y0 as u32);
+
         for y in y0..y0+h {
             self.fill_line(x0, w, y, color)
         }

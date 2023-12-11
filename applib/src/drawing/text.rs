@@ -68,40 +68,43 @@ pub fn draw_text_rect(fb: &mut Framebuffer, s: &str, rect: &Rect, font: &Font, c
         if let Some(i1) = i1 {
             draw_str(fb, &s[i0..i1], x0, y, font, color);
             i0 = i + 1;
-            y += char_h as u32;
+            y += char_h as i64;
         }
     }
 }
 
-pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: u32, y0: u32, font: &Font, color: Color) {
+pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: i64, y0: i64, font: &Font, color: Color) {
     let mut x = x0;
     for c in s.as_bytes() {
         draw_char(fb, *c, x, y0, font, color);
-        x += font.char_w as u32;
+        x += font.char_w as i64;
     }
 }
 
-fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: u32, y0: u32, font: &Font, color: Color) {
+fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: i64, y0: i64, font: &Font, color: Color) {
 
     // Replacing unsupported chars with spaces
-    if c < 32 || c > 126 { c = 32}
+    if c < 32 || c > 126 { c = 32 }
 
     let c_index = (c - 32) as usize;
     let Font { nb_chars, char_h, char_w, .. } = *font;
     let (r, g, b, _a ) = color.as_rgba();
 
-    for x in 0..char_w {
-        for y in 0..char_h {
-            let i_font = y * char_w * nb_chars + x + c_index * char_w;
-            let val_font = font.bitmap[i_font];
-
-            if val_font > 0 {
-                let (x_px, y_px) = (x0 + x as u32, y0 + y as u32);
-                let curr_color = fb.get_pixel(x_px, y_px);
-                let new_color = blend_colors(Color::from_rgba(r, g, b, val_font), curr_color);
-                fb.set_pixel(x_px, y_px, new_color);
+    let char_rect = Rect { x0, y0, w: char_w as u32, h: char_h as u32 };
+    if let Some(char_rect) = fb.clip_rect(&char_rect) {
+        let [xc0, yc0, xc1, yc1] = char_rect.as_xyxy();
+    
+        for x in xc0..=xc1 {
+            for y in yc0..=yc1 {
+                let i_font = (y - yc0) as usize * char_w * nb_chars + (x - xc0) as usize + c_index * char_w;
+                let val_font = font.bitmap[i_font];
+    
+                if val_font > 0 {
+                    let curr_color = fb.get_pixel(x as u32, y as u32);
+                    let new_color = blend_colors(Color::from_rgba(r, g, b, val_font), curr_color);
+                    fb.set_pixel(x as u32, y as u32, new_color);
+                }
             }
         }
     }
-
 }

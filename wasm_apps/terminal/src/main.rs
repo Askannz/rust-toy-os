@@ -88,7 +88,7 @@ pub fn step() {
 
     let char_h = font.char_h as u32;
     let rect_console = Rect  { x0: 0, y0: 0, w: win_w, h: win_h - char_h};
-    let rect_input = Rect  { x0: 0, y0: win_h - char_h, w: win_w, h: char_h};
+    let rect_input = Rect  { x0: 0, y0: (win_h - char_h) as i64, w: win_w, h: char_h};
 
     draw_text_rect(&mut framebuffer, &state.console_buffer, &rect_console, font, Color::from_rgba(255, 255, 255, 255));
 

@@ -111,104 +111,95 @@ impl Rect {
 
 pub struct Framebuffer<'a> {
     pub data: &'a mut [u32],
-    pub w: usize,
-    pub h: usize,
-    pub rect: Rect,
+    pub w: u32,
+    pub h: u32,
 }
 
 impl<'a> Framebuffer<'a> {
-    pub fn new(data: &'a mut [u32], w: usize, h: usize) -> Self {
-        assert_eq!(data.len(), w * h);
-        let rect = Rect { x0: 0, y0: 0, w: w as u32, h: h as u32 };
-        Framebuffer { data, w, h, rect }
+    pub fn new(data: &'a mut [u32], w: u32, h: u32) -> Self {
+        assert_eq!(data.len(), (w * h) as usize);
+        Framebuffer { data, w, h }
     }
 
 }
 
 impl<'a> Framebuffer<'a> {
 
-    pub fn get_region(&mut self, rect: &Rect) -> Option<Framebuffer> {
-
-        let clipped = self.clip_rect(rect)?;
-
-        let new_view = Rect { 
-            x0: self.rect.x0 + clipped.x0,
-            y0: self.rect.y0 + clipped.y0,
-            w: clipped.w,
-            h: clipped.h,
-        };
-
-        let [x0, y0, x1, y1] = new_view.as_xyxy();
-        assert!(x0 >= 0 && x0 < self.w as i64 && y0 >= 0 && y0 < self.h as i64);
-
-        let Framebuffer { w, h, .. } = *self;
-        Some(Framebuffer {  data: self.data, w, h, rect: new_view })
+    fn check_valid_point(&self, x: i64, y: i64) -> bool {
+        let (w, h): (i64, i64) = (self.w.into(), self.h.into());
+        return 0 <= x && x < w && 0 <= y && y < h;
     }
 
-    pub fn get_offset(&self, x: u32, y: u32) -> usize {
-        let Rect { x0, y0, .. } = self.rect;
-        let (x0, y0) = (x0 as u32, y0 as u32);
-        (y0 + y) as usize * self.w + (x0 + x) as usize
-    }
-
-    pub fn get_pixel(&self, x: u32, y: u32) -> Color {
-        let i = self.get_offset(x, y);
-        Color(self.data[i])
-    }
-
-    pub fn set_pixel(&mut self, x: u32, y: u32, color: Color) {
-        let i = self.get_offset(x, y);
-        self.data[i] = color.0;
-    }
-
-    pub fn fill_line(&mut self, x: u32, w: u32, y: u32, color: Color) {
-        let i1 = self.get_offset(x, y);
-        let i2 = self.get_offset(x+w, y);
-        self.data[i1..i2].fill(color.0);
-    }
-
-    pub fn blend(&mut self, other: &Framebuffer) {
-
-        let w = u32::min(self.rect.w, other.rect.w);
-        let h = u32::min(self.rect.h, other.rect.h);
-
-        for x in 0..w {
-            for y in 0..h {
-                let px_1 = self.get_pixel(x, y);
-                let px_2 = other.get_pixel(x, y);
-                let blended = blend_colors(px_2, px_1);
-                self.set_pixel(x, y, blended);
-            }
+    fn get_offset(&self, x: i64, y: i64) -> Option<usize> {
+        if self.check_valid_point(x, y) {
+            Some((y as u32 * self.w + x as u32) as usize)
+        } else {
+            None
         }
+        
     }
 
-    pub fn clip_rect(&self, rect: &Rect) -> Option<Rect> {
-        let view_rect = Rect { x0: 0, y0: 0, w: self.rect.w, h: self.rect.h };
-        view_rect.intersection(rect)
+    pub fn get_pixel(&self, x: i64, y: i64) -> Option<Color> {
+        self.get_offset(x, y).map(|i| Color(self.data[i]))
     }
 
-    pub fn copy_from(&mut self, other: &Framebuffer) {
-        let w = u32::min(self.rect.w, other.rect.w);
-        let h = u32::min(self.rect.h, other.rect.h);
+    pub fn set_pixel(&mut self, x: i64, y: i64, color: Color) {
+        self.get_offset(x, y).map(|i| self.data[i] = color.0);
+    }
 
-        for y in 0..h {
-            let ia1 = self.get_offset(0, y);
-            let ia2 = self.get_offset(w-1, y);
-            let ib1 = other.get_offset(0, y);
-            let ib2 = other.get_offset(w-1, y);
-            self.data[ia1..=ia2].copy_from_slice(&other.data[ib1..=ib2]);
+    pub fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color) {
+
+        let (w, h): (i64, i64) = (self.w.into(), self.h.into());
+        let line_w: i64 = line_w.into();
+
+        if y < 0 || y >= h || line_w == 0 { return }
+
+        let x1 = i64::max(x, 0);
+        let x2 = i64::min(x+line_w-1, w-1);
+
+        let i1 = self.get_offset(x1, y).unwrap();
+        let i2 = self.get_offset(x2, y).unwrap();
+        self.data[i1..=i2].fill(color.0);
+    }
+
+    pub fn copy_fb(&mut self, src: &Framebuffer, rect: &Rect) {
+
+        let Rect { x0: x, y0: y, w: w_rect, h: h_rect } = *rect;
+
+        let (wa, ha): (i64, i64) = (self.w.into(), self.h.into());
+        let (wb, hb): (i64, i64) = (src.w.into(), src.h.into());
+        let (w_rect, h_rect): (i64, i64) = (w_rect.into(), h_rect.into());
+
+        let w_copy = i64::min(wb, w_rect);
+        let h_copy = i64::min(hb, h_rect);
+
+        if wb == 0 { return; }
+
+        let ya1 = i64::max(y, 0);
+        let ya2 = i64::min(y + h_copy - 1, ha - 1);
+
+        for ya in ya1..=ya2 {
+    
+            let yb = ya - y;
+
+            let xa1 = i64::max(x, 0);
+            let xa2 = i64::min(x + w_copy - 1, wa - 1);
+
+            let xb1 = xa1 - x;
+            let xb2 = xa2 - x;
+
+            let ia1 = self.get_offset(xa1, ya).unwrap();
+            let ia2 = self.get_offset(xa2, ya).unwrap();
+
+            let ib1 = src.get_offset(xb1, yb).unwrap();
+            let ib2 = src.get_offset(xb2, yb).unwrap();
+
+            self.data[ia1..=ia2].copy_from_slice(&src.data[ib1..=ib2]);
         }
     }
 
     pub fn fill(&mut self, color: Color) {
-    
-        let Rect { x0, y0, w, h } = self.rect;
-    
-        let (x0, y0) = (x0 as u32, y0 as u32);
-
-        for y in y0..y0+h {
-            self.fill_line(x0, w, y, color)
-        }
+        self.data.fill(color.0);
     }
 }
 

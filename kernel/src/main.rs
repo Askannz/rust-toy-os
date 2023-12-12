@@ -118,6 +118,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("Display initialized");
 
     let (w, h) = virtio_gpu.get_dims();
+    let (w, h) = (w as u32, h as u32);
     let wasm_engine = WasmEngine::new();
 
     let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
@@ -154,7 +155,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         fps_manager.start_frame(&clock);
 
         system_state.time = clock.time();
-        update_input_state(&mut system_state, (w as u32, h as u32), &mut virtio_inputs);
+        update_input_state(&mut system_state, (w, h), &mut virtio_inputs);
 
         server.update();
 

@@ -66,8 +66,8 @@ impl WasmEngine {
         let host_set_framebuffer = Func::wrap(&mut store, |mut caller: Caller<StoreData>, addr: i32, w: i32, h: i32| {
             caller.data_mut().framebuffer = Some(WasmFramebufferDef { 
                 addr: addr as usize,
-                w: w as usize,
-                h: h as usize,
+                w: w as u32,
+                h: h as u32,
             });
         });
 
@@ -107,8 +107,8 @@ impl WasmEngine {
 #[derive(Clone)]
 struct WasmFramebufferDef {
     addr: usize,
-    h: usize,
-    w: usize,
+    h: u32,
+    w: u32,
 }
 
 struct StoreData {
@@ -152,14 +152,12 @@ impl WasmApp {
 
             let wasm_fb = {
                 let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
-                let fb_data = &mut mem_data[addr..addr + w*h*4];
+                let fb_data = &mut mem_data[addr..addr + (w*h*4) as usize];
                 let fb_data = unsafe { fb_data.align_to_mut::<u32>().1 };
                 Framebuffer::new(fb_data, w, h)
             };
 
-            if let Some(mut fb_region) = system_fb.get_region(win_rect) {
-                fb_region.copy_from(&wasm_fb);
-            }
+            system_fb.copy_fb(&wasm_fb, &win_rect);
         }
     }
 }

@@ -9,7 +9,7 @@ use alloc::string::String;
 use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
 use applib::keymap::{Keycode, CHARMAP};
-use applib::drawing::text::{draw_text_rect, DEFAULT_FONT, HACK_15};
+use applib::drawing::text::{draw_text_rect, HACK_15};
 
 #[derive(Debug)]
 struct AppState {
@@ -27,7 +27,7 @@ const INPUT_RATE_PERIOD: f64 = 100.0;
 #[no_mangle]
 pub fn init() -> () {
     let win_rect = guestlib::get_win_rect();
-    let fb_handle = guestlib::create_framebuffer(win_rect.w as usize, win_rect.h as usize);
+    let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
     let state = AppState { 
         fb_handle,
         input_buffer: String::with_capacity(20),

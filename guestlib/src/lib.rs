@@ -21,8 +21,8 @@ extern "C" {
 #[derive(Debug)]
 pub struct FramebufferHandle {
     framebuffer_ptr: *mut u32,
-    w: usize,
-    h: usize,
+    w: u32,
+    h: u32,
 }
 
 pub fn print_console(s: &str) {
@@ -50,8 +50,8 @@ pub fn get_win_rect() -> Rect {
     }
 }
 
-pub fn create_framebuffer(w: usize, h: usize) -> FramebufferHandle {
-    let ptr = vec![0u32; w*h].leak().as_mut_ptr();
+pub fn create_framebuffer(w: u32, h: u32) -> FramebufferHandle {
+    let ptr = vec![0u32; (w*h) as usize].leak().as_mut_ptr();
     unsafe { host_set_framebuffer(ptr as i32, w as i32, h as i32) };
     FramebufferHandle {
         framebuffer_ptr: ptr,
@@ -65,7 +65,7 @@ pub fn get_framebuffer<'a>(handle: &'a mut FramebufferHandle) -> Framebuffer<'a>
     let FramebufferHandle { framebuffer_ptr, w, h } = *handle;
 
     let fb_data = unsafe {
-        core::slice::from_raw_parts_mut(framebuffer_ptr, w*h)
+        core::slice::from_raw_parts_mut(framebuffer_ptr, (w*h) as usize)
     };
 
     Framebuffer::new(fb_data, w, h)

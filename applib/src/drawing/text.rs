@@ -91,18 +91,18 @@ fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: i64, y0: i64, font: &Font, col
     let (r, g, b, _a ) = color.as_rgba();
 
     let char_rect = Rect { x0, y0, w: char_w as u32, h: char_h as u32 };
-    if let Some(char_rect) = fb.clip_rect(&char_rect) {
-        let [xc0, yc0, xc1, yc1] = char_rect.as_xyxy();
-    
-        for x in xc0..=xc1 {
-            for y in yc0..=yc1 {
-                let i_font = (y - yc0) as usize * char_w * nb_chars + (x - xc0) as usize + c_index * char_w;
-                let val_font = font.bitmap[i_font];
-    
-                if val_font > 0 {
-                    let curr_color = fb.get_pixel(x as u32, y as u32);
+
+    let [xc0, yc0, xc1, yc1] = char_rect.as_xyxy();
+
+    for x in xc0..=xc1 {
+        for y in yc0..=yc1 {
+            let i_font = (y - yc0) as usize * char_w * nb_chars + (x - xc0) as usize + c_index * char_w;
+            let val_font = font.bitmap[i_font];
+
+            if val_font > 0 {
+                if let Some(curr_color) = fb.get_pixel(x, y) {
                     let new_color = blend_colors(Color::from_rgba(r, g, b, val_font), curr_color);
-                    fb.set_pixel(x as u32, y as u32, new_color);
+                    fb.set_pixel(x, y, new_color);
                 }
             }
         }

@@ -7,12 +7,13 @@ struct FontSpec {
     nb_chars: usize,
     char_h: usize,
     char_w: usize,
+    base_y: usize,
 }
 
 impl FontSpec {
     fn load(&self) -> Font {
 
-        let FontSpec { nb_chars, char_h, char_w, .. } = *self;
+        let FontSpec { nb_chars, char_h, char_w, base_y, .. } = *self;
 
         let bitmap = decode_png(self.bitmap_png);
 
@@ -20,7 +21,7 @@ impl FontSpec {
             panic!("Invalid font bitmap size");
         }
 
-        Font { bitmap, nb_chars, char_h, char_w }
+        Font { bitmap, nb_chars, char_h, char_w, base_y }
     }
 }
 
@@ -29,6 +30,7 @@ pub struct Font {
     pub nb_chars: usize,
     pub char_h: usize,
     pub char_w: usize,
+    pub base_y: usize,
 }
 
 
@@ -38,6 +40,7 @@ lazy_static! {
         nb_chars: 95,
         char_h: 24,
         char_w: 12,
+        base_y: 19
     }.load();
 
     pub static ref HACK_15: Font = FontSpec {
@@ -45,43 +48,21 @@ lazy_static! {
         nb_chars: 95,
         char_h: 18,
         char_w: 10,
+        base_y: 14,
     }.load();
-}
-
-pub fn draw_text_rect(fb: &mut Framebuffer, s: &str, rect: &Rect, font: &Font, color: Color) {
-    
-    let Rect { x0, y0, w, .. } = *rect;
-    let char_h = font.char_h;
-
-    let max_per_line = w as usize / font.char_w;
-
-    let mut i0 = 0;
-    let mut y = y0;
-    for (i, c) in s.chars().enumerate() {
-
-        let i1 = {
-            if c == '\n' { Some(i) }
-            else if i - i0 + 1 >= max_per_line || i == s.len() - 1 { Some(i+1) }
-            else { None }
-        };
-
-        if let Some(i1) = i1 {
-            draw_str(fb, &s[i0..i1], x0, y, font, color);
-            i0 = i + 1;
-            y += char_h as i64;
-        }
-    }
 }
 
 pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: i64, y0: i64, font: &Font, color: Color) {
     let mut x = x0;
-    for c in s.as_bytes() {
-        draw_char(fb, *c, x, y0, font, color);
+    for c in s.chars() {
+        draw_char(fb, c, x, y0, font, color);
         x += font.char_w as i64;
     }
 }
 
-fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: i64, y0: i64, font: &Font, color: Color) {
+pub fn draw_char(fb: &mut Framebuffer, c: char, x0: i64, y0: i64, font: &Font, color: Color) {
+
+    let mut c = c as u8;
 
     // Replacing unsupported chars with spaces
     if c < 32 || c > 126 { c = 32 }
@@ -106,5 +87,69 @@ fn draw_char(fb: &mut Framebuffer, mut c: u8, x0: i64, y0: i64, font: &Font, col
                 }
             }
         }
+    }
+}
+
+pub struct RichText(Vec<RichChar>);
+
+impl RichText {
+    pub fn new() -> Self {
+        RichText(Vec::new())
+    }
+
+    pub fn add_part(&mut self, s: &str, color: Color, font: &'static Font) {
+        self.0.extend(s.chars().map(|c| RichChar { c, color, font }));
+    }
+}
+
+struct RichChar {
+    c: char,
+    color: Color,
+    font: &'static Font,
+}
+
+pub fn draw_rich_text(fb: &mut Framebuffer, text: &RichText, rect: &Rect) {
+
+    let Rect { x0, y0, w, .. } = *rect;
+
+    let rich_vec = &text.0;
+
+    if rich_vec.is_empty() { return; }
+    let max_char_w = rich_vec.iter().map(|rich_char| rich_char.font.char_w).max().unwrap();
+
+    let max_per_line = w as usize / max_char_w;
+
+    let mut i0 = 0;
+    let mut y = y0;
+    for (i, rich_char) in rich_vec.iter().enumerate() {
+
+        let i1 = {
+            if rich_char.c == '\n' { Some(i) }
+            else if i - i0 + 1 >= max_per_line || i == rich_vec.len() - 1 { Some(i+1) }
+            else { None }
+        };
+
+        if let Some(i1) = i1 {
+            let rich_slice = &rich_vec[i0..i1];
+            let max_char_h = rich_slice.iter().map(|rich_char| rich_char.font.char_h).max().unwrap_or(0);
+            draw_rich_slice(fb, rich_slice, x0, y);
+            i0 = i + 1;
+            y += max_char_h as i64;
+        }
+    }
+
+}
+
+fn draw_rich_slice(fb: &mut Framebuffer, rich_slice: &[RichChar], x0: i64, y0: i64) {
+
+    if rich_slice.is_empty() { return; }
+
+    let max_base_y = rich_slice.iter().map(|rich_char| rich_char.font.base_y).max().unwrap();
+
+    let mut x = x0;
+    for rich_char in rich_slice.iter() {
+        let dy = (max_base_y - rich_char.font.base_y)  as i64;
+        draw_char(fb, rich_char.c, x, y0 + dy, rich_char.font, rich_char.color);
+        x += rich_char.font.char_w as i64;
     }
 }

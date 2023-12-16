@@ -2,12 +2,14 @@
 
 extern crate alloc;
 
+use alloc::string::ToString;
 use zune_png::PngDecoder;
 
 pub mod keymap;
 pub mod drawing;
 
-use alloc::vec::Vec;
+use alloc::{vec::Vec, string::String, vec};
+use alloc::collections::LinkedList;
 use keymap::Keycode;
 
 pub const MAX_KEYS_PRESSED: usize = 3;

@@ -6,23 +6,35 @@ extern crate alloc;
 use core::cell::OnceCell;
 use alloc::{format, borrow::ToOwned};
 use alloc::string::String;
+use alloc::vec::Vec;
 use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
 use applib::keymap::{Keycode, CHARMAP};
-use applib::drawing::text::{draw_text_rect, HACK_15};
+use applib::drawing::text::{draw_rich_text, RichText, HACK_15};
 
 #[derive(Debug)]
 struct AppState {
     fb_handle: FramebufferHandle,
     input_buffer: String,
-    console_buffer: String,
+    console_buffer: Vec<EvalResult>,
     last_input_t: f64,
     rhai_engine: rhai::Engine,
+}
+
+#[derive(Debug)]
+enum EvalResult {
+    Success { cmd: String, res: String},
+    Error { cmd: String }
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
 const INPUT_RATE_PERIOD: f64 = 100.0;
+
+const WHITE: Color = Color::from_rgba(255, 255, 255, 255);
+const RED: Color = Color::from_rgba(255, 0, 0, 255);
+const GREEN: Color = Color::from_rgba(0, 255, 0, 255);
+const YELLOW: Color = Color::from_rgba(255, 255, 0, 255);
 
 #[no_mangle]
 pub fn init() -> () {
@@ -31,7 +43,7 @@ pub fn init() -> () {
     let state = AppState { 
         fb_handle,
         input_buffer: String::with_capacity(20),
-        console_buffer: String::with_capacity(800),
+        console_buffer: Vec::new(),
         last_input_t: 0.0,
         rhai_engine: rhai::Engine::new(),
     };
@@ -71,12 +83,15 @@ pub fn step() {
 
     if enter_pressed && !state.input_buffer.is_empty() {
 
-        let result: String = match state.rhai_engine.eval::<rhai::Dynamic>(&state.input_buffer).ok() {
-            Some(res) => format!("{:?}", res),
-            None => "ERROR".to_owned(),
+        let cmd = state.input_buffer.to_owned();
+
+        let result = match state.rhai_engine.eval::<rhai::Dynamic>(&cmd).ok() {
+            Some(res) => EvalResult::Success { cmd, res: format!("{:?}", res) },
+            None => EvalResult::Error { cmd },
         };
         
-        state.console_buffer.push_str(&format!("$ {}\n  > {}\n", state.input_buffer, result));
+        //state.console_buffer.push_str(&format!("$ {}\n  > {}\n", state.input_buffer, result));
+        state.console_buffer.push(result);
         state.input_buffer.clear();
     }
 
@@ -90,8 +105,27 @@ pub fn step() {
     let rect_console = Rect  { x0: 0, y0: 0, w: win_w, h: win_h - char_h};
     let rect_input = Rect  { x0: 0, y0: (win_h - char_h) as i64, w: win_w, h: char_h};
 
-    draw_text_rect(&mut framebuffer, &state.console_buffer, &rect_console, font, Color::from_rgba(255, 255, 255, 255));
+    let mut console_rich_text = RichText::new();
+    for res in state.console_buffer.iter() {
+        match res {
+            EvalResult::Success { cmd, res } => {
+                console_rich_text.add_part("$ ", GREEN, font);
+                console_rich_text.add_part(&cmd, WHITE, font);
+                console_rich_text.add_part(&format!("\n  > {}", res), WHITE, font);
+            },
+            EvalResult::Error { cmd } => {
+                console_rich_text.add_part("$ ", RED, font);
+                console_rich_text.add_part(&cmd, WHITE, font);
+                console_rich_text.add_part(&format!("\n  > ERROR"), RED, font);
+            }
+        }
+        console_rich_text.add_part("\n", WHITE, font)
+    }
+    
+    draw_rich_text(&mut framebuffer, &console_rich_text, &rect_console);
 
-    let input_fmt = format!("> {}", state.input_buffer);
-    draw_text_rect(&mut framebuffer, &input_fmt, &rect_input, font, Color::from_rgba(255, 255, 255, 255));
+    let mut input_rich_text = RichText::new();
+    input_rich_text.add_part("> ", YELLOW, font);
+    input_rich_text.add_part(&state.input_buffer, WHITE, font);
+    draw_rich_text(&mut framebuffer, &input_rich_text, &rect_input);
 }

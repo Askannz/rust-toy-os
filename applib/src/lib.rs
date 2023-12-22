@@ -2,14 +2,13 @@
 
 extern crate alloc;
 
-use alloc::string::ToString;
 use zune_png::PngDecoder;
 
 pub mod keymap;
 pub mod drawing;
+pub mod ui;
 
-use alloc::{vec::Vec, string::String, vec};
-use alloc::collections::LinkedList;
+use alloc::vec::Vec;
 use keymap::Keycode;
 
 pub const MAX_KEYS_PRESSED: usize = 3;
@@ -32,6 +31,14 @@ pub struct PointerState {
     pub right_clicked: bool
 }
 
+impl PointerState {
+    pub fn change_origin(&self, rect: &Rect) -> Self {
+        let &Self { x, y, left_clicked, right_clicked } = self;
+        let &Rect { x0, y0, .. } = rect;
+        Self { x: x-x0, y: y-y0, left_clicked, right_clicked }
+    }
+}
+
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Color(pub u32);
@@ -48,6 +55,14 @@ impl Color {
             (g << 1 * 8) +
             (r << 0 * 8);
 
+        Color(val)
+    }
+
+    pub const fn from_rgb(r: u8, g: u8, b: u8) -> Self {
+        Self::from_rgba(r, g, b, 255)
+    }
+
+    pub const fn hex(val: u32) -> Self {
         Color(val)
     }
 

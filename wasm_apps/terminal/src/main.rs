@@ -11,20 +11,22 @@ use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
 use applib::keymap::{Keycode, CHARMAP};
 use applib::drawing::text::{draw_rich_text, RichText, HACK_15};
+use applib::ui::{Button, ButtonConfig};
 
-#[derive(Debug)]
 struct AppState {
     fb_handle: FramebufferHandle,
     input_buffer: String,
     console_buffer: Vec<EvalResult>,
     last_input_t: f64,
     rhai_engine: rhai::Engine,
+    button: Button,
 }
 
 #[derive(Debug)]
-enum EvalResult {
-    Success { cmd: String, res: String},
-    Error { cmd: String }
+struct EvalResult {
+    cmd: String,
+    res: String,
+    success: bool,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -42,12 +44,16 @@ pub fn init() -> () {
     let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
     let state = AppState { 
         fb_handle,
-        input_buffer: String::with_capacity(20),
+        input_buffer: String::with_capacity(100),
         console_buffer: Vec::new(),
         last_input_t: 0.0,
         rhai_engine: rhai::Engine::new(),
+        button: Button::new(&ButtonConfig { 
+            text: "Clear".to_owned(),
+            ..Default::default()
+        }),
     };
-    unsafe { APP_STATE.set(state).expect("App already initialized"); }
+    unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")) }
 }
 
 #[no_mangle]
@@ -56,7 +62,10 @@ pub fn step() {
     let state = unsafe { APP_STATE.get_mut().expect("App not initialized") };
 
     let system_state = guestlib::get_system_state();
-    let Rect { w: win_w, h: win_h, .. } = guestlib::get_win_rect();
+    let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
+
+    let win_rect = guestlib::get_win_rect();
+    let Rect { w: win_w, h: win_h, .. } = win_rect;
 
     //println!("{:?} {}", system_state.keyboard, state.s);
 
@@ -79,23 +88,21 @@ pub fn step() {
             state.input_buffer.push(new_char);
             state.last_input_t = curr_input_t;
         } 
-    } 
+    }
 
     if enter_pressed && !state.input_buffer.is_empty() {
 
         let cmd = state.input_buffer.to_owned();
 
-        let result = match state.rhai_engine.eval::<rhai::Dynamic>(&cmd).ok() {
-            Some(res) => EvalResult::Success { cmd, res: format!("{:?}", res) },
-            None => EvalResult::Error { cmd },
+        let result = match state.rhai_engine.eval::<rhai::Dynamic>(&cmd) {
+            Ok(res) => EvalResult { cmd, res: format!("{:?}", res), success: true },
+            Err(res) => EvalResult { cmd, res: format!("{:?}", res), success: false },
         };
         
         //state.console_buffer.push_str(&format!("$ {}\n  > {}\n", state.input_buffer, result));
         state.console_buffer.push(result);
         state.input_buffer.clear();
     }
-
-    let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 
     framebuffer.fill(Color::from_rgba(0, 0, 0, 0xff));
 
@@ -107,18 +114,10 @@ pub fn step() {
 
     let mut console_rich_text = RichText::new();
     for res in state.console_buffer.iter() {
-        match res {
-            EvalResult::Success { cmd, res } => {
-                console_rich_text.add_part("$ ", GREEN, font);
-                console_rich_text.add_part(&cmd, WHITE, font);
-                console_rich_text.add_part(&format!("\n  > {}", res), WHITE, font);
-            },
-            EvalResult::Error { cmd } => {
-                console_rich_text.add_part("$ ", RED, font);
-                console_rich_text.add_part(&cmd, WHITE, font);
-                console_rich_text.add_part(&format!("\n  > ERROR"), RED, font);
-            }
-        }
+        console_rich_text.add_part("$ ", YELLOW, font);
+        console_rich_text.add_part(&res.cmd, WHITE, font);
+        let res_color = if res.success { WHITE } else { RED };
+        console_rich_text.add_part(&format!("\n  > {}", res.res), res_color, font);
         console_rich_text.add_part("\n", WHITE, font)
     }
     
@@ -128,4 +127,10 @@ pub fn step() {
     input_rich_text.add_part("> ", YELLOW, font);
     input_rich_text.add_part(&state.input_buffer, WHITE, font);
     draw_rich_text(&mut framebuffer, &input_rich_text, &rect_input);
+
+    let win_pointer_state = system_state.pointer.change_origin(&win_rect);
+    let clear_console = state.button.update_and_draw(&mut framebuffer, &win_pointer_state);
+    if clear_console {
+        state.console_buffer.clear();
+    }
 }

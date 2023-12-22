@@ -5,6 +5,7 @@
 
 use core::panic::PanicInfo;
 use alloc::format;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
@@ -14,6 +15,7 @@ use smoltcp::wire::{IpAddress, IpCidr};
 use applib::{Color, Rect, Framebuffer, SystemState, PointerState, MAX_KEYS_PRESSED, decode_png};
 use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
+use applib::ui::{Button, ButtonConfig};
 
 extern crate alloc;
 
@@ -49,6 +51,7 @@ struct AppDescriptor {
 struct App {
     wasm_app: WasmApp,
     descriptor: AppDescriptor,
+    button: Button,
     is_open: bool,
     rect: Rect,
     grab_pos: Option<(i64, i64)>,
@@ -128,6 +131,11 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         rect: app_desc.init_win_rect.clone(),
         grab_pos: None,
         time_used: 0.0,
+        button: Button::new(&ButtonConfig {
+            rect: app_desc.launch_rect.clone(),
+            text: app_desc.name.to_string(),
+            ..Default::default()
+        })
     }).collect();
 
     log::info!("Applications loaded");
@@ -192,28 +200,17 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
     const COLOR_TEXT: Color = Color::from_rgba(0xff, 0xff, 0xff, 0xff);
 
     const OFFSET_SHADOW: i64 = 10;
-    const TEXT_MARGIN: i64 = 5;
     const DECO_PADDING: i64 = 5;
+
+    let pointer_state = &system_state.pointer;
 
     for app in applications.iter_mut() {
 
-        let rect = &app.descriptor.launch_rect;
-
-        let pointer_state = &system_state.pointer;
-        let launch_hover = rect.check_contains_point(pointer_state.x, pointer_state.y);
-
-        let color = if launch_hover { COLOR_HOVER } else { COLOR_IDLE };
-
-        if launch_hover && pointer_state.left_clicked && !app.is_open {
+        let button_fired = app.button.update_and_draw(fb, pointer_state);
+        if button_fired && !app.is_open {
             log::info!("{} is open", app.descriptor.name);
             app.is_open = true;
         }
-
-        draw_rect(fb, &rect, color);
-
-        let text_x0 = rect.x0 + TEXT_MARGIN;
-        let text_y0 = rect.y0 + TEXT_MARGIN;
-        draw_str(fb, app.descriptor.name, text_x0, text_y0, &DEFAULT_FONT, COLOR_TEXT);
 
         if app.is_open {
 

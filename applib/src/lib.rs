@@ -9,6 +9,7 @@ pub mod drawing;
 pub mod ui;
 
 use alloc::vec::Vec;
+use managed::ManagedSlice;
 use keymap::Keycode;
 
 pub const MAX_KEYS_PRESSED: usize = 3;
@@ -127,7 +128,7 @@ impl Rect {
 }
 
 pub struct Framebuffer<'a> {
-    pub data: &'a mut [u32],
+    pub data: ManagedSlice<'a, u32>,
     pub w: u32,
     pub h: u32,
 }
@@ -135,9 +136,33 @@ pub struct Framebuffer<'a> {
 impl<'a> Framebuffer<'a> {
     pub fn new(data: &'a mut [u32], w: u32, h: u32) -> Self {
         assert_eq!(data.len(), (w * h) as usize);
-        Framebuffer { data, w, h }
+        Framebuffer { data: ManagedSlice::Borrowed(data), w, h }
     }
 
+    pub fn from_png(png_bytes: &[u8]) -> Self {
+
+        let mut decoder =  PngDecoder::new(png_bytes);
+        let decoded = decoder.decode().expect("Invalid PNG bitmap");
+        let (w, h) = decoder.get_dimensions().unwrap();
+
+        let data_u8 = decoded.u8().unwrap();
+
+        let data_u32 = unsafe {
+            assert_eq!(data_u8.len(), h * w * 4); // Requires an alpha channel
+            let mut data_u8 = core::mem::ManuallyDrop::new(data_u8);
+            Vec::from_raw_parts(
+                data_u8.as_mut_ptr() as *mut u32,
+                h * w,
+                h * w
+            )
+        };
+    
+        Framebuffer {
+            data: ManagedSlice::Owned(data_u32),
+            w: w as u32,
+            h: h as u32
+        }
+    }
 }
 
 impl<'a> Framebuffer<'a> {
@@ -179,7 +204,7 @@ impl<'a> Framebuffer<'a> {
         self.data[i1..=i2].fill(color.0);
     }
 
-    pub fn copy_fb(&mut self, src: &Framebuffer, rect: &Rect) {
+    pub fn copy_fb(&mut self, src: &Framebuffer, rect: &Rect, blend: bool) {
 
         let Rect { x0: x, y0: y, w: w_rect, h: h_rect } = *rect;
 
@@ -211,7 +236,16 @@ impl<'a> Framebuffer<'a> {
             let ib1 = src.get_offset(xb1, yb).unwrap();
             let ib2 = src.get_offset(xb2, yb).unwrap();
 
-            self.data[ia1..=ia2].copy_from_slice(&src.data[ib1..=ib2]);
+            if blend {
+                self.data[ia1..=ia2].iter_mut()
+                    .enumerate()
+                    .for_each(|(i, v_dst)| {
+                        let v_src = Color(src.data[ib1+i]);
+                        *v_dst = blend_colors(v_src, Color(*v_dst)).0;
+                    });
+            } else {
+                self.data[ia1..=ia2].copy_from_slice(&src.data[ib1..=ib2]);
+            }
         }
     }
 

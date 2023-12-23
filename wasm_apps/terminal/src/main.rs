@@ -104,6 +104,12 @@ pub fn step() {
         state.input_buffer.clear();
     }
 
+    let win_pointer_state = system_state.pointer.change_origin(&win_rect);
+    let clear_console = state.button.update(&win_pointer_state);
+    if clear_console {
+        state.console_buffer.clear();
+    }
+
     framebuffer.fill(Color::from_rgba(0, 0, 0, 0xff));
 
     let font = &HACK_15;
@@ -128,9 +134,5 @@ pub fn step() {
     input_rich_text.add_part(&state.input_buffer, WHITE, font);
     draw_rich_text(&mut framebuffer, &input_rich_text, &rect_input);
 
-    let win_pointer_state = system_state.pointer.change_origin(&win_rect);
-    let clear_console = state.button.update_and_draw(&mut framebuffer, &win_pointer_state);
-    if clear_console {
-        state.console_buffer.clear();
-    }
+    state.button.draw(&mut framebuffer);
 }

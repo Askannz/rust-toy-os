@@ -46,6 +46,7 @@ struct AppDescriptor {
     launch_rect: Rect,
     name: &'static str,
     init_win_rect: Rect,
+    icon: Option<&'static Framebuffer<'static>>
 }
 
 struct App {
@@ -58,32 +59,40 @@ struct App {
     time_used: f64,
 }
 
-const APPLICATIONS: [AppDescriptor; 3] = [
-    AppDescriptor {
-        data: include_bytes!("../../embedded_data/cube_3d.wasm"),
-        launch_rect: Rect { x0: 100, y0: 100, w: 200, h: 40 },
-        name: "3D Cube",
-        init_win_rect: Rect { x0: 200, y0: 200, w: 200, h: 200 }
-    },
-    AppDescriptor {
-        data: include_bytes!("../../embedded_data/chronometer.wasm"),
-        launch_rect: Rect { x0: 100, y0: 150, w: 200, h: 40 },
-        name: "Chronometer",
-        init_win_rect: Rect { x0: 600, y0: 200, w: 200, h: 200 }
-    },
-    AppDescriptor {
-        data: include_bytes!("../../embedded_data/terminal.wasm"),
-        launch_rect: Rect { x0: 100, y0: 200, w: 200, h: 40 },
-        name: "Terminal",
-        init_win_rect: Rect { x0: 400, y0: 300, w: 400, h: 200 }
-    },
-];
+lazy_static! {
+    static ref WALLPAPER: Vec<u8> = decode_png(include_bytes!("../../wallpaper.png"));
+    static ref CUBE_ICON: Framebuffer<'static> = Framebuffer::from_png(include_bytes!("../icons/cube.png"));
+    static ref CHRONO_ICON: Framebuffer<'static> = Framebuffer::from_png(include_bytes!("../icons/chronometer.png"));
+    static ref TERMINAL_ICON: Framebuffer<'static> = Framebuffer::from_png(include_bytes!("../icons/terminal.png"));
+
+    static ref APPLICATIONS: [AppDescriptor; 3] = [
+        AppDescriptor {
+            data: include_bytes!("../../embedded_data/cube_3d.wasm"),
+            launch_rect: Rect { x0: 100, y0: 100, w: 200, h: 40 },
+            name: "3D Cube",
+            init_win_rect: Rect { x0: 200, y0: 200, w: 200, h: 200 },
+            icon: Some(&CUBE_ICON),
+        },
+        AppDescriptor {
+            data: include_bytes!("../../embedded_data/chronometer.wasm"),
+            launch_rect: Rect { x0: 100, y0: 150, w: 200, h: 40 },
+            name: "Chronometer",
+            init_win_rect: Rect { x0: 600, y0: 200, w: 200, h: 200 },
+            icon: Some(&CHRONO_ICON),
+        },
+        AppDescriptor {
+            data: include_bytes!("../../embedded_data/terminal.wasm"),
+            launch_rect: Rect { x0: 100, y0: 200, w: 200, h: 40 },
+            name: "Terminal",
+            init_win_rect: Rect { x0: 400, y0: 300, w: 400, h: 200 },
+            icon: Some(&TERMINAL_ICON),
+        },
+    ];
+}
 
 const FPS_TARGET: f64 = 60.0;
 
-lazy_static! {
-    static ref WALLPAPER: Vec<u8> = decode_png(include_bytes!("../../wallpaper.png"));
-}
+
 
 static LOGGER: logging::SerialLogger = logging::SerialLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
@@ -134,6 +143,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         button: Button::new(&ButtonConfig {
             rect: app_desc.launch_rect.clone(),
             text: app_desc.name.to_string(),
+            icon: app_desc.icon,
             ..Default::default()
         })
     }).collect();
@@ -206,7 +216,8 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 
     for app in applications.iter_mut() {
 
-        let button_fired = app.button.update_and_draw(fb, pointer_state);
+        let button_fired = app.button.update(pointer_state);
+        app.button.draw(fb);
         if button_fired && !app.is_open {
             log::info!("{} is open", app.descriptor.name);
             app.is_open = true;
@@ -255,7 +266,6 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 
             let (x_txt, y_txt) = (app.rect.x0, app.rect.y0 - font_h as i64 - DECO_PADDING);
             draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, COLOR_TEXT);
-
 
             let t0 = clock.time();
             app.wasm_app.step(system_state, fb, &app.rect);

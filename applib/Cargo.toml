@@ -8,6 +8,7 @@ enumn = "0.1.12"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 log = { version = "0.4.20", default-features = false }
 zune-png = { version = "0.4.0", default-features = false }
+managed = { version = "0.8.0", default-features = false, features = ["alloc"] }
 
 # the profile used for `cargo build`
 [profile.dev]

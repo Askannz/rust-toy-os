@@ -12,7 +12,8 @@ use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 use smoltcp::wire::{IpAddress, IpCidr};
 
-use applib::{Color, Rect, Framebuffer, SystemState, PointerState, MAX_KEYS_PRESSED, decode_png};
+use applib::{Color, Rect, Framebuffer, SystemState, decode_png};
+use applib::input::{InputState, InputEvent};
 use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
 use applib::ui::{Button, ButtonConfig};
@@ -160,10 +161,9 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let clock = SystemClock::new(runtime_services);
     let mut fps_manager = FpsManager::new(FPS_TARGET);
 
-    let mut system_state = SystemState {
-        pointer: PointerState { x: 0, y: 0, left_clicked: false, right_clicked: false },
-        keyboard: [None; MAX_KEYS_PRESSED],
-        time: clock.time()
+    let mut system_state = SystemState { 
+        input: InputState::new(),
+        time: clock.time(),
     };
 
     log::info!("Entering main loop");
@@ -212,11 +212,12 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
     const OFFSET_SHADOW: i64 = 10;
     const DECO_PADDING: i64 = 5;
 
-    let pointer_state = &system_state.pointer;
+    let input_state = &system_state.input;
+    let pointer_state = &input_state.pointer;
 
     for app in applications.iter_mut() {
 
-        let button_fired = app.button.update(pointer_state);
+        let button_fired = app.button.update(input_state);
         app.button.draw(fb);
         if button_fired && !app.is_open {
             log::info!("{} is open", app.descriptor.name);
@@ -281,7 +282,7 @@ fn draw_cursor(fb: &mut Framebuffer, system_state: &SystemState) {
     const CURSOR_SIZE: u32 = 5;
     const CURSOR_COLOR: Color = Color::from_rgba(0xff, 0xff, 0xff, 0xff);
 
-    let pointer_state = &system_state.pointer;
+    let pointer_state = &system_state.input.pointer;
     let x = pointer_state.x;
     let y = pointer_state.y;
     draw_rect(fb, &Rect { x0: x, y0: y, w: CURSOR_SIZE, h: CURSOR_SIZE }, CURSOR_COLOR)
@@ -291,6 +292,10 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
 
     let (w, h) = dims;
     let (w, h) = (w as i32, h as i32);
+
+    let input_state = &mut system_state.input;
+    
+    input_state.clear_events();
 
     for virtio_inp in virtio_inputs.iter_mut() {
         for event in virtio_inp.poll() {
@@ -304,28 +309,13 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                 Some(EventType::EV_KEY) => match Keycode::n(event.code) {
 
                     // Mouse click
-                    Some(Keycode::BTN_MOUSE_LEFT) => system_state.pointer.left_clicked = event.value == 1,
-                    Some(Keycode::BTN_MOUSE_RIGHT) => system_state.pointer.right_clicked = event.value == 1,
+                    Some(Keycode::BTN_MOUSE_LEFT) => input_state.pointer.left_clicked = event.value == 1,
+                    Some(Keycode::BTN_MOUSE_RIGHT) => input_state.pointer.right_clicked = event.value == 1,
 
                     // Keyboard
                     Some(keycode) => match event.value {
-
-                        // Key was released, freeing its slot
-                        0 => system_state.keyboard.iter_mut()
-                                .filter(|c| *c == &Some(keycode))
-                                .for_each(|c| *c = None),
-    
-                        // New key pressed, finding a slot for it
-                        1 => if !system_state.keyboard.contains(&Some(keycode)) {
-                            match system_state.keyboard.iter_mut().find(|c| c.is_none()) {
-                                Some(slot) => *slot = Some(keycode),
-                                None => log::warn!(
-                                    "Dropping keyboard event (all {} slots taken)",
-                                    system_state.keyboard.len()
-                                )
-                            }
-                        }
-    
+                        0 => input_state.add_event(InputEvent::KeyRelease { keycode }),
+                        1 => input_state.add_event(InputEvent::KeyPress { keycode }),
                         val => log::warn!("Unknown key state {}", val)
                     },
                     None => log::warn!("Unknown keycode {} for keyboard event", event.code)
@@ -335,12 +325,12 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                 Some(EventType::EV_REL) => match event.code {
                     0 => {  // X axis
                         let dx = (event.value as i32) as i64;
-                        let pointer_state = &mut system_state.pointer;
+                        let pointer_state = &mut input_state.pointer;
                         pointer_state.x = i64::max(0, i64::min(w as i64 - 1, pointer_state.x as i64 + dx));
                     }
                     1 => {  // Y axis
                         let dy = (event.value as i32) as i64;
-                        let pointer_state = &mut system_state.pointer;
+                        let pointer_state = &mut input_state.pointer;
                         pointer_state.y = i64::max(0, i64::min(h as i64 - 1, pointer_state.y as i64 + dy));
                     },
                     _ => log::warn!("Unknown event code {} for pointer event", event.code)

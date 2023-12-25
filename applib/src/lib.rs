@@ -5,39 +5,19 @@ extern crate alloc;
 use zune_png::PngDecoder;
 
 pub mod keymap;
+pub mod input;
 pub mod drawing;
 pub mod ui;
 
 use alloc::vec::Vec;
 use managed::ManagedSlice;
-use keymap::Keycode;
-
-pub const MAX_KEYS_PRESSED: usize = 3;
-pub type KeyboardState = [Option<Keycode>; MAX_KEYS_PRESSED];
+use input::InputState;
 
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct SystemState {
-    pub pointer: PointerState,
-    pub keyboard: KeyboardState,
+    pub input: InputState,
     pub time: f64,
-}
-
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct PointerState {
-    pub x: i64,
-    pub y: i64,
-    pub left_clicked: bool,
-    pub right_clicked: bool
-}
-
-impl PointerState {
-    pub fn change_origin(&self, rect: &Rect) -> Self {
-        let &Self { x, y, left_clicked, right_clicked } = self;
-        let &Rect { x0, y0, .. } = rect;
-        Self { x: x-x0, y: y-y0, left_clicked, right_clicked }
-    }
 }
 
 #[derive(Clone, Copy)]

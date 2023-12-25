@@ -9,6 +9,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
+use applib::input::InputEvent;
 use applib::keymap::{Keycode, CHARMAP};
 use applib::drawing::text::{draw_rich_text, RichText, HACK_15};
 use applib::ui::{Button, ButtonConfig};
@@ -17,9 +18,9 @@ struct AppState {
     fb_handle: FramebufferHandle,
     input_buffer: String,
     console_buffer: Vec<EvalResult>,
-    last_input_t: f64,
     rhai_engine: rhai::Engine,
     button: Button,
+    shift_pressed: bool,
 }
 
 #[derive(Debug)]
@@ -30,8 +31,6 @@ struct EvalResult {
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
-
-const INPUT_RATE_PERIOD: f64 = 100.0;
 
 const WHITE: Color = Color::from_rgba(255, 255, 255, 255);
 const RED: Color = Color::from_rgba(255, 0, 0, 255);
@@ -45,13 +44,13 @@ pub fn init() -> () {
     let state = AppState { 
         fb_handle,
         input_buffer: String::with_capacity(100),
-        console_buffer: Vec::new(),
-        last_input_t: 0.0,
+        console_buffer: Vec::with_capacity(500),
         rhai_engine: rhai::Engine::new(),
         button: Button::new(&ButtonConfig { 
             text: "Clear".to_owned(),
             ..Default::default()
         }),
+        shift_pressed: false,
     };
     unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")) }
 }
@@ -67,45 +66,66 @@ pub fn step() {
     let win_rect = guestlib::get_win_rect();
     let Rect { w: win_w, h: win_h, .. } = win_rect;
 
-    //println!("{:?} {}", system_state.keyboard, state.s);
+    let input_state = &system_state.input;
 
-    let shift_pressed = system_state.keyboard.contains(&Some(Keycode::KEY_LEFTSHIFT));
-    let enter_pressed = system_state.keyboard.contains(&Some(Keycode::KEY_ENTER));
 
-    let new_char = system_state.keyboard
-        .iter()
-        .find_map(|keycode| match keycode {
-            &Some(keycode) => CHARMAP
+    //
+    // Updating shift state
+
+    let check_is_shift = |keycode| {
+        keycode == Keycode::KEY_LEFTSHIFT || 
+        keycode == Keycode::KEY_RIGHTSHIFT
+    };
+    input_state.events.iter().for_each(|&event| match event {
+        Some(InputEvent::KeyPress { keycode }) if check_is_shift(keycode) => state.shift_pressed = true,
+        Some(InputEvent::KeyRelease { keycode }) if check_is_shift(keycode) => state.shift_pressed = false,
+        _ => ()
+    });
+
+
+    //
+    // Reading keypress events
+
+    for event in input_state.events {
+
+        match event {
+
+            // Enter key pressed (flushing input)
+            Some(InputEvent::KeyPress { keycode: Keycode::KEY_ENTER }) => {
+                if !state.input_buffer.is_empty() {
+
+                    let cmd = state.input_buffer.to_owned();
+
+                    let result = match state.rhai_engine.eval::<rhai::Dynamic>(&cmd) {
+                        Ok(res) => EvalResult { cmd, res: format!("{:?}", res), success: true },
+                        Err(res) => EvalResult { cmd, res: format!("{:?}", res), success: false },
+                    };
+                    
+                    //state.console_buffer.push_str(&format!("$ {}\n  > {}\n", state.input_buffer, result));
+                    state.console_buffer.push(result);
+                    state.input_buffer.clear();
+                }
+            },
+
+            // Character input
+            Some(InputEvent::KeyPress { keycode }) => {
+
+                let new_char = CHARMAP
                     .get(&keycode)
-                    .map(|(low_c, up_c)| if shift_pressed { *up_c } else { *low_c })
-                    .flatten(),
-            None => None
-        });
+                    .map(|(low_c, up_c)| if state.shift_pressed { *up_c } else { *low_c })
+                    .flatten();
 
-    if let Some(new_char) = new_char {
-        let curr_input_t = system_state.time;
-        if curr_input_t - state.last_input_t > INPUT_RATE_PERIOD {
-            state.input_buffer.push(new_char);
-            state.last_input_t = curr_input_t;
-        } 
-    }
+                if let Some(new_char) = new_char {
+                    state.input_buffer.push(new_char);
+                }
+            }
 
-    if enter_pressed && !state.input_buffer.is_empty() {
-
-        let cmd = state.input_buffer.to_owned();
-
-        let result = match state.rhai_engine.eval::<rhai::Dynamic>(&cmd) {
-            Ok(res) => EvalResult { cmd, res: format!("{:?}", res), success: true },
-            Err(res) => EvalResult { cmd, res: format!("{:?}", res), success: false },
+            _ => ()
         };
-        
-        //state.console_buffer.push_str(&format!("$ {}\n  > {}\n", state.input_buffer, result));
-        state.console_buffer.push(result);
-        state.input_buffer.clear();
     }
 
-    let win_pointer_state = system_state.pointer.change_origin(&win_rect);
-    let clear_console = state.button.update(&win_pointer_state);
+    let win_input_state = system_state.input.change_origin(&win_rect);
+    let clear_console = state.button.update(&win_input_state);
     if clear_console {
         state.console_buffer.clear();
     }

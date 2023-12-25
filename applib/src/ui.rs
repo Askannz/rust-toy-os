@@ -1,6 +1,7 @@
 use alloc::borrow::ToOwned;
 use alloc::string::String;
-use crate::{Rect, Color, Framebuffer, PointerState};
+use crate::{Rect, Color, Framebuffer};
+use crate::input::InputState;
 use crate::drawing::text::{Font, draw_str, DEFAULT_FONT};
 use crate::drawing::primitives::draw_rect;
 
@@ -15,9 +16,9 @@ impl Button {
         Self { config: config.clone(), state: State::Idle }
     }
 
-    pub fn update(&mut self, pointer_state: &PointerState) -> bool {
+    pub fn update(&mut self, input_state: &InputState) -> bool {
     
-        let ps = pointer_state;
+        let ps = &input_state.pointer;
 
         let mut fire = false;
 

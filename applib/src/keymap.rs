@@ -17,6 +17,8 @@ pub enum Keycode {
 
     BTN_MOUSE_LEFT = 272,
     BTN_MOUSE_RIGHT = 273,
+    BTN_GEAR_DOWN = 336,
+    BTN_GEAR_UP = 337,
 
     KEY_1 = 2,
     KEY_2 = 3,

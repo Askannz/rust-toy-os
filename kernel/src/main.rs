@@ -333,6 +333,10 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                         let pointer_state = &mut input_state.pointer;
                         pointer_state.y = i64::max(0, i64::min(h as i64 - 1, pointer_state.y as i64 + dy));
                     },
+                    8 => {  // Scroll wheel
+                        let delta = (event.value as i32) as i64;
+                        input_state.add_event(InputEvent::Scroll { delta });
+                    }
                     _ => log::warn!("Unknown event code {} for pointer event", event.code)
                 },
 

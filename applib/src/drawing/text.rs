@@ -90,6 +90,7 @@ pub fn draw_char(fb: &mut Framebuffer, c: char, x0: i64, y0: i64, font: &Font, c
     }
 }
 
+#[derive(Clone)]
 pub struct RichText(Vec<RichChar>);
 
 impl RichText {
@@ -102,6 +103,7 @@ impl RichText {
     }
 }
 
+#[derive(Clone)]
 struct RichChar {
     c: char,
     color: Color,
@@ -122,7 +124,8 @@ pub fn draw_rich_text(fb: &mut Framebuffer, text: &RichText, rect: &Rect, offset
 
     let mut i0 = 0;
     let mut y = y0;
-    for (i, rich_char) in rich_vec.iter().skip(offset).enumerate() {
+    let mut line_count = 0;
+    for (i, rich_char) in rich_vec.iter().enumerate() {
 
         let i1 = {
             if rich_char.c == '\n' { Some(i) }
@@ -132,14 +135,23 @@ pub fn draw_rich_text(fb: &mut Framebuffer, text: &RichText, rect: &Rect, offset
 
         if let Some(i1) = i1 {
 
-            let rich_slice = &rich_vec[i0..i1];
-            let max_char_h = rich_slice.iter().map(|rich_char| rich_char.font.char_h).max().unwrap_or(0) as i64;
+            if line_count >= offset {
 
-            if y + max_char_h > y0 + h { break; }
+                let rich_slice = &rich_vec[i0..i1];
 
-            draw_rich_slice(fb, rich_slice, x0, y);
+                let max_char_h = rich_slice.iter()
+                    .map(|rich_char| rich_char.font.char_h)
+                    .max()
+                    .unwrap_or(0) as i64;
+
+                if y + max_char_h > y0 + h { break; }
+
+                draw_rich_slice(fb, rich_slice, x0, y);
+                y += max_char_h;
+            }
+
             i0 = i + 1;
-            y += max_char_h;
+            line_count += 1;
         }
     }
 

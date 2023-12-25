@@ -14,7 +14,7 @@ use smoltcp::wire::{IpAddress, IpCidr};
 
 use applib::{Color, Rect, Framebuffer, SystemState, decode_png};
 use applib::input::{InputState, InputEvent};
-use applib::drawing::text::{DEFAULT_FONT, draw_str, RichText, draw_rich_text};
+use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
 use applib::ui::button::{Button, ButtonConfig};
 
@@ -168,18 +168,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     log::info!("Entering main loop");
 
-    // TEST
-    let rich_text = {
-        let mut rich_text = RichText::new();
-        rich_text.add_part("aaaaa\n", Color(0xFFFFFFFF), &DEFAULT_FONT);
-        rich_text.add_part("bbbbb\n", Color(0xFFFFFFFF), &DEFAULT_FONT);
-        rich_text.add_part("ccccc\n", Color(0xFFFFFFFF), &DEFAULT_FONT);
-        rich_text.add_part("ddddd\n", Color(0xFFFFFFFF), &DEFAULT_FONT);
-        rich_text
-    };
-    let rich_text_rect = Rect { x0: 300, y0: 300, w: 100, h: 50 };
-
-
     loop {
 
         fps_manager.start_frame(&clock);
@@ -199,14 +187,10 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         //log::debug!("{:?}", system_state);
 
         update_apps(&mut framebuffer, &clock, &system_state, &mut applications);
-        draw_cursor(&mut framebuffer, &system_state);
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
-        // TEST
-        draw_rect(&mut framebuffer, &rich_text_rect, Color(0x0));
-        draw_rich_text(&mut framebuffer, &rich_text, &rich_text_rect, 0);
-
+        draw_cursor(&mut framebuffer, &system_state);
         fps_manager.end_frame(&clock, &mut framebuffer);
         virtio_gpu.flush();
     }

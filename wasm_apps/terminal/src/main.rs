@@ -11,15 +11,23 @@ use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP};
-use applib::drawing::text::{draw_rich_text, RichText, HACK_15};
+use applib::drawing::text::{draw_rich_text, RichText, HACK_15, Font};
 use applib::ui::button::{Button, ButtonConfig};
+use applib::ui::text::{ScrollableText, TextConfig};
 
 struct AppState {
     fb_handle: FramebufferHandle,
     input_buffer: String,
     console_buffer: Vec<EvalResult>,
     rhai_engine: rhai::Engine,
+
+    font: &'static Font,
+    rect_console: Rect,
+    rect_input: Rect,
+
     button: Button,
+    scrollable_text: ScrollableText,
+
     shift_pressed: bool,
 }
 
@@ -39,15 +47,31 @@ const YELLOW: Color = Color::from_rgba(255, 255, 0, 255);
 
 #[no_mangle]
 pub fn init() -> () {
+
     let win_rect = guestlib::get_win_rect();
     let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
+
+    let Rect { w: win_w, h: win_h, .. } = win_rect;
+    let font = &HACK_15;
+
+    let char_h = font.char_h as u32;
+    let rect_console = Rect  { x0: 0, y0: 0, w: win_w, h: win_h - char_h};
+    let rect_input = Rect  { x0: 0, y0: (win_h - char_h) as i64, w: win_w, h: char_h};
+
     let state = AppState { 
         fb_handle,
         input_buffer: String::with_capacity(100),
         console_buffer: Vec::with_capacity(500),
         rhai_engine: rhai::Engine::new(),
+        font,
+        rect_console: rect_console.clone(),
+        rect_input: rect_input.clone(),
         button: Button::new(&ButtonConfig { 
             text: "Clear".to_owned(),
+            ..Default::default()
+        }),
+        scrollable_text: ScrollableText::new(&TextConfig { 
+            rect: rect_console,
             ..Default::default()
         }),
         shift_pressed: false,
@@ -132,27 +156,29 @@ pub fn step() {
 
     framebuffer.fill(Color::from_rgba(0, 0, 0, 0xff));
 
-    let font = &HACK_15;
+    let font = state.font;
 
-    let char_h = font.char_h as u32;
-    let rect_console = Rect  { x0: 0, y0: 0, w: win_w, h: win_h - char_h};
-    let rect_input = Rect  { x0: 0, y0: (win_h - char_h) as i64, w: win_w, h: char_h};
 
-    let mut console_rich_text = RichText::new();
-    for res in state.console_buffer.iter() {
-        console_rich_text.add_part("$ ", YELLOW, font);
-        console_rich_text.add_part(&res.cmd, WHITE, font);
-        let res_color = if res.success { WHITE } else { RED };
-        console_rich_text.add_part(&format!("\n  > {}", res.res), res_color, font);
-        console_rich_text.add_part("\n", WHITE, font)
-    }
+    state.scrollable_text.text = {
+        let mut console_rich_text = RichText::new();
+        for res in state.console_buffer.iter() {
+            console_rich_text.add_part("$ ", YELLOW, font);
+            console_rich_text.add_part(&res.cmd, WHITE, font);
+            let res_color = if res.success { WHITE } else { RED };
+            console_rich_text.add_part(&format!("\n  > {}", res.res), res_color, font);
+            console_rich_text.add_part("\n", WHITE, font)
+        }
+        console_rich_text
+    };
+
+    state.scrollable_text.update(&win_input_state);
     
-    draw_rich_text(&mut framebuffer, &console_rich_text, &rect_console, 0);
+    state.scrollable_text.draw(&mut framebuffer);
 
     let mut input_rich_text = RichText::new();
     input_rich_text.add_part("> ", YELLOW, font);
     input_rich_text.add_part(&state.input_buffer, WHITE, font);
-    draw_rich_text(&mut framebuffer, &input_rich_text, &rect_input, 0);
+    draw_rich_text(&mut framebuffer, &input_rich_text, &state.rect_input, 0);
 
     state.button.draw(&mut framebuffer);
 }

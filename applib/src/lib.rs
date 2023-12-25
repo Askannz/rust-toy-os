@@ -4,7 +4,6 @@ extern crate alloc;
 
 use zune_png::PngDecoder;
 
-pub mod keymap;
 pub mod input;
 pub mod drawing;
 pub mod ui;

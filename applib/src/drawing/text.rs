@@ -108,10 +108,11 @@ struct RichChar {
     font: &'static Font,
 }
 
-pub fn draw_rich_text(fb: &mut Framebuffer, text: &RichText, rect: &Rect) {
+pub fn draw_rich_text(fb: &mut Framebuffer, text: &RichText, rect: &Rect, offset: usize) {
 
-    let Rect { x0, y0, w, .. } = *rect;
+    let Rect { x0, y0, w, h } = *rect;
 
+    let h: i64 = h.into();
     let rich_vec = &text.0;
 
     if rich_vec.is_empty() { return; }
@@ -121,7 +122,7 @@ pub fn draw_rich_text(fb: &mut Framebuffer, text: &RichText, rect: &Rect) {
 
     let mut i0 = 0;
     let mut y = y0;
-    for (i, rich_char) in rich_vec.iter().enumerate() {
+    for (i, rich_char) in rich_vec.iter().skip(offset).enumerate() {
 
         let i1 = {
             if rich_char.c == '\n' { Some(i) }
@@ -130,11 +131,15 @@ pub fn draw_rich_text(fb: &mut Framebuffer, text: &RichText, rect: &Rect) {
         };
 
         if let Some(i1) = i1 {
+
             let rich_slice = &rich_vec[i0..i1];
-            let max_char_h = rich_slice.iter().map(|rich_char| rich_char.font.char_h).max().unwrap_or(0);
+            let max_char_h = rich_slice.iter().map(|rich_char| rich_char.font.char_h).max().unwrap_or(0) as i64;
+
+            if y + max_char_h > y0 + h { break; }
+
             draw_rich_slice(fb, rich_slice, x0, y);
             i0 = i + 1;
-            y += max_char_h as i64;
+            y += max_char_h;
         }
     }
 

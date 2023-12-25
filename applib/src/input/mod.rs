@@ -1,5 +1,7 @@
+pub mod keymap;
+
 use crate::Rect;
-use crate::keymap::Keycode;
+pub use keymap::{Keycode, CHARMAP};
 
 pub const MAX_EVENTS: usize = 10;
 
@@ -56,6 +58,7 @@ impl InputState {
 
 #[derive(Debug, Clone)]
 #[repr(C)]
+
 pub struct PointerState {
     pub x: i64,
     pub y: i64,

@@ -10,9 +10,9 @@ use alloc::vec::Vec;
 use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
 use applib::input::InputEvent;
-use applib::keymap::{Keycode, CHARMAP};
+use applib::input::{Keycode, CHARMAP};
 use applib::drawing::text::{draw_rich_text, RichText, HACK_15};
-use applib::ui::{Button, ButtonConfig};
+use applib::ui::button::{Button, ButtonConfig};
 
 struct AppState {
     fb_handle: FramebufferHandle,
@@ -147,12 +147,12 @@ pub fn step() {
         console_rich_text.add_part("\n", WHITE, font)
     }
     
-    draw_rich_text(&mut framebuffer, &console_rich_text, &rect_console);
+    draw_rich_text(&mut framebuffer, &console_rich_text, &rect_console, 0);
 
     let mut input_rich_text = RichText::new();
     input_rich_text.add_part("> ", YELLOW, font);
     input_rich_text.add_part(&state.input_buffer, WHITE, font);
-    draw_rich_text(&mut framebuffer, &input_rich_text, &rect_input);
+    draw_rich_text(&mut framebuffer, &input_rich_text, &rect_input, 0);
 
     state.button.draw(&mut framebuffer);
 }

@@ -217,9 +217,9 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 
     for app in applications.iter_mut() {
 
-        let button_fired = app.button.update(input_state);
+        app.button.update(input_state);
         app.button.draw(fb);
-        if button_fired && !app.is_open {
+        if app.button.is_fired() && !app.is_open {
             log::info!("{} is open", app.descriptor.name);
             app.is_open = true;
         }

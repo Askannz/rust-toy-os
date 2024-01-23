@@ -8,40 +8,52 @@ use crate::drawing::primitives::draw_rect;
 pub struct Button {
     config: ButtonConfig,
     state: State,
+    fired: bool,
 }
 
 impl Button {
 
     pub fn new(config: &ButtonConfig) -> Self {
-        Self { config: config.clone(), state: State::Idle }
+        Self { config: config.clone(), state: State::Idle, fired: false }
     }
 
     pub fn update(&mut self, input_state: &InputState) -> bool {
     
         let ps = &input_state.pointer;
 
-        let mut fire = false;
+        self.fired = false;
+        let mut new_state = self.state.clone();
 
         if self.config.rect.check_contains_point(ps.x, ps.y) {
             if ps.left_clicked {
 
-                if self.state != State::Clicked { 
-                    fire = true;
-                    self.state = State::Clicked;
+                if new_state != State::Clicked { 
+                    self.fired = true;
+                    new_state = State::Clicked;
                 }
 
             } else {
-                self.state = State::Hover;
+                new_state = State::Hover;
             }
         } else {
-            self.state = State::Idle;
+            new_state = State::Idle;
         }
 
+        let mut redraw = false;
+        if new_state != self.state {
+            self.state = new_state;
+            redraw = true;
+        }
 
-        fire
+        redraw
     }
 
-    pub fn draw(&self, fb: &mut Framebuffer) {
+    pub fn is_fired(&self) -> bool {
+        return self.fired
+    }
+    
+
+    pub fn draw(&mut self, fb: &mut Framebuffer) {
 
         let button_color = match self.state {
             State::Idle => self.config.idle_color,
@@ -104,7 +116,7 @@ impl Default for ButtonConfig {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 enum State {
     Idle,
     Hover,

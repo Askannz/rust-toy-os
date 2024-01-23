@@ -14,18 +14,31 @@ impl ScrollableText {
         Self { text: RichText::new(), config: config.clone(), offset: 0 }
     }
 
-    pub fn update(&mut self, input_state: &InputState) {
+    pub fn update(&mut self, input_state: &InputState, text: Option<RichText>) -> bool {
 
-        let ps = &input_state.pointer;
+        let mut redraw = false;
 
-        if self.config.rect.check_contains_point(ps.x, ps.y) {
-            for event in input_state.events {
-                if let Some(InputEvent::Scroll { delta }) = event {
-                    let offset = self.offset as i64 - delta;
-                    self.offset = i64::max(0, offset) as usize;
+        if let Some(text) = text {
+            self.text = text;
+            redraw = true;
+        }
+
+        if self.config.scrollable {
+
+            let ps = &input_state.pointer;
+
+            if self.config.rect.check_contains_point(ps.x, ps.y) {
+                for event in input_state.events {
+                    if let Some(InputEvent::Scroll { delta }) = event {
+                        let offset = self.offset as i64 - delta;
+                        self.offset = i64::max(0, offset) as usize;
+                        redraw = true;
+                    }
                 }
             }
         }
+
+        redraw
     }
 
     pub fn draw(&self, fb: &mut Framebuffer) {
@@ -36,12 +49,14 @@ impl ScrollableText {
 #[derive(Clone)]
 pub struct TextConfig {
     pub rect: Rect,
+    pub scrollable: bool,
 }
 
 impl Default for TextConfig {
     fn default() -> Self {
         TextConfig {
             rect: Rect { x0: 0, y0: 0, w: 100, h: 25 },
+            scrollable: true,
         }
     }
 }

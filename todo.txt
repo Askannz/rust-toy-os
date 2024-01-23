@@ -1,4 +1,3 @@
-* scrollable text
 * proto-web browser
 * make it pretty (UI color palette)
 (* Tiling windows?)
@@ -7,5 +6,4 @@
 * app audit window
 * file editor + "fake" filesystem?
 * better memory allocator
-* switch back to events for inputs
 * context wheel

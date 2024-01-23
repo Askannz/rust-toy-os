@@ -7,7 +7,7 @@ use core::cell::OnceCell;
 use alloc::{format, borrow::ToOwned};
 use alloc::string::String;
 use alloc::vec::Vec;
-use guestlib::FramebufferHandle;
+use guestlib::{println, FramebufferHandle};
 use applib::{Color, Rect};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP};
@@ -22,13 +22,14 @@ struct AppState {
     rhai_engine: rhai::Engine,
 
     font: &'static Font,
-    rect_console: Rect,
-    rect_input: Rect,
 
     button: Button,
-    scrollable_text: ScrollableText,
+    console_area: ScrollableText,
+    input_area: ScrollableText,
 
     shift_pressed: bool,
+
+    first_frame: bool,
 }
 
 #[derive(Debug)]
@@ -40,10 +41,10 @@ struct EvalResult {
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
-const WHITE: Color = Color::from_rgba(255, 255, 255, 255);
-const RED: Color = Color::from_rgba(255, 0, 0, 255);
-const GREEN: Color = Color::from_rgba(0, 255, 0, 255);
-const YELLOW: Color = Color::from_rgba(255, 255, 0, 255);
+const WHITE: Color = Color::from_rgb(255, 255, 255);
+const RED: Color = Color::from_rgb(255, 0, 0);
+const GREEN: Color = Color::from_rgb(0, 255, 0);
+const YELLOW: Color = Color::from_rgb(255, 255, 0);
 
 #[no_mangle]
 pub fn init() -> () {
@@ -55,7 +56,8 @@ pub fn init() -> () {
     let font = &HACK_15;
 
     let char_h = font.char_h as u32;
-    let rect_console = Rect  { x0: 0, y0: 0, w: win_w, h: win_h - char_h};
+    let border_h = 30u32;
+    let rect_console = Rect  { x0: 0, y0: border_h.into(), w: win_w, h: win_h - char_h - border_h};
     let rect_input = Rect  { x0: 0, y0: (win_h - char_h) as i64, w: win_w, h: char_h};
 
     let state = AppState { 
@@ -64,17 +66,21 @@ pub fn init() -> () {
         console_buffer: Vec::with_capacity(500),
         rhai_engine: rhai::Engine::new(),
         font,
-        rect_console: rect_console.clone(),
-        rect_input: rect_input.clone(),
         button: Button::new(&ButtonConfig { 
             text: "Clear".to_owned(),
             ..Default::default()
         }),
-        scrollable_text: ScrollableText::new(&TextConfig { 
+        console_area: ScrollableText::new(&TextConfig { 
             rect: rect_console,
             ..Default::default()
         }),
+        input_area: ScrollableText::new(&TextConfig { 
+            rect: rect_input,
+            scrollable: false,
+            ..Default::default()
+        }),
         shift_pressed: false,
+        first_frame: true,
     };
     unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")) }
 }
@@ -88,9 +94,11 @@ pub fn step() {
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 
     let win_rect = guestlib::get_win_rect();
-    let Rect { w: win_w, h: win_h, .. } = win_rect;
 
     let input_state = &system_state.input;
+
+    let mut console_changed = false;
+    let mut input_changed = false;
 
 
     //
@@ -128,6 +136,8 @@ pub fn step() {
                     //state.console_buffer.push_str(&format!("$ {}\n  > {}\n", state.input_buffer, result));
                     state.console_buffer.push(result);
                     state.input_buffer.clear();
+                    console_changed = true;
+                    input_changed = true;
                 }
             },
 
@@ -141,6 +151,7 @@ pub fn step() {
 
                 if let Some(new_char) = new_char {
                     state.input_buffer.push(new_char);
+                    input_changed = true;
                 }
             }
 
@@ -148,37 +159,54 @@ pub fn step() {
         };
     }
 
-    let win_input_state = system_state.input.change_origin(&win_rect);
-    let clear_console = state.button.update(&win_input_state);
-    if clear_console {
-        state.console_buffer.clear();
-    }
-
-    framebuffer.fill(Color::from_rgba(0, 0, 0, 0xff));
-
     let font = state.font;
 
+    let win_input_state = system_state.input.change_origin(&win_rect);
 
-    state.scrollable_text.text = {
-        let mut console_rich_text = RichText::new();
-        for res in state.console_buffer.iter() {
-            console_rich_text.add_part("$ ", YELLOW, font);
-            console_rich_text.add_part(&res.cmd, WHITE, font);
-            let res_color = if res.success { WHITE } else { RED };
-            console_rich_text.add_part(&format!("\n  > {}", res.res), res_color, font);
-            console_rich_text.add_part("\n", WHITE, font)
-        }
-        console_rich_text
+    let redraw_button = state.button.update(&win_input_state);
+
+    if state.button.is_fired() {
+        state.console_buffer.clear();
+        console_changed = true;
+    }
+
+    let console_rich_text = match console_changed {
+        true => {
+            let mut console_rich_text = RichText::new();
+            for res in state.console_buffer.iter() {
+                console_rich_text.add_part("$ ", YELLOW, font);
+                console_rich_text.add_part(&res.cmd, WHITE, font);
+                let res_color = if res.success { WHITE } else { RED };
+                console_rich_text.add_part(&format!("\n  > {}", res.res), res_color, font);
+                console_rich_text.add_part("\n", WHITE, font)
+            }
+            Some(console_rich_text)
+        },
+        false => None
     };
 
-    state.scrollable_text.update(&win_input_state);
+    let input_rich_text = match input_changed || state.first_frame {
+        true => {
+            let mut input_rich_text = RichText::new();
+            input_rich_text.add_part("> ", YELLOW, font);
+            input_rich_text.add_part(&state.input_buffer, WHITE, font);
+            Some(input_rich_text)
+        },
+        false => None
+    };
+
+    let redraw_console = state.console_area.update(&win_input_state, console_rich_text);
+    let redraw_input = state.input_area.update(&win_input_state, input_rich_text);
+
+    let redraw = redraw_button || redraw_console || redraw_input || state.first_frame;
+
+    if !redraw { return; }
+
+    framebuffer.fill(Color::from_rgb(0, 0, 0));
     
-    state.scrollable_text.draw(&mut framebuffer);
-
-    let mut input_rich_text = RichText::new();
-    input_rich_text.add_part("> ", YELLOW, font);
-    input_rich_text.add_part(&state.input_buffer, WHITE, font);
-    draw_rich_text(&mut framebuffer, &input_rich_text, &state.rect_input, 0);
-
     state.button.draw(&mut framebuffer);
+    state.console_area.draw(&mut framebuffer);
+    state.input_area.draw(&mut framebuffer);
+
+    state.first_frame = false;
 }

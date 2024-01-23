@@ -101,6 +101,10 @@ impl RichText {
     pub fn add_part(&mut self, s: &str, color: Color, font: &'static Font) {
         self.0.extend(s.chars().map(|c| RichChar { c, color, font }));
     }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 #[derive(Clone)]

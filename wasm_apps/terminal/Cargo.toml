@@ -10,11 +10,17 @@ guestlib = { path = "../../guestlib" }
 
 
 # Patched version of Rhai that allows no_std on WASM targets
-[dependencies.rhai]
-git = "https://github.com/Askannz/rhai"
-rev = "323e08f92649bc06b4527360b9b62aa26c06e320"
-default-features = false
-features = ["no_std"]
+# [dependencies.rhai]
+# git = "https://github.com/Askannz/rhai"
+# rev = "323e08f92649bc06b4527360b9b62aa26c06e320"
+# default-features = false
+# features = ["no_std"]
+
+
+[dependencies.rustpython]
+git = "https://github.com/RustPython/RustPython"
+rev = "3eda1cf3b4a29eb35c30f2a3ed272771c642c065"
+features = [ "freeze-stdlib" ]
 
 # To avoid error about missing tests
 [[bin]]

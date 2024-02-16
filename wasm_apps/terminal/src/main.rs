@@ -1,13 +1,10 @@
-#![no_std]
-#![no_main]
-
 extern crate alloc;
 
 use core::cell::OnceCell;
 use alloc::{format, borrow::ToOwned};
 use alloc::string::String;
 use alloc::vec::Vec;
-use guestlib::{println, FramebufferHandle};
+use guestlib::{FramebufferHandle};
 use applib::{Color, Rect};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP};
@@ -15,11 +12,14 @@ use applib::drawing::text::{draw_rich_text, RichText, HACK_15, Font};
 use applib::ui::button::{Button, ButtonConfig};
 use applib::ui::text::{ScrollableText, TextConfig};
 
+mod python;
+
 struct AppState {
     fb_handle: FramebufferHandle,
     input_buffer: String,
     console_buffer: Vec<EvalResult>,
-    rhai_engine: rhai::Engine,
+    //rhai_engine: rhai::Engine,
+    python: python::Python,
 
     font: &'static Font,
 
@@ -46,6 +46,10 @@ const RED: Color = Color::from_rgb(255, 0, 0);
 const GREEN: Color = Color::from_rgb(0, 255, 0);
 const YELLOW: Color = Color::from_rgb(255, 255, 0);
 
+fn main() {
+    
+}
+
 #[no_mangle]
 pub fn init() -> () {
 
@@ -64,7 +68,8 @@ pub fn init() -> () {
         fb_handle,
         input_buffer: String::with_capacity(100),
         console_buffer: Vec::with_capacity(500),
-        rhai_engine: rhai::Engine::new(),
+        //rhai_engine: rhai::Engine::new(),
+        python: python::Python::new(),
         font,
         button: Button::new(&ButtonConfig { 
             text: "Clear".to_owned(),
@@ -128,9 +133,17 @@ pub fn step() {
 
                     let cmd = state.input_buffer.to_owned();
 
-                    let result = match state.rhai_engine.eval::<rhai::Dynamic>(&cmd) {
-                        Ok(res) => EvalResult { cmd, res: format!("{:?}", res), success: true },
-                        Err(res) => EvalResult { cmd, res: format!("{:?}", res), success: false },
+                    // let result = match state.rhai_engine.eval::<rhai::Dynamic>(&cmd) {
+                    //     Ok(res) => EvalResult { cmd, res: format!("{:?}", res), success: true },
+                    //     Err(res) => EvalResult { cmd, res: format!("{:?}", res), success: false },
+                    // };
+
+                    // TEMP, TODO
+                    let res = state.python.run_code(&cmd);
+                    let result = EvalResult {
+                        cmd,
+                        res,
+                        success: true,
                     };
                     
                     //state.console_buffer.push_str(&format!("$ {}\n  > {}\n", state.input_buffer, result));

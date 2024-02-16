@@ -71,22 +71,22 @@ pub fn get_framebuffer<'a>(handle: &'a mut FramebufferHandle) -> Framebuffer<'a>
     Framebuffer::new(fb_data, w, h)
 }
 
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => {
-        $crate::print_console(&format!($($arg)*))
-    };
-}
+// #[macro_export]
+// macro_rules! print {
+//     ($($arg:tt)*) => {
+//         $crate::print_console(&format!($($arg)*))
+//     };
+// }
 
-#[macro_export]
-macro_rules! println {
-    () => (print!("\n"));
-    ($fmt:expr) => ($crate::print!(concat!($fmt, "\n")));
-    ($fmt:expr, $($arg:tt)*) => ($crate::print!(concat!($fmt, "\n"), $($arg)*));
-}
+// #[macro_export]
+// macro_rules! println {
+//     () => (print!("\n"));
+//     ($fmt:expr) => ($crate::print!(concat!($fmt, "\n")));
+//     ($fmt:expr, $($arg:tt)*) => ($crate::print!(concat!($fmt, "\n"), $($arg)*));
+// }
 
-#[panic_handler]
-fn panic(info: &PanicInfo) ->  ! {
-    println!("{}", info);
-    loop {}
-}
+// #[panic_handler]
+// fn panic(info: &PanicInfo) ->  ! {
+//     println!("{}", info);
+//     loop {}
+// }

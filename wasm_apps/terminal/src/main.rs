@@ -14,11 +14,15 @@ use applib::ui::text::{ScrollableText, TextConfig};
 
 mod python;
 
+struct EvalResult {
+    cmd: String,
+    pyres: python::EvalResult,
+}
+
 struct AppState {
     fb_handle: FramebufferHandle,
     input_buffer: String,
     console_buffer: Vec<EvalResult>,
-    //rhai_engine: rhai::Engine,
     python: python::Python,
 
     font: &'static Font,
@@ -30,13 +34,6 @@ struct AppState {
     shift_pressed: bool,
 
     first_frame: bool,
-}
-
-#[derive(Debug)]
-struct EvalResult {
-    cmd: String,
-    res: String,
-    success: bool,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -133,25 +130,19 @@ pub fn step() {
 
                     let cmd = state.input_buffer.to_owned();
 
-                    // let result = match state.rhai_engine.eval::<rhai::Dynamic>(&cmd) {
-                    //     Ok(res) => EvalResult { cmd, res: format!("{:?}", res), success: true },
-                    //     Err(res) => EvalResult { cmd, res: format!("{:?}", res), success: false },
-                    // };
-
-                    // TEMP, TODO
-                    let res = state.python.run_code(&cmd);
-                    let result = EvalResult {
-                        cmd,
-                        res,
-                        success: true,
-                    };
+                    let pyres = state.python.run_code(&cmd);
                     
-                    //state.console_buffer.push_str(&format!("$ {}\n  > {}\n", state.input_buffer, result));
-                    state.console_buffer.push(result);
+                    state.console_buffer.push(EvalResult { cmd, pyres });
                     state.input_buffer.clear();
                     console_changed = true;
                     input_changed = true;
                 }
+            },
+
+            // Backspace
+            Some(InputEvent::KeyPress { keycode: Keycode::KEY_BACKSPACE }) => { 
+                state.input_buffer.pop();
+                input_changed = true;
             },
 
             // Character input
@@ -187,10 +178,22 @@ pub fn step() {
         true => {
             let mut console_rich_text = RichText::new();
             for res in state.console_buffer.iter() {
-                console_rich_text.add_part("$ ", YELLOW, font);
+
+                console_rich_text.add_part(">>> ", YELLOW, font);
                 console_rich_text.add_part(&res.cmd, WHITE, font);
-                let res_color = if res.success { WHITE } else { RED };
-                console_rich_text.add_part(&format!("\n  > {}", res.res), res_color, font);
+
+                let color = match &res.pyres {
+                    python::EvalResult::Failure(_) => RED,
+                    _ => WHITE
+                };
+
+                let text = match &res.pyres {
+                    python::EvalResult::Failure(err) => format!("\n{}", err),
+                    python::EvalResult::Success(repr) => format!("\n{}", repr),
+                    python::EvalResult::None => "".to_owned()
+                };
+
+                console_rich_text.add_part(&text, color, font);
                 console_rich_text.add_part("\n", WHITE, font)
             }
             Some(console_rich_text)
@@ -201,7 +204,7 @@ pub fn step() {
     let input_rich_text = match input_changed || state.first_frame {
         true => {
             let mut input_rich_text = RichText::new();
-            input_rich_text.add_part("> ", YELLOW, font);
+            input_rich_text.add_part(">>> ", YELLOW, font);
             input_rich_text.add_part(&state.input_buffer, WHITE, font);
             Some(input_rich_text)
         },

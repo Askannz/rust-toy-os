@@ -1,22 +1,10 @@
 {
 	"folders": [
 		{
-			"path": "kernel"
-		},
-		{
-			"path": "applib"
-		},
-		{
-			"path": "wasm_apps/cube_3d"
-		},
-		{
-			"path": "wasm_apps/chronometer"
-		},
-		{
 			"path": "wasm_apps/terminal"
 		},
 		{
-			"path": "guestlib"
+			"path": "kernel"
 		}
 	],
 	"settings": {}

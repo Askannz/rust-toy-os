@@ -80,6 +80,9 @@ impl WasmEngine {
         linker.define("env", "host_get_system_state", host_get_system_state).unwrap();
         linker.define("env", "host_get_win_rect", host_get_win_rect).unwrap();
         linker.define("env", "host_set_framebuffer", host_set_framebuffer).unwrap();
+
+        add_wasi_functions(&mut store, &mut linker);
+
         let instance = linker
             .instantiate(&mut store, &module).unwrap()
             .start(&mut store).unwrap();
@@ -160,4 +163,151 @@ impl WasmApp {
             system_fb.copy_fb(&wasm_fb, &win_rect, false);
         }
     }
+}
+
+
+//
+// WASI
+
+fn add_wasi_functions(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData>) {
+
+    macro_rules! linker_impl {
+        ($module:expr, $name:expr, $func:expr) => {
+            linker.define(
+                $module, $name,
+                Func::wrap(&mut store, $func)
+            ).unwrap();
+        }
+    }
+
+    macro_rules! linker_stub {
+
+        ($module:expr, $name:expr, [$($x:ty),*], $y:ty) => {
+            linker_impl!(
+                $module, $name,
+                |_: Caller<StoreData>, $(_: $x),*| -> $y { 
+                    panic!("WASM function {}() is not implemented (stub)", $name);
+                }
+            )
+        };
+
+        ($module:expr, $name:expr, [$($x:ty),*], $y:ty, $v:expr) => {
+            linker_impl!(
+                $module, $name,
+                |_: Caller<StoreData>, $(_: $x),*| -> $y {
+                    log::debug!("WASM stub {}() called, returning {:?}", $name, $v);
+                    $v
+                }
+            )
+        }
+    }
+
+    linker_stub!("__main_argc_argv", "env", [i32, i32], i32);
+
+    let m = "wasi_snapshot_preview1";
+
+    linker_stub!(m, "clock_time_get", [i32, i64, i32], i32);
+    linker_stub!(m, "fd_filestat_set_size", [i32, i64], i32);
+    linker_stub!(m, "fd_read", [i32, i32, i32, i32], i32);
+    linker_stub!(m, "fd_readdir", [i32, i32, i32, i64, i32], i32);
+    linker_stub!(m, "path_create_directory", [i32, i32, i32], i32);
+    linker_stub!(m, "path_filestat_get", [i32, i32, i32, i32, i32], i32);
+    linker_stub!(m, "path_link", [i32, i32, i32, i32, i32, i32, i32], i32);
+    linker_stub!(m, "path_open", [i32, i32, i32, i32, i32, i64, i64, i32, i32], i32);
+    linker_stub!(m, "path_readlink", [i32, i32, i32, i32, i32, i32], i32);
+    linker_stub!(m, "path_remove_directory", [i32, i32, i32], i32);
+    linker_stub!(m, "path_rename", [i32, i32, i32, i32, i32, i32], i32);
+    linker_stub!(m, "path_unlink_file", [i32, i32, i32], i32);
+    linker_stub!(m, "poll_oneoff", [i32, i32, i32, i32], i32);
+    linker_stub!(m, "sched_yield", [], i32);
+    linker_stub!(m, "environ_get", [i32, i32], i32);
+    linker_stub!(m, "fd_close", [i32], i32);
+    linker_stub!(m, "fd_filestat_get", [i32, i32], i32);
+    linker_stub!(m, "fd_prestat_dir_name", [i32, i32, i32], i32);
+    linker_stub!(m, "fd_sync", [i32], i32);
+    linker_stub!(m, "path_filestat_set_times", [i32, i32, i32, i32, i64, i64, i32], i32);
+    linker_stub!(m, "fd_fdstat_set_flags", [i32, i32], i32);
+
+    linker_stub!(m, "args_get", [i32, i32], i32, Errno::SUCCESS as i32);
+    linker_stub!(m, "proc_exit", [i32], (), ());
+    linker_stub!(m, "fd_fdstat_get", [i32, i32], i32, Errno::EBADFS as i32);
+    linker_stub!(m, "fd_seek", [i32, i64, i32, i32], i32, Errno::EBADFS as i32);
+    linker_stub!(m, "fd_prestat_get", [i32, i32], i32, Errno::EBADFS as i32);
+
+    linker_impl!(m, "random_get", |mut caller: Caller<StoreData>, buf: i32, buf_len: i32| -> i32 { 
+
+        log::debug!("Function random_get() called (dest buffer {:#x})", buf);
+
+        let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let mem_data = mem.data_mut(&mut caller);
+
+        let buf = buf as usize;
+        let buf_len = buf_len as usize;
+
+        mem_data[buf..buf+buf_len].fill(0xFF);
+
+        0
+    });
+
+
+    linker_impl!(m, "environ_sizes_get", |mut caller: Caller<StoreData>, environ_count: i32, environ_buf_size: i32| -> i32 {
+
+        log::debug!("Function environ_sizes_get() called (dest buffers {:#x} {:#x})", environ_count, environ_buf_size);
+
+        let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let mem_data = mem.data_mut(&mut caller);
+
+        let environ_count = environ_count as usize;
+        let environ_buf_size = environ_buf_size as usize;
+
+        mem_data[environ_count..environ_count+4].fill(0x00);
+        mem_data[environ_buf_size..environ_buf_size+4].fill(0x00);
+
+        0
+    });
+
+    linker_impl!(m, "args_sizes_get", |mut caller: Caller<StoreData>, argc: i32, argv_buf_size: i32| -> i32 {
+
+        log::debug!("Function environ_sizes_get() called (dest buffers {:#x} {:#x})", argc, argv_buf_size);
+
+        let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let mem_data = mem.data_mut(&mut caller);
+
+        let argc = argc as usize;
+        let argv_buf_size = argv_buf_size as usize;
+
+        mem_data[argc..argc+4].fill(0x00);
+        mem_data[argv_buf_size..argv_buf_size+4].fill(0x00);
+
+        0
+    });
+
+    linker_impl!(m, "fd_write", |mut caller: Caller<StoreData>, _fd: i32, iovs: i32, _iovs_len: i32, nwritten: i32| -> i32 {
+ 
+        //log::debug!("Function fd_write() called (fd {} iovs_len {})", fd, iovs_len);
+
+        let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let mem_data = mem.data_mut(&mut caller);
+
+        let iovs = iovs as usize;
+        let nwritten = nwritten as usize;
+
+        let buf_ptr =  u32::from_le_bytes(mem_data[iovs..iovs+4].try_into().unwrap()) as usize;
+        let buf_len =  u32::from_le_bytes(mem_data[iovs+4..iovs+8].try_into().unwrap()) as usize;
+
+        let s = core::str::from_utf8(&mem_data[buf_ptr..buf_ptr+buf_len]).unwrap();
+
+        log::debug!("{}", s);
+
+        mem_data[nwritten..nwritten+4].copy_from_slice((buf_len as u32).to_le_bytes().as_slice());
+
+        0
+    });
+}
+
+#[repr(i32)]
+#[derive(Debug)]
+enum Errno {
+    SUCCESS = 0,
+    EBADFS = 8,
 }

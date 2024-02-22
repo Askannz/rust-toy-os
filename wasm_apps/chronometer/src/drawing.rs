@@ -4,7 +4,6 @@ use applib::drawing::primitives::{ScreenPoint, draw_triangle};
 
 
 const PI: f64 = 3.14159265359;
-const COLOR: Color = Color::from_rgba(0xff, 0xff, 0xff, 0xff);
 
 const HAND_BASE_HALF_W: f64 = 7.0;
 const HAND_LEN: f64 = 80.0;
@@ -31,6 +30,6 @@ pub fn draw_chrono(fb: &mut Framebuffer, time: f64) {
         ScreenPoint { x: p2x as i64, y: p2y as i64 },
     ];
 
-    draw_triangle(fb, &tri, COLOR);
+    draw_triangle(fb, &tri, Color::WHITE);
 }
 

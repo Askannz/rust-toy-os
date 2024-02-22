@@ -4,7 +4,7 @@ use core::cell::OnceCell;
 use alloc::{format, borrow::ToOwned};
 use alloc::string::String;
 use alloc::vec::Vec;
-use guestlib::{FramebufferHandle};
+use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP};
@@ -38,14 +38,7 @@ struct AppState {
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
-const WHITE: Color = Color::from_rgb(255, 255, 255);
-const RED: Color = Color::from_rgb(255, 0, 0);
-const GREEN: Color = Color::from_rgb(0, 255, 0);
-const YELLOW: Color = Color::from_rgb(255, 255, 0);
-
-fn main() {
-    
-}
+fn main() {}
 
 #[no_mangle]
 pub fn init() -> () {
@@ -179,12 +172,12 @@ pub fn step() {
             let mut console_rich_text = RichText::new();
             for res in state.console_buffer.iter() {
 
-                console_rich_text.add_part(">>> ", YELLOW, font);
-                console_rich_text.add_part(&res.cmd, WHITE, font);
+                console_rich_text.add_part(">>> ", Color::YELLOW, font);
+                console_rich_text.add_part(&res.cmd, Color::WHITE, font);
 
                 let color = match &res.pyres {
-                    python::EvalResult::Failure(_) => RED,
-                    _ => WHITE
+                    python::EvalResult::Failure(_) => Color::RED,
+                    _ => Color::WHITE
                 };
 
                 let text = match &res.pyres {
@@ -194,7 +187,7 @@ pub fn step() {
                 };
 
                 console_rich_text.add_part(&text, color, font);
-                console_rich_text.add_part("\n", WHITE, font)
+                console_rich_text.add_part("\n", Color::WHITE, font)
             }
             Some(console_rich_text)
         },
@@ -204,8 +197,8 @@ pub fn step() {
     let input_rich_text = match input_changed || state.first_frame {
         true => {
             let mut input_rich_text = RichText::new();
-            input_rich_text.add_part(">>> ", YELLOW, font);
-            input_rich_text.add_part(&state.input_buffer, WHITE, font);
+            input_rich_text.add_part(">>> ", Color::YELLOW, font);
+            input_rich_text.add_part(&state.input_buffer, Color::WHITE, font);
             Some(input_rich_text)
         },
         false => None
@@ -218,7 +211,7 @@ pub fn step() {
 
     if !redraw { return; }
 
-    framebuffer.fill(Color::from_rgb(0, 0, 0));
+    framebuffer.fill(Color::BLACK);
     
     state.button.draw(&mut framebuffer);
     state.console_area.draw(&mut framebuffer);

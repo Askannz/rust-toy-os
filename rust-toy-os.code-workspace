@@ -5,6 +5,18 @@
 		},
 		{
 			"path": "kernel"
+		},
+		{
+			"path": "applib"
+		},
+		{
+			"path": "guestlib"
+		},
+		{
+			"path": "wasm_apps/chronometer"
+		},
+		{
+			"path": "wasm_apps/cube_3d"
 		}
 	],
 	"settings": {}

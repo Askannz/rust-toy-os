@@ -204,10 +204,10 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 
     const ALPHA_SHADOW: u8 = 100;
 
-    const COLOR_IDLE: Color = Color::from_rgba(0x44, 0x44, 0x44, 0xff);
-    const COLOR_HOVER: Color = Color::from_rgba(0x88, 0x88, 0x88, 0xff);
-    const COLOR_SHADOW: Color = Color::from_rgba(0x0, 0x0, 0x0, ALPHA_SHADOW);
-    const COLOR_TEXT: Color = Color::from_rgba(0xff, 0xff, 0xff, 0xff);
+    const COLOR_IDLE: Color = Color::rgba(0x44, 0x44, 0x44, 0xff);
+    const COLOR_HOVER: Color = Color::rgba(0x88, 0x88, 0x88, 0xff);
+    const COLOR_SHADOW: Color = Color::rgba(0x0, 0x0, 0x0, ALPHA_SHADOW);
+    const COLOR_TEXT: Color = Color::rgba(0xff, 0xff, 0xff, 0xff);
 
     const OFFSET_SHADOW: i64 = 10;
     const DECO_PADDING: i64 = 5;
@@ -280,7 +280,7 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 fn draw_cursor(fb: &mut Framebuffer, system_state: &SystemState) {
 
     const CURSOR_SIZE: u32 = 5;
-    const CURSOR_COLOR: Color = Color::from_rgba(0xff, 0xff, 0xff, 0xff);
+    const CURSOR_COLOR: Color = Color::WHITE;
 
     let pointer_state = &system_state.input.pointer;
     let x = pointer_state.x;
@@ -367,17 +367,11 @@ impl FpsManager {
 
         const SMOOTHING: f64 = 0.8;
 
-        const WHITE: Color = Color::from_rgba(255, 255, 255, 255);
-        const BLACK: Color = Color::from_rgba(0, 0, 0, 255);
-        const GREEN: Color = Color::from_rgba(0, 255, 0, 255);
-        const RED: Color = Color::from_rgba(255, 0, 0, 255);
-        const YELLOW: Color = Color::from_rgba(255, 255, 0, 255);
-
         let frametime_target = 1000.0 / self.fps_target;
 
         let fps = 1000.0 / self.frametime;
         let s = format!("{:.2} FPS", fps);
-        draw_str(fb, &s, 0, 0, &DEFAULT_FONT, WHITE);
+        draw_str(fb, &s, 0, 0, &DEFAULT_FONT, Color::WHITE);
 
         let char_h = DEFAULT_FONT.char_h as u32;
         let graph_w = 12 * 9;
@@ -385,15 +379,15 @@ impl FpsManager {
         let used_frac = self.used / frametime_target;
         let used_w = (used_frac * graph_w as f64) as u32;
         let graph_color = {
-            if 0.0 <= used_frac && used_frac < 0.50  { GREEN }
-            else if 0.50 <= used_frac && used_frac < 0.75  { YELLOW }
-            else { RED }
+            if 0.0 <= used_frac && used_frac < 0.50  { Color::GREEN }
+            else if 0.50 <= used_frac && used_frac < 0.75  { Color::YELLOW }
+            else { Color::RED }
         };
-        draw_rect(fb, &Rect { x0: 0, y0: char_h as i64, w: graph_w, h: 12 }, BLACK);
+        draw_rect(fb, &Rect { x0: 0, y0: char_h as i64, w: graph_w, h: 12 }, Color::BLACK);
         draw_rect(fb, &Rect { x0: 0, y0: char_h as i64 + 3, w: used_w, h: graph_h }, graph_color);
 
         let available = frametime_target - self.used;
-        let budget_color = if available > 0.0 { WHITE } else {  RED };
+        let budget_color = if available > 0.0 { Color::WHITE } else {  Color::RED };
         let budget_txt = format!("{:>6.2} ms", available);
         draw_str(fb, &budget_txt, 0, (char_h + graph_h + 6) as i64, &DEFAULT_FONT, budget_color);
 

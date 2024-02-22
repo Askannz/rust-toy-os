@@ -25,7 +25,16 @@ pub struct Color(pub u32);
 
 impl Color {
 
-    pub const fn from_rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
+    pub const WHITE: Color = Color::rgb(255, 255, 255);
+    pub const BLACK: Color = Color::rgb(0, 0, 0);
+    pub const RED: Color = Color::rgb(255, 0, 0);
+    pub const GREEN: Color = Color::rgb(0, 255, 0);
+    pub const BLUE: Color = Color::rgb(0, 0, 255);
+    pub const YELLOW: Color = Color::rgb(255, 255, 0);
+    pub const FUCHSIA: Color = Color::rgb(255, 0, 255);
+    pub const AQUA: Color = Color::rgb(0, 250, 255);
+
+    pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
 
         let (r, g, b, a) = (r as u32, g as u32, b as u32, a as u32);
 
@@ -38,8 +47,8 @@ impl Color {
         Color(val)
     }
 
-    pub const fn from_rgb(r: u8, g: u8, b: u8) -> Self {
-        Self::from_rgba(r, g, b, 255)
+    pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
+        Self::rgba(r, g, b, 255)
     }
 
     pub const fn hex(val: u32) -> Self {
@@ -242,7 +251,7 @@ fn blend_colors(c1: Color, c2: Color) -> Color{
     let g = blend_channel(g2, g1, a1);
     let b = blend_channel(b2, b1, a1);
     
-    Color::from_rgba(r, g, b, a2)
+    Color::rgba(r, g, b, a2)
 }
 
 fn blend_channel(val_a: u8, val_b: u8, alpha: u8) -> u8 {

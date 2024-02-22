@@ -8,11 +8,11 @@ set -e
 cd wasm_apps/
 
 cd cube_3d/
-#cargo build --release
+cargo build --release
 cd ../
 
 cd chronometer/
-#cargo build --release
+cargo build --release
 cd ../
 
 cd terminal/

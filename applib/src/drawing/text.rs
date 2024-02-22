@@ -82,7 +82,7 @@ pub fn draw_char(fb: &mut Framebuffer, c: char, x0: i64, y0: i64, font: &Font, c
 
             if val_font > 0 {
                 if let Some(curr_color) = fb.get_pixel(x, y) {
-                    let new_color = blend_colors(Color::from_rgba(r, g, b, val_font), curr_color);
+                    let new_color = blend_colors(Color::rgba(r, g, b, val_font), curr_color);
                     fb.set_pixel(x, y, new_color);
                 }
             }

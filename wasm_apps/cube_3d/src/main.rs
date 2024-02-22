@@ -1,6 +1,3 @@
-#![no_std]
-#![no_main]
-
 use core::cell::OnceCell;
 use applib::Color;
 use guestlib::FramebufferHandle;
@@ -18,6 +15,8 @@ static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
 const W: usize = 200;
 const H: usize = 200;
+
+fn main() {}
 
 #[no_mangle]
 pub fn init() -> () {
@@ -42,6 +41,6 @@ pub fn step() {
     let xf = (pointer.x as f32) / ((W - 1) as f32);
     let yf = (pointer.y as f32) / ((H - 1) as f32);
 
-    framebuffer.fill(Color::from_rgba(0, 0, 0, 0xFF));
+    framebuffer.fill(Color::BLACK);
     draw_scene(&mut framebuffer, &state.scene, xf, yf);
 }

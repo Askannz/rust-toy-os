@@ -5,12 +5,12 @@ use applib::{Color, Framebuffer};
 use applib::drawing::primitives::{draw_triangle, ScreenPoint};
 
 const COLORS: [Color; 6] = [
-    Color::from_rgba(0xff, 0x00, 0x00, 0xFF),
-    Color::from_rgba(0x00, 0xff, 0x00, 0xFF),
-    Color::from_rgba(0x00, 0x00, 0xff, 0xFF),
-    Color::from_rgba(0xff, 0xff, 0x00, 0xFF),
-    Color::from_rgba(0xff, 0x00, 0xff, 0xFF),
-    Color::from_rgba(0x00, 0xff, 0xff, 0xFF),
+    Color::RED,
+    Color::GREEN,
+    Color::BLUE,
+    Color::YELLOW,
+    Color::FUCHSIA,
+    Color::AQUA,
 ];
 const ZOOM: f32 = 0.4;
 const MOUSE_SENSITIVITY: f32 = 5.0;

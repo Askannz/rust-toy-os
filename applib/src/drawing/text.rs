@@ -108,27 +108,27 @@ impl RichText {
 }
 
 #[derive(Clone)]
-struct RichChar {
+pub struct RichChar {
     c: char,
     color: Color,
     font: &'static Font,
 }
 
-pub fn draw_rich_text(fb: &mut Framebuffer, text: &RichText, rect: &Rect, offset: usize) {
+pub type FormattedRichLines = Vec<(Vec<RichChar>, i64)>;
 
-    let Rect { x0, y0, w, h } = *rect;
+pub fn format_rich_lines(text: &RichText, rect: &Rect) -> FormattedRichLines {
 
-    let h: i64 = h.into();
+    let mut formatted_lines = Vec::new();
+
     let rich_vec = &text.0;
 
-    if rich_vec.is_empty() { return; }
+    if rich_vec.is_empty() { return formatted_lines; }
     let max_char_w = rich_vec.iter().map(|rich_char| rich_char.font.char_w).max().unwrap();
 
-    let max_per_line = w as usize / max_char_w;
+    let max_per_line = rect.w as usize / max_char_w;
 
     let mut i0 = 0;
-    let mut y = y0;
-    let mut line_count = 0;
+
     for (i, rich_char) in rich_vec.iter().enumerate() {
 
         let i1 = {
@@ -139,29 +139,31 @@ pub fn draw_rich_text(fb: &mut Framebuffer, text: &RichText, rect: &Rect, offset
 
         if let Some(i1) = i1 {
 
-            if line_count >= offset {
+            let rich_slice = &rich_vec[i0..i1];
 
-                let rich_slice = &rich_vec[i0..i1];
+            let max_char_h = rich_slice.iter()
+                .map(|rich_char| rich_char.font.char_h)
+                .max()
+                .unwrap_or(0) as i64;
 
-                let max_char_h = rich_slice.iter()
-                    .map(|rich_char| rich_char.font.char_h)
-                    .max()
-                    .unwrap_or(0) as i64;
-
-                if y + max_char_h > y0 + h { break; }
-
-                draw_rich_slice(fb, rich_slice, x0, y);
-                y += max_char_h;
-            }
+            formatted_lines.push((rich_slice.to_vec(), max_char_h));
 
             i0 = i + 1;
-            line_count += 1;
         }
     }
 
+    formatted_lines
+
+    // let mut y = y0;
+    // for (rich_slice, x0, max_char_h) in formatted_lines.into_iter().skip(offset) {
+    //     if y + max_char_h > y0 + h { break; }
+    //     draw_rich_slice(fb, rich_slice, x0, y);
+    //     y += max_char_h;
+    // }
+
 }
 
-fn draw_rich_slice(fb: &mut Framebuffer, rich_slice: &[RichChar], x0: i64, y0: i64) {
+pub fn draw_rich_slice(fb: &mut Framebuffer, rich_slice: &[RichChar], x0: i64, y0: i64) {
 
     if rich_slice.is_empty() { return; }
 

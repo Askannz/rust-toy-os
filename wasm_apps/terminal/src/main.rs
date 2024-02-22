@@ -8,8 +8,7 @@ use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP};
-use applib::drawing::text::{draw_rich_text, RichText, HACK_15, Font};
-use applib::ui::button::{Button, ButtonConfig};
+use applib::drawing::text::{RichText, HACK_15, Font};
 use applib::ui::text::{ScrollableText, TextConfig};
 
 mod python;
@@ -27,9 +26,7 @@ struct AppState {
 
     font: &'static Font,
 
-    button: Button,
     console_area: ScrollableText,
-    input_area: ScrollableText,
 
     shift_pressed: bool,
 
@@ -49,29 +46,16 @@ pub fn init() -> () {
     let Rect { w: win_w, h: win_h, .. } = win_rect;
     let font = &HACK_15;
 
-    let char_h = font.char_h as u32;
-    let border_h = 30u32;
-    let rect_console = Rect  { x0: 0, y0: border_h.into(), w: win_w, h: win_h - char_h - border_h};
-    let rect_input = Rect  { x0: 0, y0: (win_h - char_h) as i64, w: win_w, h: char_h};
+    let rect_console = Rect  { x0: 0, y0: 0, w: win_w, h: win_h };
 
     let state = AppState { 
         fb_handle,
         input_buffer: String::with_capacity(100),
         console_buffer: Vec::with_capacity(500),
-        //rhai_engine: rhai::Engine::new(),
         python: python::Python::new(),
         font,
-        button: Button::new(&ButtonConfig { 
-            text: "Clear".to_owned(),
-            ..Default::default()
-        }),
         console_area: ScrollableText::new(&TextConfig { 
             rect: rect_console,
-            ..Default::default()
-        }),
-        input_area: ScrollableText::new(&TextConfig { 
-            rect: rect_input,
-            scrollable: false,
             ..Default::default()
         }),
         shift_pressed: false,
@@ -160,16 +144,11 @@ pub fn step() {
 
     let win_input_state = system_state.input.change_origin(&win_rect);
 
-    let redraw_button = state.button.update(&win_input_state);
-
-    if state.button.is_fired() {
-        state.console_buffer.clear();
-        console_changed = true;
-    }
-
-    let console_rich_text = match console_changed {
+    let console_rich_text = match console_changed || input_changed || state.first_frame {
         true => {
+
             let mut console_rich_text = RichText::new();
+
             for res in state.console_buffer.iter() {
 
                 console_rich_text.add_part(">>> ", Color::YELLOW, font);
@@ -189,33 +168,24 @@ pub fn step() {
                 console_rich_text.add_part(&text, color, font);
                 console_rich_text.add_part("\n", Color::WHITE, font)
             }
+
+            console_rich_text.add_part(">>> ", Color::WHITE, font);
+            console_rich_text.add_part(&state.input_buffer, Color::WHITE, font);
+
             Some(console_rich_text)
         },
         false => None
     };
 
-    let input_rich_text = match input_changed || state.first_frame {
-        true => {
-            let mut input_rich_text = RichText::new();
-            input_rich_text.add_part(">>> ", Color::YELLOW, font);
-            input_rich_text.add_part(&state.input_buffer, Color::WHITE, font);
-            Some(input_rich_text)
-        },
-        false => None
-    };
-
     let redraw_console = state.console_area.update(&win_input_state, console_rich_text);
-    let redraw_input = state.input_area.update(&win_input_state, input_rich_text);
 
-    let redraw = redraw_button || redraw_console || redraw_input || state.first_frame;
+    let redraw = redraw_console || state.first_frame;
 
     if !redraw { return; }
 
     framebuffer.fill(Color::BLACK);
-    
-    state.button.draw(&mut framebuffer);
+
     state.console_area.draw(&mut framebuffer);
-    state.input_area.draw(&mut framebuffer);
 
     state.first_frame = false;
 }

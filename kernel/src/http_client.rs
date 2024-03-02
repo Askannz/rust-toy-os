@@ -102,22 +102,13 @@ impl<'a> TcpSocket for SingleSocketInterface<'a> {
 
             if socket.can_recv() {
 
-                log::debug!("socket.can_recv()");
-                //loop {}
-
                 let recv_len = socket.recv(|recv_buffer| {
-
-                    log::debug!("socket.recv()");
-                    loop {}
 
                     let src_len = recv_buffer.len();
                     let dst_len = buf.len();
                     let cpy_len = usize::min(src_len, dst_len);
 
-                    log::debug!("{} {}", src_len, dst_len);
-                    loop {}
-
-                    buf.copy_from_slice(&recv_buffer[..cpy_len]);
+                    buf[..cpy_len].copy_from_slice(&recv_buffer[..cpy_len]);
                     (cpy_len, cpy_len)
                 }).map_err(anyhow::Error::msg)?;
 
@@ -159,25 +150,17 @@ pub fn test_http(virtio_dev: VirtioNetwork, clock: &SystemClock) {
 
     log::debug!("Sending HTTP GET request");
     socket.write_all(String::from("GET / HTTP/1.1\r\nAccept: text/html\r\n\r\n").as_bytes()).unwrap();
-
-    log::debug!("Waiting for HTTP response");
-    let mut recv_buf = [0u8; 10_000_000];
-
-    log::debug!("Allocated recv buffer");
-
+    
     log::debug!("Delay");
-    clock.spin_delay(60_000.0);
+    clock.spin_delay(1_000.0);
     log::debug!("End delay");
-    //loop {}
 
-    log::debug!("Reading response");
-
+    log::debug!("Reading HTTP response");
+    let mut recv_buf = [0u8; 1024];
     let recv_len = socket.read(&mut recv_buf).unwrap();
 
-    log::debug!("Got HTTP response");
-
     let s = core::str::from_utf8(&recv_buf[..recv_len]).unwrap();
-    log::debug!("got {:?}", s);
+    log::debug!("Got {:?}", s);
 
 }
 

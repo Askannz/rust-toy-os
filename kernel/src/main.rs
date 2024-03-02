@@ -18,9 +18,6 @@ use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
 use applib::ui::button::{Button, ButtonConfig};
 
-use rustls::RootCertStore;
-use webpki_roots::TLS_SERVER_ROOTS;
-
 extern crate alloc;
 
 mod memory;
@@ -33,12 +30,13 @@ mod smoltcp_virtio;
 mod http;
 mod wasm;
 
+//mod tls;
 mod http_client;
 
 use time::SystemClock;
 use http::HttpServer;
 
-use http_client::HttpClient;
+use http_client::test_http;
 
 
 use virtio::gpu::VirtioGPU;
@@ -162,7 +160,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     // let ip_cidr = IpCidr::new(IpAddress::v4(10, 0, 0, 1), 8);
     // let mut server = HttpServer::new(virtio_net, ip_cidr, port);
 
-    let mut client = HttpClient::new(virtio_net);
+    
 
     // log::info!("HTTP server initialized");
 
@@ -177,6 +175,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         time: clock.time(),
     };
 
+    test_http(virtio_net, &clock);
+
     log::info!("Entering main loop");
 
     loop {
@@ -187,7 +187,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         update_input_state(&mut system_state, (w, h), &mut virtio_inputs);
 
         //server.update();
-        client.update();
+        //client.update();
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 

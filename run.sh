@@ -55,9 +55,13 @@ sudo qemu-system-x86_64 -enable-kvm \
     -device virtio-mouse \
     -vga virtio \
     -display gtk,zoom-to-fit=off \
-    -device virtio-net-pci,netdev=network0 -netdev tap,id=network0,ifname=tap0,script=no,downscript=no \
+    -device virtio-net-pci,netdev=network0 -netdev user,id=network0 \
+    -object filter-dump,id=f1,netdev=network0,file=dump.dat \
     -monitor stdio \
     -serial file:log.txt
+    
+    # -device virtio-net-pci,netdev=network0 -netdev tap,id=network0,ifname=tap0,script=no,downscript=no \
+    # -device virtio-net-pci,netdev=network0 -netdev user,id=network0 \
 
     #-nic user,model=virtio-net-pci,hostfwd=tcp::8888-:22 \
     #-nic bridge,br=br0,model=virtio-net-pci \

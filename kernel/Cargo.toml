@@ -20,6 +20,9 @@ enumn = "0.1.12"
 wasmi = { version = "0.31.0", default-features = false }
 anyhow = { version = "1.0.75", default-features = false }
 
+rustls = { git = "https://github.com/rustls/rustls.git", default-features = false }
+webpki-roots = "0.26"
+
 
 [[bin]]
 name = "kernel"

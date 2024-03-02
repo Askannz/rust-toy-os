@@ -18,6 +18,9 @@ use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
 use applib::ui::button::{Button, ButtonConfig};
 
+use rustls::RootCertStore;
+use webpki_roots::TLS_SERVER_ROOTS;
+
 extern crate alloc;
 
 mod memory;
@@ -30,8 +33,12 @@ mod smoltcp_virtio;
 mod http;
 mod wasm;
 
+mod http_client;
+
 use time::SystemClock;
 use http::HttpServer;
+
+use http_client::HttpClient;
 
 
 use virtio::gpu::VirtioGPU;
@@ -151,11 +158,15 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     log::info!("Applications loaded");
 
-    let port = 1234;
-    let ip_cidr = IpCidr::new(IpAddress::v4(10, 0, 0, 1), 24);
-    let mut server = HttpServer::new(virtio_net, ip_cidr, port);
+    // let port = 1234;
+    // let ip_cidr = IpCidr::new(IpAddress::v4(10, 0, 0, 1), 8);
+    // let mut server = HttpServer::new(virtio_net, ip_cidr, port);
 
-    log::info!("HTTP server initialized");
+    let mut client = HttpClient::new(virtio_net);
+
+    // log::info!("HTTP server initialized");
+
+
 
     let runtime_services = unsafe { system_table.runtime_services() };
     let clock = SystemClock::new(runtime_services);
@@ -175,7 +186,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         system_state.time = clock.time();
         update_input_state(&mut system_state, (w, h), &mut virtio_inputs);
 
-        server.update();
+        //server.update();
+        client.update();
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 

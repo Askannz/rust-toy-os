@@ -26,9 +26,8 @@ cd ../
 # Embedding binary data
 
 mkdir -p embedded_data/
-#cp wasm_apps/cube_3d/target/wasm32-unknown-unknown/release/cube_3d.wasm embedded_data/cube_3d.wasm
-#cp wasm_apps/chronometer/target/wasm32-unknown-unknown/release/chronometer.wasm embedded_data/chronometer.wasm
-#cp wasm_apps/terminal/target/wasm32-unknown-unknown/release/terminal.wasm embedded_data/terminal.wasm
+cp wasm_apps/cube_3d/target/wasm32-wasi/release/cube_3d.wasm embedded_data/cube_3d.wasm
+cp wasm_apps/chronometer/target/wasm32-wasi/release/chronometer.wasm embedded_data/chronometer.wasm
 cp wasm_apps/terminal/target/wasm32-wasi/release/terminal.wasm embedded_data/terminal.wasm
 
 

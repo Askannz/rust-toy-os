@@ -1,11 +1,20 @@
 use core::mem::size_of;
+use core::cell::RefCell;
+use alloc::vec;
+use alloc::rc::Rc;
 use alloc::{string::String, borrow::ToOwned};
+use smoltcp::iface::SocketHandle;
+use smoltcp::socket::tcp::Socket;
+use smoltcp::wire::{EthernetAddress, IpCidr, IpAddress, Ipv4Address};
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext};
+use spin::Mutex;
 
 use applib::{SystemState, Framebuffer, Rect};
 
+use crate::network::TcpStack;
+
 pub struct WasmEngine {
-    engine: Engine
+    engine: Engine,
 }
 
 impl WasmEngine {
@@ -15,10 +24,10 @@ impl WasmEngine {
         WasmEngine { engine }
     }
 
-    pub fn instantiate_app(&self, wasm_code: &[u8], app_name: &str, init_rect: &Rect) -> WasmApp {
+    pub fn instantiate_app(&self, tcp_stack: Rc<RefCell<TcpStack>>, wasm_code: &[u8], app_name: &str, init_rect: &Rect) -> WasmApp {
 
         let module = Module::new(&self.engine, wasm_code).unwrap();
-        let store_data = StoreData::new(app_name, init_rect);
+        let store_data = StoreData::new(tcp_stack, app_name, init_rect);
         let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
 
         //
@@ -71,6 +80,74 @@ impl WasmEngine {
             });
         });
 
+        let host_tcp_connect = Func::wrap(&mut store, |mut caller: Caller<StoreData>, ip_addr: i32, port: i32| {
+            let data_mut = caller.data_mut();
+            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+
+            let ip_bytes = ip_addr.to_le_bytes();
+            let port: u16 = port.try_into().expect("Invalid port value");
+
+            let socket_handle = tcp_stack.connect(Ipv4Address(ip_bytes), port);
+            data_mut.socket_handle = Some(socket_handle);
+        });
+
+        let host_tcp_may_send = Func::wrap(&mut store, |caller: Caller<StoreData>| -> i32 {
+            let data = caller.data();
+            let tcp_stack = data.tcp_stack.borrow_mut();
+            let socket_handle = data.socket_handle.expect("No TCP connection");
+            tcp_stack.may_send(socket_handle).into()
+        });
+
+        let host_tcp_may_recv = Func::wrap(&mut store, |caller: Caller<StoreData>| -> i32 {
+            let data = caller.data();
+            let tcp_stack = data.tcp_stack.borrow_mut();
+            let socket_handle = data.socket_handle.expect("No TCP connection");
+            tcp_stack.may_recv(socket_handle).into()
+        });
+
+        let host_tcp_write = Func::wrap(&mut store, |mut caller: Caller<StoreData>, addr: i32, len: i32| -> i32 {
+
+            let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+            let mem_data = mem.data(&caller);
+            let len = len as usize;
+            let addr = addr as usize;
+            let buf = mem_data[addr..addr+len].to_vec();
+
+            let data_mut = caller.data_mut();
+            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+
+            let socket_handle = data_mut.socket_handle.expect("No TCP connection");
+
+            let written_len = tcp_stack.write(socket_handle, &buf);
+
+            let written_len: i32 = written_len.try_into().unwrap();
+
+            written_len
+        });
+
+        let host_tcp_read = Func::wrap(&mut store, |mut caller: Caller<StoreData>, addr: i32, len: i32| -> i32 {
+
+            let len = len as usize;
+            let addr = addr as usize;
+
+            let mut buf = vec![0; len];
+
+            let read_len: usize = {
+                let data_mut = caller.data_mut();
+                let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+                let socket_handle = data_mut.socket_handle.expect("No TCP connection");
+                tcp_stack.read(socket_handle, &mut buf)
+            };
+
+            let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+            let mem_data = mem.data_mut(&mut caller);
+
+            mem_data[addr..addr+read_len].copy_from_slice(&buf[..read_len]);
+
+            let read_len: i32 = read_len.try_into().unwrap();
+
+            read_len
+        });
 
         //
         // Instantiating app
@@ -80,6 +157,11 @@ impl WasmEngine {
         linker.define("env", "host_get_system_state", host_get_system_state).unwrap();
         linker.define("env", "host_get_win_rect", host_get_win_rect).unwrap();
         linker.define("env", "host_set_framebuffer", host_set_framebuffer).unwrap();
+        linker.define("env", "host_tcp_connect", host_tcp_connect).unwrap();
+        linker.define("env", "host_tcp_may_send", host_tcp_may_send).unwrap();
+        linker.define("env", "host_tcp_may_recv", host_tcp_may_recv).unwrap();
+        linker.define("env", "host_tcp_write", host_tcp_write).unwrap();
+        linker.define("env", "host_tcp_read", host_tcp_read).unwrap();
 
         add_wasi_functions(&mut store, &mut linker);
 
@@ -118,12 +200,22 @@ struct StoreData {
     app_name: String,
     system_state: Option<SystemState>,
     win_rect: Rect,
-    framebuffer: Option<WasmFramebufferDef>
+    framebuffer: Option<WasmFramebufferDef>,
+
+    tcp_stack: Rc<RefCell<TcpStack>>,
+    socket_handle: Option<SocketHandle>
 }
 
 impl StoreData {
-    fn new(app_name: &str, init_rect: &Rect) -> Self {
-        StoreData { app_name: app_name.to_owned(), system_state: None, framebuffer: None, win_rect: init_rect.clone() }
+    fn new(tcp_stack: Rc<RefCell<TcpStack>>, app_name: &str, init_rect: &Rect) -> Self {
+        StoreData { 
+            app_name: app_name.to_owned(),
+            system_state: None,
+            framebuffer: None,
+            win_rect: init_rect.clone(),
+            tcp_stack,
+            socket_handle: None,
+        }
     }
 }
 

@@ -20,6 +20,11 @@ fn main() {}
 
 #[no_mangle]
 pub fn init() -> () {
+
+    // TESTING
+    // println!("Connecting TCP");
+    // guestlib::tcp_connect();
+
     let win_rect = guestlib::get_win_rect();
     let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
     let state = AppState { fb_handle };

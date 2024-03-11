@@ -11,10 +11,17 @@ use applib::{SystemState, Framebuffer, Rect};
 static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
 
 extern "C" {
+
     fn host_print_console(addr: i32, len: i32);
     fn host_get_system_state(addr: i32);
     fn host_get_win_rect(addr: i32);
     fn host_set_framebuffer(addr: i32, w: i32, h: i32);
+
+    fn host_tcp_connect(ip_addr: i32, port: i32);
+    fn host_tcp_may_send() -> i32;
+    fn host_tcp_may_recv() -> i32;
+    fn host_tcp_write(addr: i32, len: i32) -> i32;
+    fn host_tcp_read(addr: i32, len: i32) -> i32;
 }
 
 
@@ -69,6 +76,39 @@ pub fn get_framebuffer<'a>(handle: &'a mut FramebufferHandle) -> Framebuffer<'a>
     };
 
     Framebuffer::new(fb_data, w, h)
+}
+
+
+pub fn tcp_connect(ip_addr: [u8; 4], port: u16) {
+    let ip_addr: i32 = i32::from_le_bytes(ip_addr);
+    let port: i32 = port.into();
+    unsafe { host_tcp_connect(ip_addr, port) }
+}
+
+pub fn tcp_may_send() -> bool {
+    unsafe { host_tcp_may_send() != 0 }
+}
+
+pub fn tcp_may_recv() -> bool {
+    unsafe { host_tcp_may_recv() != 0 }
+}
+
+pub fn tcp_write(buf: &[u8]) -> usize {
+    unsafe {
+        let addr = buf.as_ptr() as i32;
+        let len = buf.len() as i32;
+        let written_len = host_tcp_write(addr, len);
+        written_len.try_into().unwrap()
+    }
+}
+
+pub fn tcp_read(buf: &mut [u8]) -> usize {
+    unsafe {
+        let addr = buf.as_ptr() as i32;
+        let len = buf.len() as i32;
+        let read_len = host_tcp_read(addr, len);
+        read_len.try_into().unwrap()
+    }
 }
 
 // #[macro_export]

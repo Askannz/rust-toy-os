@@ -17,6 +17,9 @@
 		},
 		{
 			"path": "wasm_apps/cube_3d"
+		},
+		{
+			"path": "wasm_apps/web_browser"
 		}
 	],
 	"settings": {}

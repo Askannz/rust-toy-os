@@ -4,13 +4,14 @@
 #![feature(abi_x86_interrupt)]
 
 use core::panic::PanicInfo;
+use core::cell::RefCell;
 use alloc::format;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use alloc::rc::Rc;
 use lazy_static::lazy_static;
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
-use smoltcp::wire::{IpAddress, IpCidr};
 
 use applib::{Color, Rect, Framebuffer, SystemState, decode_png};
 use applib::input::{InputState, InputEvent};
@@ -26,18 +27,10 @@ mod logging;
 mod time;
 mod pci;
 mod virtio;
-mod smoltcp_virtio;
-mod http;
 mod wasm;
-
-//mod tls;
-mod http_client;
+mod network;
 
 use time::SystemClock;
-use http::HttpServer;
-
-use http_client::test_http;
-
 
 use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
@@ -71,7 +64,7 @@ lazy_static! {
     static ref CHRONO_ICON: Framebuffer<'static> = Framebuffer::from_png(include_bytes!("../icons/chronometer.png"));
     static ref TERMINAL_ICON: Framebuffer<'static> = Framebuffer::from_png(include_bytes!("../icons/terminal.png"));
 
-    static ref APPLICATIONS: [AppDescriptor; 3] = [
+    static ref APPLICATIONS: [AppDescriptor; 4] = [
         AppDescriptor {
             data: include_bytes!("../../embedded_data/cube_3d.wasm"),
             launch_rect: Rect { x0: 100, y0: 100, w: 200, h: 40 },
@@ -92,6 +85,13 @@ lazy_static! {
             name: "Terminal",
             init_win_rect: Rect { x0: 400, y0: 300, w: 400, h: 200 },
             icon: Some(&TERMINAL_ICON),
+        },
+        AppDescriptor {
+            data: include_bytes!("../../embedded_data/web_browser.wasm"),
+            launch_rect: Rect { x0: 100, y0: 250, w: 200, h: 40 },
+            name: "Web Browser",
+            init_win_rect: Rect { x0: 400, y0: 300, w: 400, h: 200 },
+            icon: None,
         },
     ];
 }
@@ -130,10 +130,23 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     log::info!("All VirtIO devices created");
 
+    let runtime_services = unsafe { system_table.runtime_services() };
+    let clock = SystemClock::new(runtime_services);
+
+    log::info!("System clock initialized");
+
     virtio_gpu.init_framebuffer();
     virtio_gpu.flush();
 
     log::info!("Display initialized");
+
+    let tcp_stack = network::TcpStack::new(&clock, virtio_net);
+    let tcp_stack = Rc::new(RefCell::new(tcp_stack));
+
+    //let socket_handle = tcp_stack.borrow_mut().connect(Ipv4Address([93, 184, 216, 34]), 80);
+
+
+    log::info!("TCP stack initialized");
 
     let (w, h) = virtio_gpu.get_dims();
     let (w, h) = (w as u32, h as u32);
@@ -141,7 +154,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
         descriptor: app_desc.clone(),
-        wasm_app: wasm_engine.instantiate_app(app_desc.data, app_desc.name, &app_desc.init_win_rect),
+        wasm_app: wasm_engine.instantiate_app(tcp_stack.clone(), app_desc.data, app_desc.name, &app_desc.init_win_rect),
         is_open: false,
         rect: app_desc.init_win_rect.clone(),
         grab_pos: None,
@@ -156,18 +169,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     log::info!("Applications loaded");
 
-    // let port = 1234;
-    // let ip_cidr = IpCidr::new(IpAddress::v4(10, 0, 0, 1), 8);
-    // let mut server = HttpServer::new(virtio_net, ip_cidr, port);
-
-    
-
-    // log::info!("HTTP server initialized");
-
-
-
-    let runtime_services = unsafe { system_table.runtime_services() };
-    let clock = SystemClock::new(runtime_services);
     let mut fps_manager = FpsManager::new(FPS_TARGET);
 
     let mut system_state = SystemState { 
@@ -175,19 +176,17 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         time: clock.time(),
     };
 
-    test_http(virtio_net, &clock);
-
     log::info!("Entering main loop");
+
 
     loop {
 
         fps_manager.start_frame(&clock);
 
+        tcp_stack.borrow_mut().poll_interface(&clock);
+
         system_state.time = clock.time();
         update_input_state(&mut system_state, (w, h), &mut virtio_inputs);
-
-        //server.update();
-        //client.update();
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 

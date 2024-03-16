@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 applib = { path = "../../applib" }
 guestlib = { path = "../../guestlib" }
+rustls = { version = "0.23.1", default-features = false, features = ["ring", "tls12", "std"]}
+webpki-roots = "0.26"
 
 # To avoid error about missing tests
 [[bin]]

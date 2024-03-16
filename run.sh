@@ -62,6 +62,7 @@ sudo qemu-system-x86_64 -enable-kvm \
     -device virtio-net-pci,netdev=network0 -netdev user,id=network0 \
     -object filter-dump,id=f1,netdev=network0,file=dump.dat \
     -monitor stdio \
+    -rtc base=utc \
     -serial file:log.txt
     
     # -device virtio-net-pci,netdev=network0 -netdev tap,id=network0,ifname=tap0,script=no,downscript=no \

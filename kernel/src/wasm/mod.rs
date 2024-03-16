@@ -149,6 +149,27 @@ impl WasmEngine {
             read_len
         });
 
+        let clock_time_get = Func::wrap(&mut store, |mut caller: Caller<StoreData>, clock_id: i32, precision: i64, time: i32| -> i32 {
+
+            let buf = time as usize;
+    
+            log::debug!("Function clock_time_get() called (dest buffer {:#x} clock_id {:#x} precision {})", buf, clock_id, precision);
+    
+            let system_state = caller.data()
+                .system_state
+                .as_ref().expect("System state not available");
+
+            let t = (system_state.time * 1e9) as u64;
+
+            let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+            let mem_data = mem.data_mut(&mut caller);
+    
+            let data = t.to_le_bytes();
+            mem_data[buf..buf+8].copy_from_slice(&data);
+    
+            0
+        });
+
         //
         // Instantiating app
 
@@ -162,6 +183,7 @@ impl WasmEngine {
         linker.define("env", "host_tcp_may_recv", host_tcp_may_recv).unwrap();
         linker.define("env", "host_tcp_write", host_tcp_write).unwrap();
         linker.define("env", "host_tcp_read", host_tcp_read).unwrap();
+        linker.define("wasi_snapshot_preview1", "clock_time_get", clock_time_get).unwrap();
 
         add_wasi_functions(&mut store, &mut linker);
 
@@ -298,7 +320,7 @@ fn add_wasi_functions(mut store: &mut Store<StoreData>, linker: &mut Linker<Stor
 
     let m = "wasi_snapshot_preview1";
 
-    linker_stub!(m, "clock_time_get", [i32, i64, i32], i32);
+    //linker_stub!(m, "clock_time_get", [i32, i64, i32], i32);
     linker_stub!(m, "fd_filestat_set_size", [i32, i64], i32);
     linker_stub!(m, "fd_read", [i32, i32, i32, i32], i32);
     linker_stub!(m, "fd_readdir", [i32, i32, i32, i64, i32], i32);

@@ -19,7 +19,7 @@ lazy_static! {
     static ref GATEWAY_ADDR: Ipv4Address = Ipv4Address([10, 0, 2, 2]);
 }
 
-const BUF_SIZE: usize = 1024;
+const BUF_SIZE: usize = 4096;
 
 
 pub struct TcpStack {

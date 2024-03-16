@@ -97,6 +97,7 @@ lazy_static! {
 }
 
 const FPS_TARGET: f64 = 60.0;
+const LIMIT_FPS: bool = true;
 
 
 
@@ -397,16 +398,15 @@ impl FpsManager {
         draw_rect(fb, &Rect { x0: 0, y0: char_h as i64, w: graph_w, h: 12 }, Color::BLACK);
         draw_rect(fb, &Rect { x0: 0, y0: char_h as i64 + 3, w: used_w, h: graph_h }, graph_color);
 
-        let available = frametime_target - self.used;
-        let budget_color = if available > 0.0 { Color::WHITE } else {  Color::RED };
-        let budget_txt = format!("{:>6.2} ms", available);
+        let budget_color = if self.used < frametime_target { Color::WHITE } else {  Color::RED };
+        let budget_txt = format!("{:>6.2} ms", self.used);
         draw_str(fb, &budget_txt, 0, (char_h + graph_h + 6) as i64, &DEFAULT_FONT, budget_color);
 
         let frame_end_t = clock.time();
 
         self.used = frame_end_t - self.frame_start_t;
 
-        let new_frametime = match self.used < frametime_target {
+        let new_frametime = match (self.used < frametime_target) && LIMIT_FPS {
             true => {
                 clock.spin_delay(frametime_target - self.used);
                 frametime_target

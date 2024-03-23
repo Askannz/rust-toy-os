@@ -142,7 +142,7 @@ pub fn step() {
         RequestState::Sending { mut total_sent } => {
             let sent = state.tls_client.as_mut().unwrap().write(&REQUEST_DATA[total_sent..]).unwrap();
             total_sent += sent;
-            println!("TLS: sent {}/{}B", total_sent, REQUEST_DATA.len());
+            //println!("TLS: sent {}/{}B", total_sent, REQUEST_DATA.len());
             if total_sent < REQUEST_DATA.len() {
                 RequestState::Sending { total_sent }
             } else {
@@ -173,7 +173,7 @@ pub fn step() {
                 let read_len = b;
                 state.recv_buffer.extend_from_slice(&buf[..read_len]);
                 total_recv += read_len;
-                println!("Total recv {}", total_recv);
+                //println!("Total recv {}", total_recv);
 
                 RequestState::Receiving { total_recv }
             }
@@ -244,6 +244,7 @@ fn render_html(html: &str) -> RichText {
                 }
             },
             Node::Text(ref text) if is_link => {
+                let text = html_escape::decode_html_entities(text);
                 let line_text = format!("{}{}", " ".repeat(depth), text);
                 rich_text.add_part(&line_text, Color::BLACK, &HACK_15, bg_color);
             }

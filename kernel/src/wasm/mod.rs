@@ -6,7 +6,7 @@ use alloc::{string::String, borrow::ToOwned};
 use smoltcp::iface::SocketHandle;
 use smoltcp::socket::tcp::Socket;
 use smoltcp::wire::{EthernetAddress, IpCidr, IpAddress, Ipv4Address};
-use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext};
+use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext, Memory};
 use spin::Mutex;
 
 use applib::{SystemState, Framebuffer, Rect};
@@ -29,163 +29,9 @@ impl WasmEngine {
         let module = Module::new(&self.engine, wasm_code).unwrap();
         let store_data = StoreData::new(tcp_stack, app_name, init_rect);
         let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
-
-        //
-        // WASM<->System API functions
-    
-        let host_print_console = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32, len: i32| {
-    
-            let ctx = caller.as_context();
-            let app_name = &ctx.data().app_name;
-
-            let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
-            let mem_data = mem.data(&caller);
-            let len = len as usize;
-            let addr = addr as usize;
-            let s = core::str::from_utf8(&mem_data[addr..addr+len]).unwrap().trim_end();
-
-            log::debug!("{}: {}", app_name, s);
-        });
-
-        let host_get_system_state = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32| {
-            let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
-            let system_state = caller.data()
-                .system_state
-                .as_ref().expect("System state not available");
-            unsafe {
-                let len = size_of::<SystemState>();
-                let ptr = system_state as *const SystemState as *const u8;
-                let mem_slice = core::slice::from_raw_parts(ptr, len);
-                mem.write(caller, addr as usize, mem_slice).unwrap();
-            }
-        });
-
-        let host_get_win_rect = Func::wrap(&mut store, |caller: Caller<StoreData>, addr: i32| {
-            let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
-            let win_rect = &caller.data().win_rect;
-
-            unsafe {
-                let len = size_of::<Rect>();
-                let ptr = win_rect as *const Rect as *const u8;
-                let mem_slice = core::slice::from_raw_parts(ptr, len);
-                mem.write(caller, addr as usize, mem_slice).unwrap();
-            }
-        });
-
-        let host_set_framebuffer = Func::wrap(&mut store, |mut caller: Caller<StoreData>, addr: i32, w: i32, h: i32| {
-            caller.data_mut().framebuffer = Some(WasmFramebufferDef { 
-                addr: addr as usize,
-                w: w as u32,
-                h: h as u32,
-            });
-        });
-
-        let host_tcp_connect = Func::wrap(&mut store, |mut caller: Caller<StoreData>, ip_addr: i32, port: i32| {
-            let data_mut = caller.data_mut();
-            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
-
-            let ip_bytes = ip_addr.to_le_bytes();
-            let port: u16 = port.try_into().expect("Invalid port value");
-
-            let socket_handle = tcp_stack.connect(Ipv4Address(ip_bytes), port);
-            data_mut.socket_handle = Some(socket_handle);
-        });
-
-        let host_tcp_may_send = Func::wrap(&mut store, |caller: Caller<StoreData>| -> i32 {
-            let data = caller.data();
-            let tcp_stack = data.tcp_stack.borrow_mut();
-            let socket_handle = data.socket_handle.expect("No TCP connection");
-            tcp_stack.may_send(socket_handle).into()
-        });
-
-        let host_tcp_may_recv = Func::wrap(&mut store, |caller: Caller<StoreData>| -> i32 {
-            let data = caller.data();
-            let tcp_stack = data.tcp_stack.borrow_mut();
-            let socket_handle = data.socket_handle.expect("No TCP connection");
-            tcp_stack.may_recv(socket_handle).into()
-        });
-
-        let host_tcp_write = Func::wrap(&mut store, |mut caller: Caller<StoreData>, addr: i32, len: i32| -> i32 {
-
-            let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
-            let mem_data = mem.data(&caller);
-            let len = len as usize;
-            let addr = addr as usize;
-            let buf = mem_data[addr..addr+len].to_vec();
-
-            let data_mut = caller.data_mut();
-            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
-
-            let socket_handle = data_mut.socket_handle.expect("No TCP connection");
-
-            let written_len = tcp_stack.write(socket_handle, &buf);
-
-            let written_len: i32 = written_len.try_into().unwrap();
-
-            written_len
-        });
-
-        let host_tcp_read = Func::wrap(&mut store, |mut caller: Caller<StoreData>, addr: i32, len: i32| -> i32 {
-
-            let len = len as usize;
-            let addr = addr as usize;
-
-            let mut buf = vec![0; len];
-
-            let read_len: usize = {
-                let data_mut = caller.data_mut();
-                let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
-                let socket_handle = data_mut.socket_handle.expect("No TCP connection");
-                tcp_stack.read(socket_handle, &mut buf)
-            };
-
-            let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
-            let mem_data = mem.data_mut(&mut caller);
-
-            mem_data[addr..addr+read_len].copy_from_slice(&buf[..read_len]);
-
-            let read_len: i32 = read_len.try_into().unwrap();
-
-            read_len
-        });
-
-        let clock_time_get = Func::wrap(&mut store, |mut caller: Caller<StoreData>, clock_id: i32, precision: i64, time: i32| -> i32 {
-
-            let buf = time as usize;
-    
-            log::debug!("Function clock_time_get() called (dest buffer {:#x} clock_id {:#x} precision {})", buf, clock_id, precision);
-    
-            let system_state = caller.data()
-                .system_state
-                .as_ref().expect("System state not available");
-
-            let t = (system_state.time * 1e9) as u64;
-
-            let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
-            let mem_data = mem.data_mut(&mut caller);
-    
-            let data = t.to_le_bytes();
-            mem_data[buf..buf+8].copy_from_slice(&data);
-    
-            0
-        });
-
-        //
-        // Instantiating app
-
         let mut linker = <Linker<StoreData>>::new(&self.engine);
-        linker.define("env", "host_print_console", host_print_console).unwrap();
-        linker.define("env", "host_get_system_state", host_get_system_state).unwrap();
-        linker.define("env", "host_get_win_rect", host_get_win_rect).unwrap();
-        linker.define("env", "host_set_framebuffer", host_set_framebuffer).unwrap();
-        linker.define("env", "host_tcp_connect", host_tcp_connect).unwrap();
-        linker.define("env", "host_tcp_may_send", host_tcp_may_send).unwrap();
-        linker.define("env", "host_tcp_may_recv", host_tcp_may_recv).unwrap();
-        linker.define("env", "host_tcp_write", host_tcp_write).unwrap();
-        linker.define("env", "host_tcp_read", host_tcp_read).unwrap();
-        linker.define("wasi_snapshot_preview1", "clock_time_get", clock_time_get).unwrap();
 
-        add_wasi_functions(&mut store, &mut linker);
+        add_host_apis(&mut store, &mut linker);
 
         let instance = linker
             .instantiate(&mut store, &module).unwrap()
@@ -209,6 +55,48 @@ impl WasmEngine {
             wasm_step,
         }
     }
+}
+
+fn get_wasm_mem_slice<'a>(caller: &'a Caller<StoreData>, addr: i32, len: i32) -> &'a [u8] {
+
+    let mem = get_linear_memory(caller);
+
+    let mem_data = mem.data(caller);
+    let len = len as usize;
+    let addr = addr as usize;
+
+    &mem_data[addr..addr+len]
+}
+
+fn get_wasm_mem_slice_mut<'a>(caller: &'a mut Caller<StoreData>, addr: i32, len: i32) -> &'a mut [u8] {
+
+    let mem = get_linear_memory(caller);
+
+    let mem_data = mem.data_mut(caller);
+    let len = len as usize;
+    let addr = addr as usize;
+
+    &mut mem_data[addr..addr+len]
+}
+
+fn write_to_wasm_mem<'a, T: Sized>(caller: &'a mut Caller<StoreData>, addr: i32, data: &T) {
+
+    let mem = get_linear_memory(caller);
+
+    unsafe {
+        let len = size_of::<T>();
+        let ptr = data as *const T as *const u8;
+        let mem_slice = core::slice::from_raw_parts(ptr, len);
+        mem.write(caller, addr as usize, mem_slice)
+            .expect("Failed to write to WASM memory");
+    }
+}
+
+fn get_linear_memory(caller: &Caller<StoreData>) -> Memory {
+    caller.get_export("memory")
+        .expect("No WASM memory export")
+        .into_memory()
+        .expect("Not a linear memory")
 }
 
 #[derive(Clone)]
@@ -279,11 +167,7 @@ impl WasmApp {
     }
 }
 
-
-//
-// WASI
-
-fn add_wasi_functions(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData>) {
+fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData>) {
 
     macro_rules! linker_impl {
         ($module:expr, $name:expr, $func:expr) => {
@@ -316,11 +200,17 @@ fn add_wasi_functions(mut store: &mut Store<StoreData>, linker: &mut Linker<Stor
         }
     }
 
+    //
+    // Argc/argv stub
+
     linker_stub!("__main_argc_argv", "env", [i32, i32], i32);
+
+
+    //
+    // WASMI stubs (unimplemented)
 
     let m = "wasi_snapshot_preview1";
 
-    //linker_stub!(m, "clock_time_get", [i32, i64, i32], i32);
     linker_stub!(m, "fd_filestat_set_size", [i32, i64], i32);
     linker_stub!(m, "fd_read", [i32, i32, i32, i32], i32);
     linker_stub!(m, "fd_readdir", [i32, i32, i32, i64, i32], i32);
@@ -342,17 +232,46 @@ fn add_wasi_functions(mut store: &mut Store<StoreData>, linker: &mut Linker<Stor
     linker_stub!(m, "path_filestat_set_times", [i32, i32, i32, i32, i64, i64, i32], i32);
     linker_stub!(m, "fd_fdstat_set_flags", [i32, i32], i32);
 
+
+    //
+    // WASMI stubs (with return value)
+
     linker_stub!(m, "args_get", [i32, i32], i32, Errno::SUCCESS as i32);
     linker_stub!(m, "proc_exit", [i32], (), ());
     linker_stub!(m, "fd_fdstat_get", [i32, i32], i32, Errno::EBADFS as i32);
     linker_stub!(m, "fd_seek", [i32, i64, i32, i32], i32, Errno::EBADFS as i32);
     linker_stub!(m, "fd_prestat_get", [i32, i32], i32, Errno::EBADFS as i32);
 
+
+    //
+    // WASMI implementations
+
+    linker_impl!(m, "clock_time_get", |mut caller: Caller<StoreData>, clock_id: i32, precision: i64, time: i32| -> i32 {
+
+        let buf = time as usize;
+
+        log::debug!("Function clock_time_get() called (dest buffer {:#x} clock_id {:#x} precision {})", buf, clock_id, precision);
+
+        let system_state = caller.data()
+            .system_state
+            .as_ref().expect("System state not available");
+
+        let t = (system_state.time * 1e9) as u64;
+
+        let mem = get_linear_memory(&caller);
+        let mem_data = mem.data_mut(&mut caller);
+
+        let data = t.to_le_bytes();
+        mem_data[buf..buf+8].copy_from_slice(&data);
+
+        0
+    });
+
     linker_impl!(m, "random_get", |mut caller: Caller<StoreData>, buf: i32, buf_len: i32| -> i32 { 
 
         log::debug!("Function random_get() called (dest buffer {:#x})", buf);
 
-        let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let mem = get_linear_memory(&caller);
         let mem_data = mem.data_mut(&mut caller);
 
         let buf = buf as usize;
@@ -368,7 +287,7 @@ fn add_wasi_functions(mut store: &mut Store<StoreData>, linker: &mut Linker<Stor
 
         log::debug!("Function environ_sizes_get() called (dest buffers {:#x} {:#x})", environ_count, environ_buf_size);
 
-        let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let mem = get_linear_memory(&caller);
         let mem_data = mem.data_mut(&mut caller);
 
         let environ_count = environ_count as usize;
@@ -384,7 +303,7 @@ fn add_wasi_functions(mut store: &mut Store<StoreData>, linker: &mut Linker<Stor
 
         log::debug!("Function environ_sizes_get() called (dest buffers {:#x} {:#x})", argc, argv_buf_size);
 
-        let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let mem = get_linear_memory(&caller);
         let mem_data = mem.data_mut(&mut caller);
 
         let argc = argc as usize;
@@ -400,7 +319,7 @@ fn add_wasi_functions(mut store: &mut Store<StoreData>, linker: &mut Linker<Stor
  
         //log::debug!("Function fd_write() called (fd {} iovs_len {})", fd, iovs_len);
 
-        let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+        let mem = get_linear_memory(&caller);
         let mem_data = mem.data_mut(&mut caller);
 
         let iovs = iovs as usize;
@@ -417,6 +336,114 @@ fn add_wasi_functions(mut store: &mut Store<StoreData>, linker: &mut Linker<Stor
 
         0
     });
+
+
+    //
+    // APIs specific to this particular WASM environment
+
+    let m = "env";
+
+    linker_impl!(m, "host_print_console", |caller: Caller<StoreData>, addr: i32, len: i32| {
+        let ctx = caller.as_context();
+        let app_name = &ctx.data().app_name;
+        let mem_slice = get_wasm_mem_slice(&caller, addr, len);
+
+        let s = core::str::from_utf8(mem_slice)
+            .expect("Not UTF-8")
+            .trim_end();
+
+        log::debug!("{}: {}", app_name, s);
+    });
+
+    linker_impl!(m, "host_get_system_state", |mut caller: Caller<StoreData>, addr: i32| {
+
+        let system_state = caller.data()
+            .system_state
+            .as_ref()
+            .expect("System state not available")
+            .clone();
+
+        write_to_wasm_mem(&mut caller, addr, &system_state);
+    });
+
+    linker_impl!(m, "host_get_win_rect", |mut caller: Caller<StoreData>, addr: i32| {
+        let win_rect = caller.data().win_rect.clone();
+        write_to_wasm_mem(&mut caller, addr, &win_rect);
+    });
+
+    linker_impl!(m, "host_set_framebuffer", |mut caller: Caller<StoreData>, addr: i32, w: i32, h: i32| {
+        caller.data_mut().framebuffer = Some(WasmFramebufferDef { 
+            addr: addr as usize,
+            w: w as u32,
+            h: h as u32,
+        });
+    });
+
+    linker_impl!(m, "host_tcp_connect", |mut caller: Caller<StoreData>, ip_addr: i32, port: i32| {
+        let data_mut = caller.data_mut();
+        let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+
+        let ip_bytes = ip_addr.to_le_bytes();
+        let port: u16 = port.try_into().expect("Invalid port value");
+
+        let socket_handle = tcp_stack.connect(Ipv4Address(ip_bytes), port);
+        data_mut.socket_handle = Some(socket_handle);
+    });
+
+    linker_impl!(m, "host_tcp_may_send", |caller: Caller<StoreData>| -> i32 {
+        let data = caller.data();
+        let tcp_stack = data.tcp_stack.borrow_mut();
+        let socket_handle = data.socket_handle.expect("No TCP connection");
+        tcp_stack.may_send(socket_handle).into()
+    });
+
+    linker_impl!(m, "host_tcp_may_recv", |caller: Caller<StoreData>| -> i32 {
+        let data = caller.data();
+        let tcp_stack = data.tcp_stack.borrow_mut();
+        let socket_handle = data.socket_handle.expect("No TCP connection");
+        tcp_stack.may_recv(socket_handle).into()
+    });
+
+    linker_impl!(m, "host_tcp_write", |mut caller: Caller<StoreData>, addr: i32, len: i32| -> i32 {
+
+        let buf = get_wasm_mem_slice(&mut caller, addr, len).to_vec();
+
+        let data_mut = caller.data_mut();
+        let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+
+        let socket_handle = data_mut.socket_handle.expect("No TCP connection");
+
+        let written_len = tcp_stack.write(socket_handle, &buf);
+
+        let written_len: i32 = written_len.try_into().unwrap();
+
+        written_len
+    });
+
+    linker_impl!(m, "host_tcp_read", |mut caller: Caller<StoreData>, addr: i32, len: i32| -> i32 {
+
+        let len = len as usize;
+        let addr = addr as usize;
+
+        let mut buf = vec![0; len];
+
+        let read_len: usize = {
+            let data_mut = caller.data_mut();
+            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+            let socket_handle = data_mut.socket_handle.expect("No TCP connection");
+            tcp_stack.read(socket_handle, &mut buf)
+        };
+
+        let mem = get_linear_memory(&caller);
+        let mem_data = mem.data_mut(&mut caller);
+
+        mem_data[addr..addr+read_len].copy_from_slice(&buf[..read_len]);
+
+        let read_len: i32 = read_len.try_into().unwrap();
+
+        read_len
+    });
+
 }
 
 #[repr(i32)]

@@ -90,7 +90,7 @@ lazy_static! {
             data: include_bytes!("../../embedded_data/web_browser.wasm"),
             launch_rect: Rect { x0: 100, y0: 250, w: 200, h: 40 },
             name: "Web Browser",
-            init_win_rect: Rect { x0: 400, y0: 300, w: 400, h: 200 },
+            init_win_rect: Rect { x0: 400, y0: 300, w: 800, h: 600 },
             icon: None,
         },
     ];
@@ -278,7 +278,7 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
             draw_rect(fb, &deco_rect, color_app);
 
             let (x_txt, y_txt) = (app.rect.x0, app.rect.y0 - font_h as i64 - DECO_PADDING);
-            draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, COLOR_TEXT);
+            draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, COLOR_TEXT, None);
 
             let t0 = clock.time();
             app.wasm_app.step(system_state, fb, &app.rect);
@@ -383,7 +383,7 @@ impl FpsManager {
 
         let fps = 1000.0 / self.frametime;
         let s = format!("{:.2} FPS", fps);
-        draw_str(fb, &s, 0, 0, &DEFAULT_FONT, Color::WHITE);
+        draw_str(fb, &s, 0, 0, &DEFAULT_FONT, Color::WHITE, None);
 
         let char_h = DEFAULT_FONT.char_h as u32;
         let graph_w = 12 * 9;
@@ -400,7 +400,7 @@ impl FpsManager {
 
         let budget_color = if self.used < frametime_target { Color::WHITE } else {  Color::RED };
         let budget_txt = format!("{:>6.2} ms", self.used);
-        draw_str(fb, &budget_txt, 0, (char_h + graph_h + 6) as i64, &DEFAULT_FONT, budget_color);
+        draw_str(fb, &budget_txt, 0, (char_h + graph_h + 6) as i64, &DEFAULT_FONT, budget_color, None);
 
         let frame_end_t = clock.time();
 

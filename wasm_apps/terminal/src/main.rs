@@ -151,8 +151,8 @@ pub fn step() {
 
             for res in state.console_buffer.iter() {
 
-                console_rich_text.add_part(">>> ", Color::YELLOW, font);
-                console_rich_text.add_part(&res.cmd, Color::WHITE, font);
+                console_rich_text.add_part(">>> ", Color::YELLOW, font, None);
+                console_rich_text.add_part(&res.cmd, Color::WHITE, font, None);
 
                 let color = match &res.pyres {
                     python::EvalResult::Failure(_) => Color::RED,
@@ -165,12 +165,12 @@ pub fn step() {
                     python::EvalResult::None => "".to_owned()
                 };
 
-                console_rich_text.add_part(&text, color, font);
-                console_rich_text.add_part("\n", Color::WHITE, font)
+                console_rich_text.add_part(&text, color, font, None);
+                console_rich_text.add_part("\n", Color::WHITE, font, None)
             }
 
-            console_rich_text.add_part(">>> ", Color::WHITE, font);
-            console_rich_text.add_part(&state.input_buffer, Color::WHITE, font);
+            console_rich_text.add_part(">>> ", Color::WHITE, font, None);
+            console_rich_text.add_part(&state.input_buffer, Color::WHITE, font, None);
 
             Some(console_rich_text)
         },

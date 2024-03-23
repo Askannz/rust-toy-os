@@ -51,7 +51,7 @@ impl Color {
         Self::rgba(r, g, b, 255)
     }
 
-    pub const fn hex(val: u32) -> Self {
+    pub const fn from_u32(val: u32) -> Self {
         Color(val)
     }
 

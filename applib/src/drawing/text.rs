@@ -52,15 +52,15 @@ lazy_static! {
     }.load();
 }
 
-pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: i64, y0: i64, font: &Font, color: Color) {
+pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>) {
     let mut x = x0;
     for c in s.chars() {
-        draw_char(fb, c, x, y0, font, color);
+        draw_char(fb, c, x, y0, font, color, bg_color);
         x += font.char_w as i64;
     }
 }
 
-pub fn draw_char(fb: &mut Framebuffer, c: char, x0: i64, y0: i64, font: &Font, color: Color) {
+pub fn draw_char(fb: &mut Framebuffer, c: char, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>) {
 
     let mut c = c as u8;
 
@@ -77,6 +77,11 @@ pub fn draw_char(fb: &mut Framebuffer, c: char, x0: i64, y0: i64, font: &Font, c
 
     for x in xc0..=xc1 {
         for y in yc0..=yc1 {
+
+            if let Some(bg_color) = bg_color {
+                fb.set_pixel(x, y, bg_color);
+            }
+
             let i_font = (y - yc0) as usize * char_w * nb_chars + (x - xc0) as usize + c_index * char_w;
             let val_font = font.bitmap[i_font];
 
@@ -98,8 +103,14 @@ impl RichText {
         RichText(Vec::new())
     }
 
-    pub fn add_part(&mut self, s: &str, color: Color, font: &'static Font) {
-        self.0.extend(s.chars().map(|c| RichChar { c, color, font }));
+    pub fn add_part(&mut self, s: &str, color: Color, font: &'static Font, bg_color: Option<Color>) {
+        self.0.extend(s.chars().map(|c| RichChar { c, color, font, bg_color }));
+    }
+
+    pub fn from_str(s: &str, color: Color, font: &'static Font, bg_color: Option<Color>) -> Self {
+        let mut t = Self::new();
+        t.add_part(s, color, font, bg_color);
+        t
     }
 
     pub fn len(&self) -> usize {
@@ -112,6 +123,7 @@ pub struct RichChar {
     c: char,
     color: Color,
     font: &'static Font,
+    bg_color: Option<Color>,
 }
 
 pub type FormattedRichLines = Vec<(Vec<RichChar>, i64)>;
@@ -153,14 +165,6 @@ pub fn format_rich_lines(text: &RichText, rect: &Rect) -> FormattedRichLines {
     }
 
     formatted_lines
-
-    // let mut y = y0;
-    // for (rich_slice, x0, max_char_h) in formatted_lines.into_iter().skip(offset) {
-    //     if y + max_char_h > y0 + h { break; }
-    //     draw_rich_slice(fb, rich_slice, x0, y);
-    //     y += max_char_h;
-    // }
-
 }
 
 pub fn draw_rich_slice(fb: &mut Framebuffer, rich_slice: &[RichChar], x0: i64, y0: i64) {
@@ -172,7 +176,7 @@ pub fn draw_rich_slice(fb: &mut Framebuffer, rich_slice: &[RichChar], x0: i64, y
     let mut x = x0;
     for rich_char in rich_slice.iter() {
         let dy = (max_base_y - rich_char.font.base_y)  as i64;
-        draw_char(fb, rich_char.c, x, y0 + dy, rich_char.font, rich_char.color);
+        draw_char(fb, rich_char.c, x, y0 + dy, rich_char.font, rich_char.color, rich_char.bg_color);
         x += rich_char.font.char_w as i64;
     }
 }

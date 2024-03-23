@@ -83,7 +83,7 @@ impl Button {
         let text_x0 = x0 + x_padding + text_offset_x;
         let text_y0 = y0 + i64::max(0, (h - char_h) / 2);
 
-        draw_str(fb, &self.config.text, text_x0, text_y0, self.config.font, self.config.text_color);
+        draw_str(fb, &self.config.text, text_x0, text_y0, self.config.font, self.config.text_color, None);
     }
 }
 
@@ -106,10 +106,10 @@ impl Default for ButtonConfig {
             rect: Rect { x0: 0, y0: 0, w: 100, h: 25 },
             text: "Button".to_owned(),
             font: &DEFAULT_FONT,
-            text_color: Color::hex(0xFFFFFF),
-            idle_color: Color::hex(0x444444),
-            hover_color: Color::hex(0x888888),
-            clicked_color: Color::hex(0x222222),
+            text_color: Color::from_u32(0xFFFFFF),
+            idle_color: Color::from_u32(0x444444),
+            hover_color: Color::from_u32(0x888888),
+            clicked_color: Color::from_u32(0x222222),
             icon: None,
             x_padding: 10,
         }

@@ -80,11 +80,13 @@ pub fn init() -> () {
 
     let Rect { w: win_w, h: win_h, .. } = win_rect;
 
-    let rect_console = Rect { x0: 0, y0: 0, w: win_w, h: win_h };
+    let rect_button = Rect { x0: 0, y0: 0, w: 100, h: 25 };
+    let rect_console = Rect { x0: 0, y0: rect_button.h.into(), w: win_w, h: win_h };
 
     let state = AppState { 
         fb_handle,
         button: Button::new(&ButtonConfig {
+            rect: rect_button,
             ..Default::default()
         }),
         text_area: ScrollableText::new(&TextConfig { 
@@ -152,8 +154,19 @@ pub fn step() {
         RequestState::Receiving { mut total_recv } => {
 
             if b == 0 && !guestlib::tcp_may_recv() {
-                println!("{}", core::str::from_utf8(&state.recv_buffer).unwrap());
+
+                let resp_str = core::str::from_utf8(&state.recv_buffer).expect("Not UTF-8");
+
+                let i1 = resp_str.find("<html").expect("No <html> tag");
+                let i2 = resp_str.find("</html>").expect("No </html> tag");
+                let html = &resp_str[i1..i2+7];
+
+                let rich_text = render_html(html);
+
+                text_update = Some(rich_text);
+
                 RequestState::Done
+
             } else {
                 let mut buf = vec![0u8; b];
                 state.tls_client.as_mut().unwrap().read_exact(&mut buf).unwrap();
@@ -161,16 +174,6 @@ pub fn step() {
                 state.recv_buffer.extend_from_slice(&buf[..read_len]);
                 total_recv += read_len;
                 println!("Total recv {}", total_recv);
-
-                let rich_text = {
-                    let s = core::str::from_utf8(&state.recv_buffer).unwrap();
-                    //println!("{}", s);
-                    let mut t = RichText::new();
-                    t.add_part(&s, Color::WHITE, &HACK_15);
-                    t
-                };
-                
-                text_update = Some(rich_text);
 
                 RequestState::Receiving { total_recv }
             }
@@ -191,8 +194,65 @@ pub fn step() {
     if !redraw { return; }
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
-    framebuffer.fill(Color::BLACK);
+    framebuffer.fill(Color::WHITE);
     state.text_area.draw(&mut framebuffer);
     state.button.draw(&mut framebuffer);
     state.first_frame = false;
+}
+
+
+fn render_html(html: &str) -> RichText {
+
+    use html_parser::{Dom, Node, Result};
+
+    let dom = Dom::parse(html).expect("Invalid HTML");
+
+    let mut rich_text = RichText::new();
+
+    fn walk(rich_text: &mut RichText, node: &Node, is_link: bool, mut depth: usize, mut bg_color: Option<Color>) {
+        match node {
+            Node::Element(element) if element.name == "head" => (),
+            Node::Element(element) => {
+
+                if let Some(Some(hex_str)) = element.attributes.get("bgcolor") {
+                    let mut color_bytes = hex::decode(hex_str.replace("#", "")).expect("Invalid color");
+
+                    match color_bytes.len() {
+                        3 => color_bytes.push(255),
+                        4 => (),
+                        _ => panic!("Invalid color: {:?}", color_bytes)
+                    };
+
+                    let color_bytes: [u8; 4] = color_bytes.try_into().unwrap();
+
+                    bg_color = Some(Color::from_u32(u32::from_le_bytes(color_bytes)));
+                }
+
+                let is_link = element.name == "a";
+                if element.name == "tr" { depth += 1; }
+
+                for child in &element.children {
+                    walk(rich_text, &child, is_link, depth, bg_color);
+                }
+
+                if element.name == "tr" {
+                    rich_text.add_part("\n-\n", Color::BLACK, &HACK_15, bg_color);
+                }
+
+                if element.name == "table" {
+                    rich_text.add_part("-\n", Color::BLACK, &HACK_15, bg_color);
+                }
+            },
+            Node::Text(ref text) if is_link => {
+                let line_text = format!("{}{}", " ".repeat(depth), text);
+                rich_text.add_part(&line_text, Color::BLACK, &HACK_15, bg_color);
+            }
+            _ => ()
+        };
+    }
+
+    let root = dom.children.get(0).unwrap();
+    walk(&mut rich_text, &root, false, 0, None);
+
+    rich_text
 }

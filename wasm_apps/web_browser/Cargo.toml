@@ -8,6 +8,8 @@ applib = { path = "../../applib" }
 guestlib = { path = "../../guestlib" }
 rustls = { version = "0.23.1", default-features = false, features = ["ring", "tls12", "std"]}
 webpki-roots = "0.26"
+html_parser = "0.7.0"
+hex = "0.4.3"
 
 # To avoid error about missing tests
 [[bin]]

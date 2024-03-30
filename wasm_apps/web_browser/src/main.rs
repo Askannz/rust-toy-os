@@ -197,11 +197,7 @@ pub fn step() {
 
         //print_console(&format!("HTML Data:\n{}", html));
 
-        //println!("{}", html);
-
-        //render::render_html(&mut framebuffer, html);
-
-        println!("{}", html_parser::Dom::parse(html).is_ok());
+        render::render_html(&mut framebuffer, html);
     }
 
     state.button.draw(&mut framebuffer);

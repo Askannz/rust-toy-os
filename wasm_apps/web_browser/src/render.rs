@@ -116,34 +116,26 @@ enum Orientation {
     Vertical,
 }
 
+
 fn parse_html_to_layout(html: &str) -> RenderNode {
 
-    fn parse_node(html_node: &html_parser::Node) -> Option<RenderNode> {
 
-        match html_node {
-            html_parser::Node::Element(element) if element.name == "head" => None,
-            html_parser::Node::Element(element) => {
+    fn parse_node<'a>(node: ego_tree::NodeRef<'a, scraper::Node>) -> Option<RenderNode> {
 
-                let bg_color = match element.attributes.get("bgcolor") {
-                    Some(Some(hex_str)) => {
-                        let mut color_bytes = hex::decode(hex_str.replace("#", "")).expect("Invalid color");
+        match node.value() {
 
-                        match color_bytes.len() {
-                            3 => color_bytes.push(255),
-                            4 => (),
-                            _ => panic!("Invalid color: {:?}", color_bytes)
-                        };
-    
-                        let color_bytes: [u8; 4] = color_bytes.try_into().unwrap();
-    
-                        Some(Color::from_u32(u32::from_le_bytes(color_bytes)))
-                    },
+            scraper::Node::Element(element) if element.name() == "head" => None,
+
+            scraper::Node::Element(element) => {
+
+                let bg_color = match element.attr("bgcolor") {
+                    Some(hex_str) => Some(parse_hexcolor(hex_str)),
                     _ => None
                 };
 
-                let children: Vec<RenderNode> = element.children.iter().filter_map(parse_node).collect();
+                let children: Vec<RenderNode> = node.children().filter_map(parse_node).collect();
 
-                let orientation = match element.name.as_str() {
+                let orientation = match element.name() {
                     "tr" => Orientation::Horizontal,
                     "tbody" => Orientation::Vertical,
                     "table" => Orientation::Vertical,
@@ -152,22 +144,45 @@ fn parse_html_to_layout(html: &str) -> RenderNode {
 
                 Some(RenderNode::Container { children, orientation, bg_color })
             },
-            html_parser::Node::Text(ref text) => {
-                let text = html_escape::decode_html_entities(text);
+
+            scraper::Node::Text(text) if check_is_whitespace(&text) => None,
+
+            scraper::Node::Text(text) => {
+                let text = core::str::from_utf8(text.as_bytes()).expect("Not UTF-8");
                 Some(RenderNode::Text { 
                     text: text.to_string(),
                     color: Color::BLACK,  // TODO
                     font: &HACK_15, // TODO
                 })
-            }
+            },
+
             _ => None
         }
-
     }
 
-    let dom = html_parser::Dom::parse(html).expect("Invalid HTML");
 
-    let root = dom.children.get(0).unwrap();
-    parse_node(&root).expect("Could not parse root HTML node")
+    let tree = scraper::Html::parse_document(html).tree;
+
+    let root = tree.root().first_child().expect("Empty HTML");
+
+    parse_node(root).expect("Could not parse root HTML node")
 }
 
+fn check_is_whitespace(s: &str) -> bool {
+    s.chars().map(|c| char::is_whitespace(c)).all(|x| x)
+}
+
+fn parse_hexcolor(hex_str: &str) -> Color {
+
+    let mut color_bytes = hex::decode(hex_str.replace("#", "")).expect("Invalid color");
+
+    match color_bytes.len() {
+        3 => color_bytes.push(255),
+        4 => (),
+        _ => panic!("Invalid color: {:?}", color_bytes)
+    };
+
+    let color_bytes: [u8; 4] = color_bytes.try_into().unwrap();
+
+    Color::from_u32(u32::from_le_bytes(color_bytes))
+}

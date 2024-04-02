@@ -14,13 +14,16 @@ use applib::ui::text::{ScrollableText, TextConfig};
 mod tls;
 mod render;
 
+use render::Webview;
 use tls::TlsClient;
 
-struct AppState {
+struct AppState<'a> {
     fb_handle: FramebufferHandle,
     button: Button,
 
     tls_client: Option<TlsClient<Socket>>,
+
+    webview: render::Webview<'a>,
 
     first_frame: bool,
 
@@ -81,6 +84,7 @@ pub fn init() -> () {
     let Rect { w: win_w, h: win_h, .. } = win_rect;
 
     let rect_button = Rect { x0: 0, y0: 0, w: 100, h: 25 };
+    let rect_webview = Rect  { x0: 0, y0: rect_button.h.into(), w: win_w, h: win_h };
 
     let state = AppState { 
         fb_handle,
@@ -90,6 +94,8 @@ pub fn init() -> () {
         }),
 
         tls_client: None,
+
+        webview: Webview::new(&rect_webview),
 
         first_frame: true,
         recv_buffer: Vec::new(),
@@ -115,7 +121,7 @@ pub fn step() {
 
     let redraw_button = state.button.update(&win_input_state);
 
-    let mut redraw_text = false;
+    let mut html_update = None;
 
     let new_state = match state.request_state {
     
@@ -150,7 +156,15 @@ pub fn step() {
 
             if b == 0 && !guestlib::tcp_may_recv() {
 
-                redraw_text = true;
+                let s = core::str::from_utf8(&state.recv_buffer).expect("Not UTF-8");
+
+                let i1 = s.find("<html").expect("No <html> tag");
+                let (_, s) = s.split_at(i1);
+
+                let i2 = s.find("</html>").expect("No </html> tag");
+                let (s, _) = s.split_at(i2);
+
+                html_update = Some(s);
 
                 RequestState::Done
 
@@ -173,33 +187,16 @@ pub fn step() {
         state.request_state = new_state
     }
 
-    //let redraw_text = state.text_area.update(&win_input_state, text_update);
+    let redraw_view = state.webview.update(&system_state.input, html_update);
 
-    let redraw = redraw_button || redraw_text || state.first_frame;
+    let redraw = redraw_button || redraw_view || state.first_frame;
 
     if !redraw { return; }
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
     framebuffer.fill(Color::WHITE);
 
-    // state.text_area.draw(&mut framebuffer);
-
-    if state.request_state  == RequestState::Done {
-
-        let resp_str = core::str::from_utf8(&state.recv_buffer).expect("Not UTF-8");
-
-        let i1 = resp_str.find("<html").expect("No <html> tag");
-        let i2 = resp_str.find("</html>").expect("No </html> tag");
-
-        //print_console(&format!("HTTP Header:\n{}", &resp_str[..i1]));
-
-        let html = &resp_str[i1..i2+7];
-
-        //print_console(&format!("HTML Data:\n{}", html));
-
-        render::render_html(&mut framebuffer, html);
-    }
-
+    state.webview.draw(&mut framebuffer);
     state.button.draw(&mut framebuffer);
     state.first_frame = false;
 }

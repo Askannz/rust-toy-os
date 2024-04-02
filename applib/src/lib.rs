@@ -9,6 +9,7 @@ pub mod drawing;
 pub mod ui;
 
 use alloc::vec::Vec;
+use alloc::vec;
 use managed::ManagedSlice;
 use input::InputState;
 
@@ -113,6 +114,10 @@ impl Rect {
         let (w, h) = (w as i64, h as i64);
         [x0, y0, x0+w-1, y0+h-1]
     }
+
+    pub fn zero_origin(&self) -> Self {
+        Rect { x0: 0, y0: 0, w: self.w, h: self.h }
+    }
 }
 
 pub struct Framebuffer<'a> {
@@ -122,6 +127,12 @@ pub struct Framebuffer<'a> {
 }
 
 impl<'a> Framebuffer<'a> {
+
+    pub fn new_owned(w: u32, h: u32) -> Self {
+        let data = vec![0u32; (w * h) as usize];
+        Framebuffer { data: ManagedSlice::Owned(data), w, h }
+    }
+
     pub fn new(data: &'a mut [u32], w: u32, h: u32) -> Self {
         assert_eq!(data.len(), (w * h) as usize);
         Framebuffer { data: ManagedSlice::Borrowed(data), w, h }
@@ -154,6 +165,10 @@ impl<'a> Framebuffer<'a> {
 }
 
 impl<'a> Framebuffer<'a> {
+
+    pub fn shape_as_rect(&self) -> Rect {
+        Rect { x0: 0, y0: 0, w: self.w, h: self.h }
+    }
 
     fn check_valid_point(&self, x: i64, y: i64) -> bool {
         let (w, h): (i64, i64) = (self.w.into(), self.h.into());
@@ -192,47 +207,49 @@ impl<'a> Framebuffer<'a> {
         self.data[i1..=i2].fill(color.0);
     }
 
-    pub fn copy_fb(&mut self, src: &Framebuffer, rect: &Rect, blend: bool) {
+    pub fn copy_from_fb(&mut self, src: &Framebuffer, src_rect: &Rect, dst_rect: &Rect, blend: bool) {
 
-        let Rect { x0: x, y0: y, w: w_rect, h: h_rect } = *rect;
+        let (rect_a, rect_b) =  {
 
-        let (wa, ha): (i64, i64) = (self.w.into(), self.h.into());
-        let (wb, hb): (i64, i64) = (src.w.into(), src.h.into());
-        let (w_rect, h_rect): (i64, i64) = (w_rect.into(), h_rect.into());
+            let ra = src_rect.intersection(&src.shape_as_rect());
+            let rb = dst_rect.intersection(&self.shape_as_rect());
 
-        let w_copy = i64::min(wb, w_rect);
-        let h_copy = i64::min(hb, h_rect);
+            match (ra, rb) {
+                (Some(ra), Some(rb)) => (ra, rb),
+                _ => return,
+            }
+        };
 
-        if wb == 0 { return; }
+        let w: i64 = u32::min(rect_a.w, rect_b.w).into();
+        let h: i64 = u32::min(rect_a.h, rect_b.h).into();
 
-        let ya1 = i64::max(y, 0);
-        let ya2 = i64::min(y + h_copy - 1, ha - 1);
+        if w == 0 { return; }
 
-        for ya in ya1..=ya2 {
-    
-            let yb = ya - y;
+        for y in 0..h {
 
-            let xa1 = i64::max(x, 0);
-            let xa2 = i64::min(x + w_copy - 1, wa - 1);
+            let xa0 = rect_a.x0;
+            let xa1 = rect_a.x0 + w - 1;
+            let ya = rect_a.y0 + y;
 
-            let xb1 = xa1 - x;
-            let xb2 = xa2 - x;
+            let ia1 = src.get_offset(xa0, ya).unwrap();
+            let ia2 = src.get_offset(xa1, ya).unwrap();
 
-            let ia1 = self.get_offset(xa1, ya).unwrap();
-            let ia2 = self.get_offset(xa2, ya).unwrap();
+            let xb0 = rect_b.x0;
+            let xb1 = rect_b.x0 + w - 1;
+            let yb = rect_b.y0 + y;
 
-            let ib1 = src.get_offset(xb1, yb).unwrap();
-            let ib2 = src.get_offset(xb2, yb).unwrap();
+            let ib1 = self.get_offset(xb0, yb).unwrap();
+            let ib2 = self.get_offset(xb1, yb).unwrap();
 
             if blend {
-                self.data[ia1..=ia2].iter_mut()
+                self.data[ib1..=ib2].iter_mut()
                     .enumerate()
                     .for_each(|(i, v_dst)| {
-                        let v_src = Color(src.data[ib1+i]);
+                        let v_src = Color(src.data[ia1+i]);
                         *v_dst = blend_colors(v_src, Color(*v_dst)).0;
                     });
             } else {
-                self.data[ia1..=ia2].copy_from_slice(&src.data[ib1..=ib2]);
+                self.data[ib1..=ib2].copy_from_slice(&src.data[ia1..=ia2]);
             }
         }
     }

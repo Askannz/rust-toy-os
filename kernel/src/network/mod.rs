@@ -25,7 +25,8 @@ const BUF_SIZE: usize = 4096;
 pub struct TcpStack {
     device: SmolTcpVirtio,
     interface: Interface,
-    sockets: SocketSet<'static>
+    sockets: SocketSet<'static>,
+    next_port: u16,
 }
 
 impl TcpStack {
@@ -52,7 +53,7 @@ impl TcpStack {
         let sockets_storage: [_; 1] = Default::default();
         let sockets = SocketSet::new(sockets_storage);
 
-        TcpStack { device, interface, sockets }
+        TcpStack { device, interface, sockets, next_port: 65000 }
 
     }
 
@@ -66,7 +67,8 @@ impl TcpStack {
 
         let cx = self.interface.context();
 
-        socket.connect(cx, (addr, port), 65000).unwrap();
+        socket.connect(cx, (addr, port), self.next_port).unwrap();
+        self.next_port += 1;
 
         let socket_handle = self.sockets.add(socket);
 

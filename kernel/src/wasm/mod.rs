@@ -379,6 +379,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         });
     });
 
+    // TODO: proper socket handles rather than a single global socket
+
     linker_impl!(m, "host_tcp_connect", |mut caller: Caller<StoreData>, ip_addr: i32, port: i32| {
         let data_mut = caller.data_mut();
         let mut tcp_stack = data_mut.tcp_stack.borrow_mut();

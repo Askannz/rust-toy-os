@@ -1,6 +1,5 @@
 use std::io::{self, Read, Write};
 use std::sync::Arc;
-use std::process;
 
 //use mio::net::TcpStream;
 use rustls::pki_types::ServerName;

@@ -12,6 +12,7 @@ use applib::{Color, Rect};
 
 
 use applib::ui::button::{Button, ButtonConfig};
+use applib::ui::text::{EditableText, EditableTextConfig};
 
 
 mod tls;
@@ -24,6 +25,7 @@ use tls::TlsClient;
 struct AppState<'a> {
     fb_handle: FramebufferHandle,
     button: Button,
+    url_bar: EditableText,
 
     webview: render::Webview<'a>,
 
@@ -70,7 +72,6 @@ impl Debug for RequestState {
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
 const DNS_SERVER_IP: [u8; 4] = [1, 1, 1, 1];
-const SERVER_NAME: &str = "news.ycombinator.com";
 
 struct Socket;
 
@@ -102,13 +103,24 @@ pub fn init() -> () {
 
     let Rect { w: win_w, h: win_h, .. } = win_rect;
 
-    let rect_button = Rect { x0: 0, y0: 0, w: 100, h: 25 };
+    let button_w = 100;
+    let bar_h = 25;
+
+    let rect_button = Rect { x0: (win_w - button_w).into(), y0: 0, w: button_w, h: bar_h };
+    let rect_url_bar = Rect { x0: 0, y0: 0, w: win_w - button_w, h: bar_h };
     let rect_webview = Rect  { x0: 0, y0: rect_button.h.into(), w: win_w, h: win_h };
 
     let state = AppState { 
         fb_handle,
         button: Button::new(&ButtonConfig {
             rect: rect_button,
+            text: "GO".into(),
+            ..Default::default()
+        }),
+        url_bar: EditableText::new(&EditableTextConfig {
+            rect: rect_url_bar,
+            color: Color::WHITE,
+            bg_color: Some(Color::rgb(128, 128, 128)),
             ..Default::default()
         }),
 
@@ -132,6 +144,7 @@ pub fn step() {
     let win_input_state = system_state.input.change_origin(&win_rect);
 
     let redraw_button = state.button.update(&win_input_state);
+    let redraw_url_bar = state.url_bar.update(&win_input_state);
 
     let mut html_update = None;
     let prev_state_debug = format!("{:?}", state.request_state);
@@ -139,9 +152,9 @@ pub fn step() {
     match &mut state.request_state {
     
         RequestState::Idle => {
-            if state.button.is_fired() {
+            if state.button.is_fired() || state.url_bar.is_flushed() {
                 guestlib::tcp_connect(DNS_SERVER_IP, 53);
-                let domain = SERVER_NAME.to_string();
+                let domain = state.url_bar.text().to_string();
                 state.request_state = RequestState::Dns { domain, dns_state: DnsState::Connecting } ;
             }
         },
@@ -263,7 +276,7 @@ pub fn step() {
 
     let redraw_view = state.webview.update(&system_state.input, html_update.as_deref());
 
-    let redraw = redraw_button || redraw_view || state.first_frame;
+    let redraw = redraw_button || redraw_url_bar || redraw_view || state.first_frame;
 
     if !redraw { return; }
 
@@ -272,6 +285,7 @@ pub fn step() {
 
     state.webview.draw(&mut framebuffer);
     state.button.draw(&mut framebuffer);
+    state.url_bar.draw(&mut framebuffer);
     state.first_frame = false;
 }
 

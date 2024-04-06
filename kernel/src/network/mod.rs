@@ -1,7 +1,7 @@
 mod device;
 
 use alloc::vec;
-use alloc::vec::Vec;
+
 
 use crate::virtio::network::VirtioNetwork;
 use crate::time::SystemClock;

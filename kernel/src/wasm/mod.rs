@@ -4,10 +4,10 @@ use alloc::vec;
 use alloc::rc::Rc;
 use alloc::{string::String, borrow::ToOwned};
 use smoltcp::iface::SocketHandle;
-use smoltcp::socket::tcp::Socket;
-use smoltcp::wire::{EthernetAddress, IpCidr, IpAddress, Ipv4Address};
+
+use smoltcp::wire::{Ipv4Address};
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext, Memory};
-use spin::Mutex;
+
 
 use applib::{SystemState, Framebuffer, Rect};
 

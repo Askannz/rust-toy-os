@@ -1,9 +1,9 @@
 use std::borrow::Borrow;
 
 use alloc::vec::Vec;
-use bytes::{Bytes, BytesMut};
-use dns_message_parser::rr;
-use dns_message_parser::{Dns, DomainName, Flags, Opcode, RCode, rr::RR};
+use bytes::{Bytes};
+
+use dns_message_parser::{Dns, Flags, Opcode, RCode, rr::RR};
 use dns_message_parser::question::{QClass, QType, Question};
 
 

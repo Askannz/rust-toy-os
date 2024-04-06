@@ -7,12 +7,12 @@ use std::fmt;
 
 use core::cell::OnceCell;
 use alloc::format;
-use guestlib::{tcp_read, tcp_write, FramebufferHandle};
+use guestlib::{FramebufferHandle};
 use applib::{Color, Rect};
-use applib::drawing::text::{draw_str, DEFAULT_FONT};
-use applib::drawing::text::{RichText, HACK_15, Font};
+
+
 use applib::ui::button::{Button, ButtonConfig};
-use applib::ui::text::{ScrollableText, TextConfig};
+
 
 mod tls;
 mod render;

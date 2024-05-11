@@ -291,13 +291,23 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 
 fn draw_cursor(fb: &mut Framebuffer, system_state: &SystemState) {
 
-    const CURSOR_SIZE: u32 = 5;
-    const CURSOR_COLOR: Color = Color::WHITE;
+    const SIZE: u32 = 5;
+    const BORDER: u32 = 1;
 
     let pointer_state = &system_state.input.pointer;
     let x = pointer_state.x;
     let y = pointer_state.y;
-    draw_rect(fb, &Rect { x0: x, y0: y, w: CURSOR_SIZE, h: CURSOR_SIZE }, CURSOR_COLOR)
+
+    let rect_outer = Rect { x0: x, y0: y, w: SIZE, h: SIZE };
+    let rect_inner = Rect { 
+        x0: x + BORDER as i64,
+        y0: y + BORDER as i64,
+        w: SIZE - 2 * BORDER,
+        h: SIZE - 2*BORDER
+    };
+
+    draw_rect(fb, &rect_outer, Color::BLACK);
+    draw_rect(fb, &rect_inner, Color::WHITE);
 }
 
 fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_inputs: &mut [VirtioInput]) {

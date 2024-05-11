@@ -70,7 +70,7 @@ impl Color {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Rect { pub x0: i64, pub y0: i64, pub w: u32, pub h: u32 }
 
 impl Rect {
@@ -107,6 +107,20 @@ impl Rect {
         } else {
             None
         }
+    }
+
+    pub fn bounding_box(&self, other: &Rect) -> Rect {
+
+        let [xa0, ya0, xa1, ya1] = self.as_xyxy();
+        let [xb0, yb0, xb1, yb1] = other.as_xyxy();
+
+        let x0 = i64::min(xa0, xb0);
+        let y0 = i64::min(ya0, yb0);
+
+        let x1 = i64::max(xa1, xb1);
+        let y1 = i64::max(ya1, yb1);
+
+        Rect { x0, y0, w: (x1-x0+1) as u32, h: (y1-y0+1) as u32 }
     }
 
     pub fn as_xyxy(&self) -> [i64; 4] {

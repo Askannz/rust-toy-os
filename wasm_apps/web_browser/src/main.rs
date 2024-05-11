@@ -187,7 +187,7 @@ pub fn step() {
         state.request_state = new_state
     }
 
-    let redraw_view = state.webview.update(&system_state.input, html_update);
+    let redraw_view = state.webview.update(&win_input_state, html_update);
 
     let redraw = redraw_button || redraw_view || state.first_frame;
 

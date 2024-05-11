@@ -4,10 +4,10 @@ use alloc::vec;
 use alloc::rc::Rc;
 use alloc::{string::String, borrow::ToOwned};
 use smoltcp::iface::SocketHandle;
-use smoltcp::socket::tcp::Socket;
-use smoltcp::wire::{EthernetAddress, IpCidr, IpAddress, Ipv4Address};
+
+use smoltcp::wire::{Ipv4Address};
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext, Memory};
-use spin::Mutex;
+
 
 use applib::{SystemState, Framebuffer, Rect};
 
@@ -378,6 +378,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
             h: h as u32,
         });
     });
+
+    // TODO: proper socket handles rather than a single global socket
 
     linker_impl!(m, "host_tcp_connect", |mut caller: Caller<StoreData>, ip_addr: i32, port: i32| {
         let data_mut = caller.data_mut();

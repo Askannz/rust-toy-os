@@ -1,10 +1,10 @@
 #![no_std]
 extern crate alloc;
 
-use core::panic::PanicInfo;
+
 use core::fmt::Debug;
 use core::mem::size_of;
-use alloc::{format, vec};
+use alloc::{vec};
 use applib::{SystemState, Framebuffer, Rect};
 
 #[global_allocator]

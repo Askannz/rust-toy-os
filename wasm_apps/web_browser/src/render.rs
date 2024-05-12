@@ -6,11 +6,26 @@ use applib::input::{InputState, InputEvent, PointerState};
 
 
 pub struct Webview<'a> {
-    buffer: Option<Framebuffer<'a>>,
-    layout: Option<LayoutNode>,
-    hovered_rect: Option<Rect>,
+    state: State<'a>,
     view_rect: Rect,
-    y_offset: i64,
+    next_node_id: u64,
+}
+
+enum State<'a> {
+    Blank,
+    Active {
+        buffer: Framebuffer<'a>,
+        layout: LayoutNode,
+        link_data: Option<LinkData>,
+        y_offset: i64,
+    }
+}
+
+struct LinkData {
+    node_id: u64,
+    rect: Rect,
+    url: String,
+    clicked: bool,
 }
 
 const SCROLL_SPEED: u32 = 10;
@@ -18,12 +33,10 @@ const SCROLL_SPEED: u32 = 10;
 impl<'a> Webview<'a> {
 
     pub fn new(view_rect: &Rect) -> Self {
-        Self { 
-            buffer: None,
-            layout: None,
-            hovered_rect: None,
+        Self {
+            state: State::Blank,
             view_rect: view_rect.clone(),
-            y_offset: 0
+            next_node_id: 0,
         }
     }
 
@@ -33,169 +46,101 @@ impl<'a> Webview<'a> {
 
         if let Some(html) = html_update {
 
-            let layout = parse_html_to_layout(html);
+            let layout = self.parse_html_to_layout(html);
 
             //debug_layout(&layout);
 
-            let &Rect { w: bw, h: bh, .. } = layout.get_rect();
+            let Rect { w: bw, h: bh, .. } = layout.rect;
             let mut buffer = Framebuffer::new_owned(bw, bh);
     
             draw_node(&mut buffer, &layout);
-    
-            self.buffer = Some(buffer);
-            self.layout = Some(layout);
+
+            self.state = State::Active {
+                buffer,
+                layout,
+                link_data: None,
+                y_offset: 0,
+            };
 
             redraw = true;
+
         }
 
-        for event in input_state.events {
-            if let Some(InputEvent::Scroll { delta }) = event {
-                let offset = self.y_offset as i64 - delta * (SCROLL_SPEED as i64);
-                self.y_offset = i64::max(0, offset);
-                redraw = true;
-            }
-        }
+        match &mut self.state {
+            State::Blank => (),
+            State::Active { layout, link_data, y_offset, .. } => {
 
-        if let Some(layout) = &self.layout {
+                for event in input_state.events {
+                    if let Some(InputEvent::Scroll { delta }) = event {
+                        let offset = *y_offset as i64 - delta * (SCROLL_SPEED as i64);
+                        *y_offset = i64::max(0, offset);
+                        redraw = true;
+                    }
+                }
 
-            let PointerState { mut x, mut y, ..} = input_state.pointer;
-            y = y - self.view_rect.y0 + self.y_offset;
-            x = x - self.view_rect.x0;
+                let PointerState { mut x, mut y, ..} = input_state.pointer;
+                y = y - self.view_rect.y0 + *y_offset;
+                x = x - self.view_rect.x0;
 
-            let hovered_rect = get_hovered_item(x, y, layout).map(|node| node.get_rect().clone());
-            if hovered_rect != self.hovered_rect {
-                redraw = true;
-                self.hovered_rect = hovered_rect;
+                let new_link_data = get_hovered_link(x, y, layout);
+
+                match (&new_link_data, &link_data) {
+                    (Some(new), Some(old)) if new.node_id == old.node_id => (),
+                    (None, None) => (),
+                    _ => { redraw = true; }
+                };
+
+                *link_data = new_link_data;
+
+                if let Some(link_data_val) = link_data {
+                    link_data_val.clicked = input_state.pointer.left_clicked;
+                }
             }
         }
 
         redraw
     }
 
-    pub fn draw(&mut self, fb: &mut Framebuffer) {
-        if let Some(buffer) = self.buffer.as_ref() {
+    pub fn draw(&self, fb: &mut Framebuffer) {
+
+        if let State::Active { buffer, y_offset, link_data, .. } = &self.state {
 
             let src_rect = {
                 let mut r = buffer.shape_as_rect().clone();
-                r.y0 += self.y_offset;
+                r.y0 += y_offset;
                 r
             };
 
-            fb.copy_from_fb(buffer, &src_rect, &self.view_rect, false);
+            fb.copy_from_fb(&buffer, &src_rect, &self.view_rect, false);
 
-            if let Some(mut r) = self.hovered_rect.clone() {
-                r.y0 = r.y0 + self.view_rect.y0 - self.y_offset;
+            if let Some(link_data) = link_data {
+                let mut r = link_data.rect.clone();
+                r.y0 = r.y0 + self.view_rect.y0 - y_offset;
                 r.x0 = r.x0 + self.view_rect.x0;
                 blend_rect(fb, &r, Color::rgba(0, 0, 255, 128));
             }
         }
     }
-}
 
-fn draw_node(fb: &mut Framebuffer, node: &LayoutNode) {
-
-    let &Rect { x0, y0, .. } = node.get_rect();
-
-    if fb.w as i64 <= x0 || fb.h as i64 <= y0 {
-        return;
-    }
-
-    match node {
-        LayoutNode::Text { text, color, font, rect, .. } => {
-            draw_str(fb, text, rect.x0, rect.y0, font, *color, None);
-        },
-        LayoutNode::Container { children, bg_color, rect, .. } => {
-
-            if let &Some(bg_color) = bg_color {
-                draw_rect(fb, &rect, bg_color);
-            }
-
-            for child in children.iter() {
-                draw_node(fb, child);
-            }
-        }
-    }
-}
-
-fn get_hovered_item<'a>(x: i64, y: i64, node: &'a LayoutNode) -> Option<&'a LayoutNode> {
-
-    match node {
-        LayoutNode::Text { .. } => None,
-        // LayoutNode::Container { children, rect, .. } => match rect.check_contains_point(x, y) {
-        //     false => None,
-        //     true => {
-        //         if let Some(child) = children.iter().find_map(|c| get_hovered_item(x, y, c)) {
-        //             Some(child)
-        //         } else {
-        //             Some(node)
-        //         }
-        //     }
-        // }
-        LayoutNode::Container { children, rect, url, .. } => match rect.check_contains_point(x, y) {
-            true => match url.is_some() {
-                true => Some(node),
-                false => children.iter().find_map(|c| get_hovered_item(x, y, c))
-            },
-            false => None
-        }
-    }
-
-}
-
-fn debug_layout(root_node: &LayoutNode) {
-
-    fn repr_node(out_str: &mut String, node: &LayoutNode, depth: usize) {
-        match node {
-            LayoutNode::Text { text, rect, .. } => {
-                out_str.push_str(&format!("{}{} {:?}\n"," ".repeat(depth), text, rect));
-            },
-            LayoutNode::Container { children, orientation, rect, .. } => {
-                out_str.push_str(&format!("{}CONTAINER {:?} {:?}\n"," ".repeat(depth), orientation, rect));
-                for child in children {
-                    repr_node(out_str, child, depth+1);
+    pub fn check_redirect(&self) -> Option<&str> {
+        if let State::Active { link_data, .. } = &self.state {
+            if let Some(link_data) = link_data {
+                if link_data.clicked {
+                    return Some(&link_data.url)
                 }
             }
         }
+        None
     }
 
-    let mut out_str = String::new();
-    repr_node(&mut out_str, root_node, 0);
-
-    guestlib::print_console(&out_str);
-
-}
-
-enum LayoutNode {
-    Text { text: String, color: Color, font: &'static Font, url: Option<String>, rect: Rect },
-    Container { children: Vec<LayoutNode>, orientation: Orientation, bg_color: Option<Color>, rect: Rect, url: Option<String> }
-}
-
-impl LayoutNode {
-    fn get_rect(&self) -> &Rect {
-        match self {
-            Self::Text { rect, .. } => rect,
-            Self::Container { rect, .. } => rect,
-        }
+    fn parse_html_to_layout(&mut self, html: &str) -> LayoutNode {
+        let tree = scraper::Html::parse_document(html).tree;
+        let root = tree.root().first_child().expect("Empty HTML");
+        self.parse_node(root, 0, 0).expect("Could not parse root HTML node")
     }
-}
 
-#[derive(Debug, Clone, Copy)]
-enum Orientation {
-    Horizontal,
-    Vertical,
-}
-
-struct Margins {
-    left: u32,
-    right: u32,
-    top: u32,
-    bottom: u32,
-}
-
-fn parse_html_to_layout(html: &str) -> LayoutNode {
-
-    fn parse_node<'a>(node: ego_tree::NodeRef<'a, scraper::Node>, x0: i64, y0: i64) -> Option<LayoutNode> {
-
+    fn parse_node<'b>(&mut self, node: ego_tree::NodeRef<'b, scraper::Node>, x0: i64, y0: i64) -> Option<LayoutNode> {
+    
         match node.value() {
 
             scraper::Node::Element(element) if element.name() == "head" => None,
@@ -222,8 +167,8 @@ fn parse_html_to_layout(html: &str) -> LayoutNode {
                 let mut children: Vec<LayoutNode> = Vec::new();
                 let (mut child_x0, mut child_y0): (i64, i64) = (x0, y0);
                 for html_child in node.children() {
-                    if let Some(child_node) = parse_node(html_child, child_x0, child_y0) {
-                        let &Rect { w: child_w, h: child_h, .. } = child_node.get_rect();
+                    if let Some(child_node) = self.parse_node(html_child, child_x0, child_y0) {
+                        let Rect { w: child_w, h: child_h, .. } = child_node.rect;
                         match orientation {
                             Orientation::Horizontal => child_x0 += child_w as i64,
                             Orientation::Vertical => child_y0 += child_h as i64,
@@ -233,11 +178,15 @@ fn parse_html_to_layout(html: &str) -> LayoutNode {
                 }
 
                 if children.len() > 0 {
-                    let rect_0 = children[0].get_rect().clone();
+                    let rect_0 = children[0].rect.clone();
                     let container_rect = children.iter()
-                        .map(|c| c.get_rect().clone())
+                        .map(|c| c.rect.clone())
                         .fold(rect_0, |acc, r| r.bounding_box(&acc));
-                    Some(LayoutNode::Container { children, orientation, bg_color, rect: container_rect, url })
+                    Some(LayoutNode {
+                        id: self.make_node_id(),
+                        rect: container_rect,
+                        data: NodeData::Container { children, orientation, bg_color, url }
+                    })
                 } else {
                     None
                 }
@@ -254,15 +203,19 @@ fn parse_html_to_layout(html: &str) -> LayoutNode {
                 let font = &HACK_15; // TODO
                 let w = (text.len() * font.char_w) as u32 + M.left + M.right;
                 let h = font.char_h as u32  + M.top + M.bottom;
-                Some(LayoutNode::Text { 
-                    text: text.to_string(),
-                    color: Color::BLACK,  // TODO
-                    font, 
-                    url: None,
+
+                Some(LayoutNode {
+                    id: self.make_node_id(),
                     rect: Rect { 
                         x0: x0 + M.left as i64,
                         y0: y0 + M.top as i64,
                         w, h
+                    },
+                    data: NodeData::Text { 
+                        text: text.to_string(),
+                        color: Color::BLACK,  // TODO
+                        font, 
+                        url: None,
                     }
                 })
             },
@@ -271,12 +224,106 @@ fn parse_html_to_layout(html: &str) -> LayoutNode {
         }
     }
 
+    fn make_node_id(&mut self) -> u64 {
+        let id = self.next_node_id;
+        self.next_node_id += 1;
+        id
+    }
+}
 
-    let tree = scraper::Html::parse_document(html).tree;
+fn draw_node(fb: &mut Framebuffer, node: &LayoutNode) {
 
-    let root = tree.root().first_child().expect("Empty HTML");
+    let rect = &node.rect;
 
-    parse_node(root, 0, 0).expect("Could not parse root HTML node")
+    if fb.w as i64 <= rect.x0 || fb.h as i64 <= rect.y0 {
+        return;
+    }
+
+    match &node.data {
+        NodeData::Text { text, color, font, .. } => {
+            draw_str(fb, text, rect.x0, rect.y0, font, *color, None);
+        },
+        NodeData::Container { children, bg_color, .. } => {
+
+            if let &Some(bg_color) = bg_color {
+                draw_rect(fb, &rect, bg_color);
+            }
+
+            for child in children.iter() {
+                draw_node(fb, child);
+            }
+        }
+    }
+}
+
+fn get_hovered_link(x: i64, y: i64, node: &LayoutNode) -> Option<LinkData> {
+
+    let rect = &node.rect;
+
+    match &node.data {
+        NodeData::Text { .. } => None,
+        NodeData::Container { children, url, .. } => match rect.check_contains_point(x, y) {
+            true => match url {
+                Some(url) => Some(LinkData {
+                    node_id: node.id,
+                    rect: rect.clone(),
+                    url: url.clone(),
+                    clicked: false,
+                }),
+                None => children.iter().find_map(|c| get_hovered_link(x, y, c))
+            },
+            false => None
+        }
+    }
+
+}
+
+fn debug_layout(root_node: &LayoutNode) {
+
+    fn repr_node(out_str: &mut String, node: &LayoutNode, depth: usize) {
+
+        match &node.data {
+            NodeData::Text { text, .. } => {
+                out_str.push_str(&format!("{}{}\n"," ".repeat(depth), text));
+            },
+            NodeData::Container { children, orientation, .. } => {
+                out_str.push_str(&format!("{}CONTAINER {:?}\n"," ".repeat(depth), orientation));
+                for child in children {
+                    repr_node(out_str, child, depth+1);
+                }
+            }
+        }
+    }
+
+    let mut out_str = String::new();
+    repr_node(&mut out_str, root_node, 0);
+
+    guestlib::print_console(&out_str);
+
+}
+
+enum NodeData {
+    Text { text: String, color: Color, font: &'static Font, url: Option<String> },
+    Container { children: Vec<LayoutNode>, orientation: Orientation, bg_color: Option<Color>, url: Option<String> }
+}
+
+struct LayoutNode {
+    id: u64,
+    rect: Rect,
+    data: NodeData,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Orientation {
+    Horizontal,
+    Vertical,
+}
+
+struct Margins {
+    left: u32,
+    right: u32,
+    top: u32,
+    bottom: u32,
 }
 
 fn check_is_whitespace(s: &str) -> bool {

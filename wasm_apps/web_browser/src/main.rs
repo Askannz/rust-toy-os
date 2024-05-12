@@ -35,6 +35,7 @@ struct AppState<'a> {
 
     request_state: RequestState,
 
+    redirect: Option<String>,
 }
 
 enum RequestState {
@@ -129,6 +130,7 @@ pub fn init() -> () {
         first_frame: true,
         buffer: vec![0u8; 100_000],
         request_state: RequestState::Idle,
+        redirect: None,
     };
     unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")); }
 }
@@ -143,8 +145,13 @@ pub fn step() {
 
     let win_input_state = system_state.input.change_origin(&win_rect);
 
+    let text_override = match state.first_frame {
+        true => Some("news.ycombinator.com".to_owned()),
+        false => state.redirect.take()
+    };
+
     let redraw_button = state.button.update(&win_input_state);
-    let redraw_url_bar = state.url_bar.update(&win_input_state);
+    let redraw_url_bar = state.url_bar.update(&win_input_state, text_override.as_deref());
 
     let mut html_update = None;
     let prev_state_debug = format!("{:?}", state.request_state);
@@ -275,6 +282,10 @@ pub fn step() {
     }
 
     let redraw_view = state.webview.update(&win_input_state, html_update.as_deref());
+
+    if let Some(url) = state.webview.check_redirect() {
+        state.redirect = Some(url.to_owned());
+    }
 
     let redraw = redraw_button || redraw_url_bar || redraw_view || state.first_frame;
 

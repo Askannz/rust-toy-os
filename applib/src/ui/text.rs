@@ -1,3 +1,4 @@
+use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -42,7 +43,7 @@ impl EditableText {
         Self { config: config.clone(), text: String::from(""), is_shift_pressed: false, is_flushed: false }
     }
 
-    pub fn update(&mut self, input_state: &InputState) -> bool {
+    pub fn update(&mut self, input_state: &InputState, text_override: Option<&str>) -> bool {
 
         let check_is_shift = |keycode| {
             keycode == Keycode::KEY_LEFTSHIFT || 
@@ -89,6 +90,11 @@ impl EditableText {
     
                 _ => ()
             };
+        }
+
+        if let Some(text) = text_override {
+            self.text = text.to_owned();
+            redraw = true;
         }
 
         redraw

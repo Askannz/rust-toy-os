@@ -28,7 +28,8 @@ struct LinkData {
     clicked: bool,
 }
 
-const SCROLL_SPEED: u32 = 10;
+const SCROLL_SPEED: u32 = 20;
+const MAX_RENDER_HEIGHT: u32 = 5000;
 
 impl<'a> Webview<'a> {
 
@@ -50,7 +51,13 @@ impl<'a> Webview<'a> {
 
             //debug_layout(&layout);
 
-            let Rect { w: bw, h: bh, .. } = layout.rect;
+            let (bw, bh) = {
+                let Rect { w: bw, h: bh, .. } = layout.rect;
+                let bw = u32::min(bw, self.view_rect.w);
+                let bh = u32::min(bh, MAX_RENDER_HEIGHT);
+                (bw, bh)
+            };
+
             let mut buffer = Framebuffer::new_owned(bw, bh);
     
             draw_node(&mut buffer, &layout);

@@ -34,15 +34,13 @@ struct AppState<'a> {
     buffer: Vec<u8>,
 
     request_state: RequestState,
-
-    redirect: Option<String>,
 }
 
 enum RequestState {
-    Idle,
-    Dns { domain: String, dns_state: DnsState },
-    Https { domain: String, tls_client: TlsClient<Socket>, https_state: HttpsState },
-
+    Idle { domain: Option<String> },
+    Dns { domain: String, path: String, dns_state: DnsState },
+    Https { domain: String, path: String, tls_client: TlsClient<Socket>, https_state: HttpsState },
+    Render { domain: String, html: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,15 +61,17 @@ enum HttpsState {
 impl Debug for RequestState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RequestState::Idle => write!(f, "Idle"),
-            RequestState::Dns { dns_state, .. } => write!(f, "DNS {:?}", dns_state),
+            RequestState::Idle { .. } => write!(f, "Idle"),
+            RequestState::Dns { domain, dns_state, .. } => write!(f, "DNS {} {:?}", domain, dns_state),
             RequestState::Https { https_state, .. } => write!(f, "HTTPS {:?}", https_state),
+            RequestState::Render { .. } => write!(f, "Render"),
         }
     }
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
+const SCHEME: &str = "https://";
 const DNS_SERVER_IP: [u8; 4] = [1, 1, 1, 1];
 
 struct Socket;
@@ -129,8 +129,7 @@ pub fn init() -> () {
 
         first_frame: true,
         buffer: vec![0u8; 100_000],
-        request_state: RequestState::Idle,
-        redirect: None,
+        request_state: RequestState::Idle { domain: None },
     };
     unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")); }
 }
@@ -145,28 +144,56 @@ pub fn step() {
 
     let win_input_state = system_state.input.change_origin(&win_rect);
 
-    let text_override = match state.first_frame {
-        true => Some("news.ycombinator.com".to_owned()),
-        false => state.redirect.take()
+    let url_override = match state.first_frame {
+        true => Some("https://news.ycombinator.com/item?id=40379347".to_owned()),
+        false => match &state.request_state {
+            RequestState::Dns { domain, path, .. } => Some(format!("{}{}{}", SCHEME, domain, path)),
+            _ => None,
+        }
+    };
+
+    let html_update = match &state.request_state {
+        RequestState::Render { html, .. } => Some(html.as_str()),
+        _ => None
     };
 
     let redraw_button = state.button.update(&win_input_state);
-    let redraw_url_bar = state.url_bar.update(&win_input_state, text_override.as_deref());
+    let redraw_url_bar = state.url_bar.update(&win_input_state, url_override.as_deref());
+    let redraw_view = state.webview.update(&win_input_state, html_update);
 
-    let mut html_update = None;
     let prev_state_debug = format!("{:?}", state.request_state);
 
     match &mut state.request_state {
     
-        RequestState::Idle => {
+        RequestState::Idle { domain: current_domain } => {
+
+            let mut url_data: Option<(String, String)> = None;
+
             if state.button.is_fired() || state.url_bar.is_flushed() {
+                let (domain, path) = parse_url(state.url_bar.text());
+                url_data = Some((domain.to_string(), path.to_string()));
+            } else {
+                if let Some(href) = state.webview.check_redirect() {
+                    if let Some(current_domain) = current_domain {
+                        if !href.starts_with(SCHEME) {
+                            let path = format!("/{}", href);
+                            url_data = Some((current_domain.clone(), path));
+                        }
+                    }
+                }
+            }
+
+            if let Some((domain, path)) = url_data {
                 guestlib::tcp_connect(DNS_SERVER_IP, 53);
-                let domain = state.url_bar.text().to_string();
-                state.request_state = RequestState::Dns { domain, dns_state: DnsState::Connecting } ;
+                state.request_state = RequestState::Dns { 
+                    domain,
+                    path,
+                    dns_state: DnsState::Connecting
+                };
             }
         },
 
-        RequestState::Dns { domain, dns_state } => match dns_state {
+        RequestState::Dns { domain, path, dns_state } => match dns_state {
 
             DnsState::Connecting => {
                 let socket_ready = guestlib::tcp_may_send() && guestlib::tcp_may_recv();
@@ -211,6 +238,7 @@ pub fn step() {
                     guestlib::tcp_connect(ip_addr, 443);
                     state.request_state = RequestState::Https { 
                         domain: domain.clone(),
+                        path: path.clone(),
                         tls_client: TlsClient::new(Socket, domain),
                         https_state: HttpsState::Connecting,
                     }
@@ -218,18 +246,19 @@ pub fn step() {
             }
         },
 
-        RequestState::Https { domain, tls_client, https_state } => match https_state {
+        RequestState::Https { domain, path, tls_client, https_state } => match https_state {
 
             HttpsState::Connecting => {
                 let socket_ready = guestlib::tcp_may_send() && guestlib::tcp_may_recv();
                 if socket_ready {
 
                     let http_string = format!(
-                        "GET / HTTP/1.1\r\n\
+                        "GET {} HTTP/1.1\r\n\
                         Host: {}\r\n\
                         Connection: close\r\n\
                         Accept-Encoding: identity\r\n\
                         \r\n",
+                        path,
                         domain
                     );
                     let http_bytes = http_string.as_bytes();
@@ -267,11 +296,16 @@ pub fn step() {
 
                     let http_string = core::str::from_utf8(&state.buffer).expect("Not UTF-8");
                     let html_string = get_html_string(http_string);
-                    html_update = Some(html_string);
-                    state.request_state = RequestState::Idle;
+                    state.request_state = RequestState::Render { domain: domain.clone(), html: html_string };
                 }
             }
 
+        },
+
+        RequestState::Render {domain, .. } => { 
+            state.request_state = RequestState::Idle { 
+                domain: Some(domain.clone())
+            };
         },
     };
 
@@ -279,12 +313,6 @@ pub fn step() {
 
     if new_state_debug != prev_state_debug {
         println!("Request state change: {} => {}", prev_state_debug, new_state_debug);
-    }
-
-    let redraw_view = state.webview.update(&win_input_state, html_update.as_deref());
-
-    if let Some(url) = state.webview.check_redirect() {
-        state.redirect = Some(url.to_owned());
     }
 
     let redraw = redraw_button || redraw_url_bar || redraw_view || state.first_frame;
@@ -311,4 +339,20 @@ fn get_html_string(http_string: &str) -> String {
     let (s, _) = s.split_at(i2);
 
     s.to_string()
+}
+
+fn parse_url(url: &str) -> (&str, &str) {
+
+    if !url.starts_with(SCHEME) {
+        panic!("Invalid URL (no https://)");
+    }
+
+    let (_scheme, s) = url.split_at(SCHEME.len());
+
+   let (domain, path) = match s.find("/") {
+        Some(i) => s.split_at(i),
+        None => (s, "/")
+    };
+
+    (domain, path)
 }

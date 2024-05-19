@@ -287,23 +287,40 @@ fn get_hovered_link(x: i64, y: i64, node: &LayoutNode) -> Option<LinkData> {
 
 fn debug_layout(root_node: &LayoutNode) {
 
-    fn repr_node(out_str: &mut String, node: &LayoutNode, depth: usize) {
+    fn repr_node(out_str: &mut String, node: &LayoutNode, is_last: bool, prefix: &str) {
+
+        let c = match is_last {
+            true => "└",
+            false => "├",
+        };
 
         match &node.data {
             NodeData::Text { text, .. } => {
-                out_str.push_str(&format!("{}{}\n"," ".repeat(depth), text));
+                for line in text.split("\n") {
+                    out_str.push_str(&format!("{}{}{}\n", prefix, c, line));
+                }
             },
             NodeData::Container { children, orientation, .. } => {
-                out_str.push_str(&format!("{}CONTAINER {:?}\n"," ".repeat(depth), orientation));
-                for child in children {
-                    repr_node(out_str, child, depth+1);
+
+                out_str.push_str(&format!("{}{}CONTAINER {:?} {:?}\n", prefix, c, orientation, node.rect));
+
+                let c2 = match is_last {
+                    true => " ",
+                    false => "|",
+                };
+
+                let child_prefix = format!("{}{}", prefix, c2);
+
+                for (i, child) in children.iter().enumerate() {
+                    let child_is_last = i == children.len() - 1;
+                    repr_node(out_str, child, child_is_last, &child_prefix);
                 }
             }
         }
     }
 
     let mut out_str = String::new();
-    repr_node(&mut out_str, root_node, 0);
+    repr_node(&mut out_str, root_node, false, "");
 
     guestlib::print_console(&out_str);
 

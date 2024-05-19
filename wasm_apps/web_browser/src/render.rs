@@ -29,7 +29,7 @@ struct LinkData {
 }
 
 const SCROLL_SPEED: u32 = 20;
-const MAX_RENDER_HEIGHT: u32 = 5000;
+const MAX_RENDER_HEIGHT: u32 = 10_000;
 
 impl<'a> Webview<'a> {
 
@@ -143,14 +143,28 @@ impl<'a> Webview<'a> {
     fn parse_html_to_layout(&mut self, html: &str) -> LayoutNode {
         let tree = scraper::Html::parse_document(html).tree;
         let root = tree.root().first_child().expect("Empty HTML");
-        self.parse_node(root, 0, 0).expect("Could not parse root HTML node")
+        self.parse_node(root, 0, 0, false).expect("Could not parse root HTML node")
     }
 
-    fn parse_node<'b>(&mut self, node: ego_tree::NodeRef<'b, scraper::Node>, x0: i64, y0: i64) -> Option<LayoutNode> {
+    fn parse_node<'b>(&mut self, node: ego_tree::NodeRef<'b, scraper::Node>, mut x0: i64, mut y0: i64, link: bool) -> Option<LayoutNode> {
+
+        const ZERO_M: Margins = Margins { left: 0, right: 0, top: 0, bottom: 0};
+        const TR_M: Margins  = Margins { left: 0, right: 0, top: 5, bottom: 5};
     
         match node.value() {
 
             scraper::Node::Element(element) if element.name() == "head" => None,
+
+            scraper::Node::Element(element) if element.name() == "img" => {
+                let parse_dim = |attr: &str| -> u32 { element.attr(attr).map(|s| s.parse().ok()).flatten().unwrap_or(0) };
+                let w: u32 = parse_dim("width");
+                let h: u32 = parse_dim("height");
+                Some(LayoutNode {
+                    id: self.make_node_id(),
+                    rect: Rect { x0, y0, w, h },
+                    data: NodeData::Image,
+                })
+            },
 
             scraper::Node::Element(element) => {
 
@@ -166,32 +180,54 @@ impl<'a> Webview<'a> {
 
                 let tag = element.name().to_string();
 
-                let orientation = match tag.as_str() {
-                    "tr" => Orientation::Horizontal,
-                    "td" => Orientation::Vertical,
-                    "tbody" => Orientation::Vertical,
-                    "table" => Orientation::Vertical,
-                    _ => Orientation::Horizontal
+                let (orientation, margin) = match tag.as_str() {
+                    "tr" => (Orientation::Horizontal, TR_M),
+                    "td" => (Orientation::Vertical, ZERO_M),
+                    "tbody" => (Orientation::Vertical, ZERO_M),
+                    "table" => (Orientation::Vertical, ZERO_M),
+                    "div" => (Orientation::Vertical, ZERO_M),
+                    "span" => (Orientation::Horizontal, ZERO_M),
+                    "p" => (Orientation::Horizontal, ZERO_M),
+                    _ => (Orientation::Horizontal, ZERO_M)
                 };
+
+                x0 += margin.left as i64;
+                y0 += margin.top as i64;
 
                 let mut children: Vec<LayoutNode> = Vec::new();
                 let (mut child_x0, mut child_y0): (i64, i64) = (x0, y0);
+
                 for html_child in node.children() {
-                    if let Some(child_node) = self.parse_node(html_child, child_x0, child_y0) {
+
+                    let is_block = check_is_block_element(html_child) && orientation == Orientation::Horizontal;
+
+                    // TODO: this should only happen is self.parse_node() is successful
+                    if is_block {
+                        if let Some(prev_child) = children.last() {
+                            child_y0 += prev_child.rect.h as i64;
+                            child_x0 = x0;
+                        }
+                    }
+
+                    if let Some(child_node) = self.parse_node(html_child, child_x0, child_y0, url.is_some()) {
+
                         let Rect { w: child_w, h: child_h, .. } = child_node.rect;
                         match orientation {
                             Orientation::Horizontal => child_x0 += child_w as i64,
                             Orientation::Vertical => child_y0 += child_h as i64,
                         }
+
                         children.push(child_node);
                     }
                 }
 
                 if children.len() > 0 {
                     let rect_0 = children[0].rect.clone();
-                    let container_rect = children.iter()
+                    let mut container_rect = children.iter()
                         .map(|c| c.rect.clone())
                         .fold(rect_0, |acc, r| r.bounding_box(&acc));
+                    container_rect.w += margin.right;
+                    container_rect.h += margin.bottom;
                     Some(LayoutNode {
                         id: self.make_node_id(),
                         rect: container_rect,
@@ -206,24 +242,24 @@ impl<'a> Webview<'a> {
 
             scraper::Node::Text(text) => {
 
-                //const M: Margins = Margins { left: 0, right: 0, top: 5, bottom: 5};
-                const M: Margins = Margins { left: 0, right: 0, top: 0, bottom: 0};
+                let m = ZERO_M;
 
                 let text = core::str::from_utf8(text.as_bytes()).expect("Not UTF-8");
                 let font = &HACK_15; // TODO
-                let w = (text.len() * font.char_w) as u32 + M.left + M.right;
-                let h = font.char_h as u32  + M.top + M.bottom;
+                let color = if link { Color::BLUE } else { Color::BLACK };
+                let w = (text.len() * font.char_w) as u32 + m.left + m.right;
+                let h = font.char_h as u32  + m.top + m.bottom;
 
                 Some(LayoutNode {
                     id: self.make_node_id(),
                     rect: Rect { 
-                        x0: x0 + M.left as i64,
-                        y0: y0 + M.top as i64,
+                        x0: x0 + m.left as i64,
+                        y0: y0 + m.top as i64,
                         w, h
                     },
                     data: NodeData::Text { 
                         text: text.to_string(),
-                        color: Color::BLACK,  // TODO
+                        color,
                         font, 
                         url: None,
                     }
@@ -241,6 +277,18 @@ impl<'a> Webview<'a> {
     }
 }
 
+fn check_is_block_element(node: ego_tree::NodeRef<scraper::Node>) -> bool {
+    match node.value() {
+        scraper::Node::Element(element) => {
+            match element.name() {
+                "p" => true,
+                _ => false
+            }
+        },
+        _ => false
+    }
+}
+
 fn draw_node(fb: &mut Framebuffer, node: &LayoutNode) {
 
     let rect = &node.rect;
@@ -253,6 +301,7 @@ fn draw_node(fb: &mut Framebuffer, node: &LayoutNode) {
         NodeData::Text { text, color, font, .. } => {
             draw_str(fb, text, rect.x0, rect.y0, font, *color, None);
         },
+        NodeData::Image => (),
         NodeData::Container { children, bg_color, .. } => {
 
             if let &Some(bg_color) = bg_color {
@@ -271,7 +320,6 @@ fn get_hovered_link(x: i64, y: i64, node: &LayoutNode) -> Option<LinkData> {
     let rect = &node.rect;
 
     match &node.data {
-        NodeData::Text { .. } => None,
         NodeData::Container { children, url, .. } => match rect.check_contains_point(x, y) {
             true => match url {
                 Some(url) => Some(LinkData {
@@ -283,7 +331,8 @@ fn get_hovered_link(x: i64, y: i64, node: &LayoutNode) -> Option<LinkData> {
                 None => children.iter().find_map(|c| get_hovered_link(x, y, c))
             },
             false => None
-        }
+        },
+        _ => None,
     }
 
 }
@@ -302,6 +351,9 @@ fn debug_layout(root_node: &LayoutNode) {
                 for line in text.split("\n") {
                     out_str.push_str(&format!("{}{}{}\n", prefix, c, line));
                 }
+            },
+            NodeData::Image => {
+                out_str.push_str(&format!("{}{}IMAGE {:?}\n", prefix, c, node.rect));
             },
             NodeData::Container { children, orientation, tag, .. } => {
 
@@ -336,6 +388,7 @@ enum NodeData {
         font: &'static Font,
         url: Option<String>
     },
+    Image,
     Container { 
         children: Vec<LayoutNode>,
         orientation: Orientation,
@@ -351,7 +404,7 @@ struct LayoutNode {
     data: NodeData,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Orientation {
     Horizontal,
     Vertical,

@@ -145,7 +145,7 @@ pub fn step() {
     let win_input_state = system_state.input.change_origin(&win_rect);
 
     let url_override = match state.first_frame {
-        true => Some("https://news.ycombinator.com/item?id=40379347".to_owned()),
+        true => Some("https://news.ycombinator.com/item?id=40403569".to_owned()),
         false => match &state.request_state {
             RequestState::Dns { domain, path, .. } => Some(format!("{}{}{}", SCHEME, domain, path)),
             _ => None,

@@ -173,7 +173,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let mut fps_manager = FpsManager::new(FPS_TARGET);
 
     let mut system_state = SystemState { 
-        input: InputState::new(),
+        input: InputState::new(w, h),
         time: clock.time(),
     };
 

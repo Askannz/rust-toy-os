@@ -15,11 +15,11 @@ pub struct InputState {
 
 impl InputState {
 
-    pub fn new() -> Self {
+    pub fn new(w: u32, h: u32) -> Self {
         Self { 
             pointer: PointerState { 
-                x: 0,
-                y: 0,
+                x: (w / 2).into(),
+                y: (h / 2).into(),
                 left_clicked: false,
                 right_clicked: false,
             },

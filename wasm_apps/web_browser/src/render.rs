@@ -164,8 +164,11 @@ impl<'a> Webview<'a> {
                     _ => None,
                 };
 
-                let orientation = match element.name() {
+                let tag = element.name().to_string();
+
+                let orientation = match tag.as_str() {
                     "tr" => Orientation::Horizontal,
+                    "td" => Orientation::Vertical,
                     "tbody" => Orientation::Vertical,
                     "table" => Orientation::Vertical,
                     _ => Orientation::Horizontal
@@ -192,7 +195,7 @@ impl<'a> Webview<'a> {
                     Some(LayoutNode {
                         id: self.make_node_id(),
                         rect: container_rect,
-                        data: NodeData::Container { children, orientation, bg_color, url }
+                        data: NodeData::Container { children, orientation, bg_color, url, tag }
                     })
                 } else {
                     None
@@ -300,9 +303,9 @@ fn debug_layout(root_node: &LayoutNode) {
                     out_str.push_str(&format!("{}{}{}\n", prefix, c, line));
                 }
             },
-            NodeData::Container { children, orientation, .. } => {
+            NodeData::Container { children, orientation, tag, .. } => {
 
-                out_str.push_str(&format!("{}{}CONTAINER {:?} {:?}\n", prefix, c, orientation, node.rect));
+                out_str.push_str(&format!("{}{}CONTAINER {} {:?} {:?}\n", prefix, c, tag, orientation, node.rect));
 
                 let c2 = match is_last {
                     true => " ",
@@ -327,8 +330,19 @@ fn debug_layout(root_node: &LayoutNode) {
 }
 
 enum NodeData {
-    Text { text: String, color: Color, font: &'static Font, url: Option<String> },
-    Container { children: Vec<LayoutNode>, orientation: Orientation, bg_color: Option<Color>, url: Option<String> }
+    Text { 
+        text: String,
+        color: Color,
+        font: &'static Font,
+        url: Option<String>
+    },
+    Container { 
+        children: Vec<LayoutNode>,
+        orientation: Orientation,
+        bg_color: Option<Color>,
+        url: Option<String>,
+        tag: String,
+    }
 }
 
 struct LayoutNode {

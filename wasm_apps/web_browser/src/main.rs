@@ -18,6 +18,7 @@ use applib::ui::text::{EditableText, EditableTextConfig};
 mod tls;
 mod render;
 mod dns;
+mod html_parsing;
 
 use render::Webview;
 use tls::TlsClient;

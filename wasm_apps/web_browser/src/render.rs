@@ -4,6 +4,8 @@ use applib::drawing::text::draw_str;
 use applib::drawing::text::{HACK_15, Font};
 use applib::input::{InputState, InputEvent, PointerState};
 
+use crate::html_parsing::{parse_html, HtmlTree, NodeId, NodeData as HtmlNodeData};
+
 
 pub struct Webview<'a> {
     state: State<'a>,
@@ -141,22 +143,27 @@ impl<'a> Webview<'a> {
     }
 
     fn parse_html_to_layout(&mut self, html: &str) -> LayoutNode {
-        let tree = scraper::Html::parse_document(html).tree;
-        let root = tree.root().first_child().expect("Empty HTML");
-        self.parse_node(root, 0, 0, false).expect("Could not parse root HTML node")
+        //let tree = scraper::Html::parse_document(html).tree;
+        //let root = tree.root().first_child().expect("Empty HTML");
+
+        let tree = parse_html(html).unwrap();
+
+        self.parse_node(&tree, NodeId(0), 0, 0, false).expect("Could not parse root HTML node")
     }
 
-    fn parse_node<'b>(&mut self, node: ego_tree::NodeRef<'b, scraper::Node>, mut x0: i64, mut y0: i64, link: bool) -> Option<LayoutNode> {
+    fn parse_node<'b>(&mut self, tree: &HtmlTree, node_id: NodeId, mut x0: i64, mut y0: i64, link: bool) -> Option<LayoutNode> {
 
         const ZERO_M: Margins = Margins { left: 0, right: 0, top: 0, bottom: 0};
         const TR_M: Margins  = Margins { left: 0, right: 0, top: 5, bottom: 5};
+
+        let node = tree.get_node(node_id).unwrap();
     
-        match node.value() {
+        match &node.data {
 
-            scraper::Node::Element(element) if element.name() == "head" => None,
+            HtmlNodeData::Tag { name, .. } if *name == "head" => None,
 
-            scraper::Node::Element(element) if element.name() == "img" => {
-                let parse_dim = |attr: &str| -> u32 { element.attr(attr).map(|s| s.parse().ok()).flatten().unwrap_or(0) };
+            HtmlNodeData::Tag { name, attrs } if *name == "img" => {
+                let parse_dim = |attr: &str| -> u32 { attrs.get(attr).map(|s| s.parse().ok()).flatten().unwrap_or(0) };
                 let w: u32 = parse_dim("width");
                 let h: u32 = parse_dim("height");
                 Some(LayoutNode {
@@ -166,19 +173,19 @@ impl<'a> Webview<'a> {
                 })
             },
 
-            scraper::Node::Element(element) => {
+            HtmlNodeData::Tag { name, attrs } => {
 
-                let bg_color = match element.attr("bgcolor") {
+                let bg_color = match attrs.get("bgcolor") {
                     Some(hex_str) => Some(parse_hexcolor(hex_str)),
                     _ => None
                 };
 
-                let url: Option<String> = match element.name() {
-                    "a" => element.attr("href").map(|s| s.to_owned()),
+                let url: Option<String> = match *name {
+                    "a" => attrs.get("href").map(|&s| s.to_owned()),
                     _ => None,
                 };
 
-                let tag = element.name().to_string();
+                let tag = name.to_string();
 
                 let (orientation, margin) = match tag.as_str() {
                     "tr" => (Orientation::Horizontal, TR_M),
@@ -197,9 +204,11 @@ impl<'a> Webview<'a> {
                 let mut children: Vec<LayoutNode> = Vec::new();
                 let (mut child_x0, mut child_y0): (i64, i64) = (x0, y0);
 
-                for html_child in node.children() {
+                for html_child_id in node.children.iter() {
 
-                    let is_block = check_is_block_element(html_child) && orientation == Orientation::Horizontal;
+                    let html_child = tree.get_node(*html_child_id).unwrap();
+
+                    let is_block = check_is_block_element(&html_child.data) && orientation == Orientation::Horizontal;
 
                     // TODO: this should only happen is self.parse_node() is successful
                     if is_block {
@@ -209,7 +218,7 @@ impl<'a> Webview<'a> {
                         }
                     }
 
-                    if let Some(child_node) = self.parse_node(html_child, child_x0, child_y0, url.is_some()) {
+                    if let Some(child_node) = self.parse_node(tree, *html_child_id, child_x0, child_y0, url.is_some()) {
 
                         let Rect { w: child_w, h: child_h, .. } = child_node.rect;
                         match orientation {
@@ -238,9 +247,9 @@ impl<'a> Webview<'a> {
                 }
             },
 
-            scraper::Node::Text(text) if check_is_whitespace(&text) => None,
+            HtmlNodeData::Text { text } if check_is_whitespace(&text) => None,
 
-            scraper::Node::Text(text) => {
+            HtmlNodeData::Text { text } => {
 
                 let m = ZERO_M;
 
@@ -277,10 +286,10 @@ impl<'a> Webview<'a> {
     }
 }
 
-fn check_is_block_element(node: ego_tree::NodeRef<scraper::Node>) -> bool {
-    match node.value() {
-        scraper::Node::Element(element) => {
-            match element.name() {
+fn check_is_block_element(node_data: &HtmlNodeData) -> bool {
+    match node_data {
+        &HtmlNodeData::Tag { name, .. } => {
+            match name {
                 "p" => true,
                 _ => false
             }

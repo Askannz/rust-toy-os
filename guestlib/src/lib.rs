@@ -22,6 +22,8 @@ extern "C" {
     fn host_tcp_may_recv() -> i32;
     fn host_tcp_write(addr: i32, len: i32) -> i32;
     fn host_tcp_read(addr: i32, len: i32) -> i32;
+
+    fn host_get_consumed_fuel() -> i32;
 }
 
 
@@ -109,6 +111,11 @@ pub fn tcp_read(buf: &mut [u8]) -> usize {
         let read_len = host_tcp_read(addr, len);
         read_len.try_into().unwrap()
     }
+}
+
+pub fn get_consumed_fuel() -> u64 {
+    let fuel = unsafe { host_get_consumed_fuel() };
+    fuel as u64
 }
 
 // #[macro_export]

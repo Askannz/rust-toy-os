@@ -20,7 +20,7 @@ pub struct WasmEngine {
 impl WasmEngine {
 
     pub fn new() -> Self {
-        let engine = Engine::new(&Config::default().consume_fuel(false));
+        let engine = Engine::new(&Config::default().consume_fuel(true));
         WasmEngine { engine }
     }
 
@@ -39,6 +39,8 @@ impl WasmEngine {
     
         let wasm_init = instance.get_typed_func::<(), ()>(&store, "init").unwrap();
         let wasm_step = instance.get_typed_func::<(), ()>(&store, "step").unwrap();
+
+        store.add_fuel(u64::MAX).unwrap();
 
 
         //
@@ -444,6 +446,13 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         let read_len: i32 = read_len.try_into().unwrap();
 
         read_len
+    });
+
+    linker_impl!(m, "host_get_consumed_fuel", |caller: Caller<StoreData>| -> i32 {
+        caller.fuel_consumed()
+            .expect("Fuel metering disabled")
+            .try_into()
+            .unwrap()
     });
 
 }

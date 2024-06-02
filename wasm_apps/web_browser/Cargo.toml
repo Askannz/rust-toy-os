@@ -13,6 +13,7 @@ scraper = "0.19.0"
 ego-tree = "0.6.2"
 dns-message-parser = "0.7.0"
 bytes = "1.6.0"
+html-escape = "0.2.13"
 
 # To avoid error about missing tests
 [[bin]]

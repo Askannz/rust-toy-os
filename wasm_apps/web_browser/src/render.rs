@@ -169,7 +169,7 @@ impl<'a> Webview<'a> {
 
             HtmlNodeData::Tag { name, .. } if *name == "head" => None,
 
-            HtmlNodeData::Tag { name, attrs } if *name == "img" => {
+            HtmlNodeData::Tag { name, attrs, .. } if *name == "img" => {
                 let parse_dim = |attr: &str| -> u32 { attrs.get(attr).map(|s| s.parse().ok()).flatten().unwrap_or(0) };
                 let w: u32 = parse_dim("width");
                 let h: u32 = parse_dim("height");
@@ -180,15 +180,15 @@ impl<'a> Webview<'a> {
                 })
             },
 
-            HtmlNodeData::Tag { name, attrs } => {
+            HtmlNodeData::Tag { name, attrs, .. } => {
 
                 let bg_color = match attrs.get("bgcolor") {
                     Some(hex_str) => Some(parse_hexcolor(hex_str)),
                     _ => None
                 };
 
-                let url: Option<String> = match *name {
-                    "a" => attrs.get("href").map(|&s| s.to_owned()),
+                let url: Option<String> = match name.as_str() {
+                    "a" => attrs.get("href").cloned(),
                     _ => None,
                 };
 
@@ -295,8 +295,8 @@ impl<'a> Webview<'a> {
 
 fn check_is_block_element(node_data: &HtmlNodeData) -> bool {
     match node_data {
-        &HtmlNodeData::Tag { name, .. } => {
-            match name {
+        HtmlNodeData::Tag { name, .. } => {
+            match name.as_str() {
                 "p" => true,
                 _ => false
             }

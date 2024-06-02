@@ -1,5 +1,7 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::error::Error;
+use std::marker::PhantomData;
 use std::result::Result;
 use std::fmt;
 
@@ -16,7 +18,8 @@ pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
 
             ChunkType::Text => {
                 if tree.len() > 0 {
-                    let data = NodeData::Text { text: chunk.s };
+                    let text = html_escape::decode_html_entities(chunk.s).to_string();
+                    let data = NodeData::Text { text };
                     tree.add_node(parent_id, data)?;
                 }
             },
@@ -43,7 +46,7 @@ pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
 
                         Some(p_id) => {
 
-                            let curr_tag_name = match tree.get_node(p_id).unwrap().data {
+                            let curr_tag_name = match &tree.get_node(p_id).unwrap().data {
                                 NodeData::Tag { name, .. } => name,
                                 _ => return Err(HtmlError::new(&format!(
                                         "line {} col {}: parent node is Text, should not happen",
@@ -52,7 +55,7 @@ pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
                             };
 
 
-                            if name == curr_tag_name {
+                            if &name == curr_tag_name {
                                 parent_id = tree.get_parent(p_id)?;
                                 break;
                             } else {
@@ -78,7 +81,6 @@ pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
     Ok(tree)
 }
 
-
 fn check_is_void_element(tag_name: &str) -> bool {
     [
         "area",
@@ -100,9 +102,9 @@ fn check_is_void_element(tag_name: &str) -> bool {
 }
 
 #[derive(Debug)]
-enum ParsedTag<'a> {
-    Open { name: &'a str, attrs: BTreeMap<&'a str, &'a str>, is_void: bool },
-    Close { name: &'a str }
+enum ParsedTag {
+    Open { name: String, attrs: BTreeMap<String, String>, is_void: bool },
+    Close { name: String }
 }
 
 fn parse_tag(s: &str) -> Result<ParsedTag, HtmlError> {
@@ -127,19 +129,20 @@ fn parse_tag(s: &str) -> Result<ParsedTag, HtmlError> {
     };
 
     let (name, s) = s.split_once(' ').unwrap_or((s, ""));
+    let name = name.to_string();
 
     if closing {
         return Ok(ParsedTag::Close { name })
     }
 
     let attrs = parse_attrs(s)?;
-    let is_void = check_is_void_element(name);
+    let is_void = check_is_void_element(&name);
 
     Ok(ParsedTag::Open { name, attrs, is_void })
 
 }
 
-fn parse_attrs(s: &str) -> Result<BTreeMap<&str, &str>, HtmlError> {
+fn parse_attrs(s: &str) -> Result<BTreeMap<String, String>, HtmlError> {
 
     #[derive(Debug, Clone, Copy)]
     enum State<'a> { 
@@ -167,7 +170,8 @@ fn parse_attrs(s: &str) -> Result<BTreeMap<&str, &str>, HtmlError> {
             (_, State::InEqual { key }) => State::InEqual { key },
 
             ('"', State::InVal { key, i1 }) => {
-                let val = &s[i1..i];
+                let val = s[i1..i].to_string();
+                let key = html_escape::decode_html_entities(key).to_string();
                 attrs.insert(key, val);
                 State::Idle
             },
@@ -252,41 +256,41 @@ enum ChunkType {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NodeId(pub usize);
 
-pub struct Node<'a> {
-    pub data: NodeData<'a>,
+pub struct Node {
+    pub data: NodeData,
     pub parent: Option<NodeId>,
     pub children: Vec<NodeId>,
 }
 
 
 #[derive(Debug)]
-pub enum NodeData<'a> {
-    Tag { name: &'a str, attrs: BTreeMap<&'a str, &'a str> },
-    Text { text: &'a str }
+pub enum NodeData {
+    Tag { name: String, attrs: BTreeMap<String, String> },
+    Text { text: String }
 }
 
 
-pub struct HtmlTree<'a> {
-    nodes: Vec<Node<'a>>
+pub struct HtmlTree {
+    nodes: Vec<Node>
 }
 
 
 
-impl<'a> HtmlTree<'a> {
+impl HtmlTree {
 
     fn new() -> Self {
         Self { nodes: vec![] }
     }
 
-    pub fn get_node(&self, node_id: NodeId) -> Option<&Node<'a>> {
+    pub fn get_node(&self, node_id: NodeId) -> Option<&Node> {
         self.nodes.get(node_id.0)
     }
 
-    fn get_node_mut(&mut self, node_id: NodeId) -> Option<&mut NodeData<'a>> {
+    fn get_node_mut(&mut self, node_id: NodeId) -> Option<&mut NodeData> {
         self.nodes.get_mut(node_id.0).map(|node| &mut node.data)
     }
 
-    fn add_node(&mut self, parent_id: Option<NodeId>, data: NodeData<'a>) -> Result<NodeId, HtmlError> {
+    fn add_node(&mut self, parent_id: Option<NodeId>, data: NodeData) -> Result<NodeId, HtmlError> {
 
         let child_id = NodeId(self.nodes.len());
 
@@ -348,7 +352,7 @@ impl<'a> HtmlTree<'a> {
                         out_str.push_str(&format!("{}{}{}\n", prefix, c, line));
                     }
                 },
-                NodeData::Tag { name, attrs } => {
+                NodeData::Tag { name, attrs, .. } => {
     
                     out_str.push_str(&format!("{}{}{} {:?}\n", prefix, c, name, attrs));
     

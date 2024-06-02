@@ -29,22 +29,47 @@ pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
                     if !is_void { parent_id = new_id; }
                 },
 
-                ParsedTag::Close { name } => {
+                ParsedTag::Close { name } => loop {
+                    
+                    match parent_id {
+    
+                        None => {
+                            println!(
+                                "Unexpected closing tag on line {} col {}: </{}> (no parent)",
+                                chunk.line+1, chunk.col+1, name
+                            );
+                            break;
+                        },
 
-                    let curr_tag_name = parent_id
-                        .map(|parent_id| match tree.get_node(parent_id).unwrap().data {
-                            NodeData::Tag { name, .. } => Some(name),
-                            _ => None,
-                        })
-                        .flatten();
+                        Some(p_id) => {
 
-                    if let Some(curr_tag_name) = curr_tag_name {
-                        if name != curr_tag_name {
-                            return Err(HtmlError::new(&format!("Unexpected closing tag: {}", name)))
+                            let curr_tag_name = match tree.get_node(p_id).unwrap().data {
+                                NodeData::Tag { name, .. } => name,
+                                _ => return Err(HtmlError::new(&format!(
+                                        "line {} col {}: parent node is Text, should not happen",
+                                        chunk.line+1, chunk.col+1
+                                    ))),
+                            };
+
+
+                            if name == curr_tag_name {
+                                parent_id = tree.get_parent(p_id)?;
+                                break;
+                            } else {
+                                println!(
+                                    "Unexpected closing tag on line {} col {}: </{}>. Discarding parent <{}>.",
+                                    chunk.line+1, chunk.col+1, name, curr_tag_name
+                                );
+
+                                let parent_parent_id = tree.get_parent(p_id)?;
+                                if let Some(p_p_id) = parent_parent_id {
+                                    tree.transfer_children(p_id, p_p_id);
+                                }
+                                parent_id = parent_parent_id;
+                            }
                         }
                     }
 
-                    parent_id = tree.get_parent(parent_id.unwrap())?;
                 }
             }
         }
@@ -52,6 +77,7 @@ pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
 
     Ok(tree)
 }
+
 
 fn check_is_void_element(tag_name: &str) -> bool {
     [
@@ -165,22 +191,29 @@ fn get_chunks<'a>(html: &'a str) -> impl Iterator<Item = Chunk<'a>> {
     }
 
     html.char_indices().scan(
-        State::Idle,
-        |state, (i, c)| {
+        (State::Idle, 0, 0),
+        |(state, line, col), (i, c)| {
 
             let mut new_chunk = None;
+
+            if c == '\n' {
+                *line += 1;
+                *col = 0;
+            } else {
+                *col += 1;
+            }
 
             *state = match (c, *state) {
                 ('<', State::Idle) => State::InTag { i1: i, in_attr: false },
                 ('<', State::InText { i1 }) => {
                     let i2 = i;
-                    new_chunk = Some(Chunk { s: &html[i1..i2], chunk_type: ChunkType::Text });
+                    new_chunk = Some(Chunk { s: &html[i1..i2], chunk_type: ChunkType::Text, line: *line, col: *col });
                     State::InTag { i1: i, in_attr: false }
                 },
 
                 ('>', State::InTag { i1, .. }) => {
                     let i2 = i + 1;
-                    new_chunk = Some(Chunk { s: &html[i1..i2], chunk_type: ChunkType::Tag });
+                    new_chunk = Some(Chunk { s: &html[i1..i2], chunk_type: ChunkType::Tag, line: *line, col: *col });
                     State::Idle
                 },
 
@@ -205,6 +238,8 @@ fn get_chunks<'a>(html: &'a str) -> impl Iterator<Item = Chunk<'a>> {
 struct Chunk<'a> {
     s: &'a str,
     chunk_type: ChunkType,
+    line: usize,
+    col: usize,
 }
 
 #[derive(Debug)]
@@ -280,6 +315,20 @@ impl<'a> HtmlTree<'a> {
 
     fn len(&self) -> usize {
         self.nodes.len()
+    }
+
+    fn transfer_children(&mut self, src_id: NodeId, dst_id: NodeId) {
+
+        let (src_node, dst_node) = {
+            assert!(src_id != dst_id);
+            let (id_1, id_2) = if src_id.0 < dst_id.0 { (src_id.0, dst_id.0) } else { (dst_id.0, src_id.0) };
+            let (node_1, tail) = self.nodes[id_1..].split_first_mut().expect("Tree is empty");
+            let node_2 = &mut tail[id_2 - id_1 - 1];
+            if src_id.0 < dst_id.0 { (node_1, node_2) } else { (node_2, node_1) }
+        };
+
+        dst_node.children.extend(src_node.children.iter());
+        src_node.children.clear();
     }
 
     fn plot(&self) -> String {

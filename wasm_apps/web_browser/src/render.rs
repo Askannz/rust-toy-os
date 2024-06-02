@@ -10,15 +10,15 @@ use crate::html_parsing::{parse_html, HtmlTree, NodeId, NodeData as HtmlNodeData
 use crate::errors::HtmlError;
 
 pub struct Webview<'a> {
-    state: State<'a>,
+    state: State,
     view_rect: Rect,
     next_node_id: u64,
+    buffer: Framebuffer<'a>,
 }
 
-enum State<'a> {
+enum State {
     Blank,
     Active {
-        buffer: Framebuffer<'a>,
         layout: LayoutNode,
         link_data: Option<LinkData>,
         y_offset: i64,
@@ -34,7 +34,7 @@ struct LinkData {
 }
 
 const SCROLL_SPEED: u32 = 20;
-const MAX_RENDER_HEIGHT: u32 = 10_000;
+const MAX_RENDER_HEIGHT: u32 = 3_000;
 
 impl<'a> Webview<'a> {
 
@@ -43,6 +43,7 @@ impl<'a> Webview<'a> {
             state: State::Blank,
             view_rect: view_rect.clone(),
             next_node_id: 0,
+            buffer: Framebuffer::new_owned(view_rect.w, MAX_RENDER_HEIGHT),
         }
     }
 
@@ -58,21 +59,12 @@ impl<'a> Webview<'a> {
 
                     //debug_layout(&layout);
 
-                    let (bw, bh) = {
-                        let Rect { w: bw, h: bh, .. } = layout.rect;
-                        let bw = u32::min(bw, self.view_rect.w);
-                        let bh = u32::min(bh, MAX_RENDER_HEIGHT);
-                        (bw, bh)
-                    };
-        
-                    let mut buffer = Framebuffer::new_owned(bw, bh);
-            
-                    draw_node(&mut buffer, &layout);
+                    self.buffer.fill(Color::WHITE);
+                    draw_node(&mut self.buffer, &layout);
         
                     redraw = true;
 
                     State::Active {
-                        buffer,
                         layout,
                         link_data: None,
                         y_offset: 0,
@@ -125,14 +117,14 @@ impl<'a> Webview<'a> {
 
         match &self.state {
             State::Blank => (),
-            State::Active { buffer, y_offset, link_data, .. } => {
+            State::Active { y_offset, link_data, .. } => {
                 let src_rect = {
-                    let mut r = buffer.shape_as_rect().clone();
+                    let mut r = self.buffer.shape_as_rect().clone();
                     r.y0 += y_offset;
                     r
                 };
     
-                fb.copy_from_fb(&buffer, &src_rect, &self.view_rect, false);
+                fb.copy_from_fb(&self.buffer, &src_rect, &self.view_rect, false);
     
                 if let Some(link_data) = link_data {
                     let mut r = link_data.rect.clone();

@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use applib::{Color, Rect, Framebuffer};
 use applib::drawing::primitives::{draw_rect, blend_rect};
 use applib::drawing::text::draw_str;
@@ -5,7 +7,7 @@ use applib::drawing::text::{HACK_15, Font};
 use applib::input::{InputState, InputEvent, PointerState};
 
 use crate::html_parsing::{parse_html, HtmlTree, NodeId, NodeData as HtmlNodeData};
-
+use crate::errors::HtmlError;
 
 pub struct Webview<'a> {
     state: State<'a>,
@@ -20,7 +22,8 @@ enum State<'a> {
         layout: LayoutNode,
         link_data: Option<LinkData>,
         y_offset: i64,
-    }
+    },
+    Error { msg: String }
 }
 
 struct LinkData {
@@ -49,34 +52,41 @@ impl<'a> Webview<'a> {
 
         if let Some(html) = html_update {
 
-            let layout = self.parse_html_to_layout(html);
+            self.state = match self.parse_html_to_layout(html) {
 
-            //debug_layout(&layout);
+                Ok(layout) => {
 
-            let (bw, bh) = {
-                let Rect { w: bw, h: bh, .. } = layout.rect;
-                let bw = u32::min(bw, self.view_rect.w);
-                let bh = u32::min(bh, MAX_RENDER_HEIGHT);
-                (bw, bh)
-            };
+                    //debug_layout(&layout);
 
-            let mut buffer = Framebuffer::new_owned(bw, bh);
-    
-            draw_node(&mut buffer, &layout);
+                    let (bw, bh) = {
+                        let Rect { w: bw, h: bh, .. } = layout.rect;
+                        let bw = u32::min(bw, self.view_rect.w);
+                        let bh = u32::min(bh, MAX_RENDER_HEIGHT);
+                        (bw, bh)
+                    };
+        
+                    let mut buffer = Framebuffer::new_owned(bw, bh);
+            
+                    draw_node(&mut buffer, &layout);
+        
+                    redraw = true;
 
-            self.state = State::Active {
-                buffer,
-                layout,
-                link_data: None,
-                y_offset: 0,
-            };
+                    State::Active {
+                        buffer,
+                        layout,
+                        link_data: None,
+                        y_offset: 0,
+                    }
+                },
 
-            redraw = true;
-
+                Err(error) => {
+                    redraw = true;
+                    State::Error { msg: error.to_string() }
+                }
+            }
         }
 
         match &mut self.state {
-            State::Blank => (),
             State::Active { layout, link_data, y_offset, .. } => {
 
                 for event in input_state.events {
@@ -104,7 +114,8 @@ impl<'a> Webview<'a> {
                 if let Some(link_data_val) = link_data {
                     link_data_val.clicked = input_state.pointer.left_clicked;
                 }
-            }
+            },
+            _ => (),
         }
 
         redraw
@@ -112,21 +123,27 @@ impl<'a> Webview<'a> {
 
     pub fn draw(&self, fb: &mut Framebuffer) {
 
-        if let State::Active { buffer, y_offset, link_data, .. } = &self.state {
-
-            let src_rect = {
-                let mut r = buffer.shape_as_rect().clone();
-                r.y0 += y_offset;
-                r
-            };
-
-            fb.copy_from_fb(&buffer, &src_rect, &self.view_rect, false);
-
-            if let Some(link_data) = link_data {
-                let mut r = link_data.rect.clone();
-                r.y0 = r.y0 + self.view_rect.y0 - y_offset;
-                r.x0 = r.x0 + self.view_rect.x0;
-                blend_rect(fb, &r, Color::rgba(0, 0, 255, 128));
+        match &self.state {
+            State::Blank => (),
+            State::Active { buffer, y_offset, link_data, .. } => {
+                let src_rect = {
+                    let mut r = buffer.shape_as_rect().clone();
+                    r.y0 += y_offset;
+                    r
+                };
+    
+                fb.copy_from_fb(&buffer, &src_rect, &self.view_rect, false);
+    
+                if let Some(link_data) = link_data {
+                    let mut r = link_data.rect.clone();
+                    r.y0 = r.y0 + self.view_rect.y0 - y_offset;
+                    r.x0 = r.x0 + self.view_rect.x0;
+                    blend_rect(fb, &r, Color::rgba(0, 0, 255, 128));
+                }
+            },
+            State::Error { msg } => {
+                let Rect { x0, y0, .. } = self.view_rect;
+                draw_str(fb, msg, x0, y0, &HACK_15, Color::BLACK, None);
             }
         }
     }
@@ -142,13 +159,11 @@ impl<'a> Webview<'a> {
         None
     }
 
-    fn parse_html_to_layout(&mut self, html: &str) -> LayoutNode {
-        //let tree = scraper::Html::parse_document(html).tree;
-        //let root = tree.root().first_child().expect("Empty HTML");
+    fn parse_html_to_layout(&mut self, html: &str) -> Result<LayoutNode, HtmlError> {
 
-        let tree = parse_html(html).unwrap();
-
-        self.parse_node(&tree, NodeId(0), 0, 0, false).expect("Could not parse root HTML node")
+        let tree = parse_html(html)?;
+        self.parse_node(&tree, NodeId(0), 0, 0, false)
+            .ok_or(HtmlError::new("Error computing HTML layout"))
     }
 
     fn parse_node<'b>(&mut self, tree: &HtmlTree, node_id: NodeId, mut x0: i64, mut y0: i64, link: bool) -> Option<LayoutNode> {

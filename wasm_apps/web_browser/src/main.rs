@@ -14,7 +14,7 @@ use applib::{Color, Rect};
 use applib::ui::button::{Button, ButtonConfig};
 use applib::ui::text::{EditableText, EditableTextConfig};
 
-
+mod errors;
 mod tls;
 mod render;
 mod dns;

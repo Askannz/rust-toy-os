@@ -3,6 +3,8 @@ use std::error::Error;
 use std::result::Result;
 use std::fmt;
 
+use crate::errors::HtmlError;
+
 pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
 
     let mut tree = HtmlTree::new();
@@ -233,22 +235,7 @@ pub struct HtmlTree<'a> {
     nodes: Vec<Node<'a>>
 }
 
-#[derive(Debug)]
-pub struct HtmlError { msg: String }
 
-impl fmt::Display for HtmlError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "TreeError")
-    }
-}
-
-impl Error for HtmlError {}
-
-impl HtmlError {
-    fn new(msg: &str) -> Self {
-        Self { msg: msg.to_owned() }
-    }
-}
 
 impl<'a> HtmlTree<'a> {
 

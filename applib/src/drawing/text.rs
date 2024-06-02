@@ -55,12 +55,12 @@ lazy_static! {
 pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>) {
     let mut x = x0;
     for c in s.chars() {
-        draw_char(fb, c, x, y0, font, color, bg_color);
+        draw_char(fb, c, x, y0, font, color, bg_color, true);
         x += font.char_w as i64;
     }
 }
 
-pub fn draw_char(fb: &mut Framebuffer, c: char, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>) {
+pub fn draw_char(fb: &mut Framebuffer, c: char, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>, blend: bool) {
 
     let mut c = c as u8;
 
@@ -78,18 +78,30 @@ pub fn draw_char(fb: &mut Framebuffer, c: char, x0: i64, y0: i64, font: &Font, c
     for x in xc0..=xc1 {
         for y in yc0..=yc1 {
 
-            if let Some(bg_color) = bg_color {
-                fb.set_pixel(x, y, bg_color);
-            }
-
             let i_font = (y - yc0) as usize * char_w * nb_chars + (x - xc0) as usize + c_index * char_w;
             let val_font = font.bitmap[i_font];
+            let is_in_font = val_font > 0;
 
-            if val_font > 0 {
-                if let Some(curr_color) = fb.get_pixel(x, y) {
-                    let new_color = blend_colors(Color::rgba(r, g, b, val_font), curr_color);
-                    fb.set_pixel(x, y, new_color);
+            let txt_color = Color::rgba(r, g, b, val_font);
+
+            let new_color = match blend {
+
+                true => match fb.get_pixel(x, y) {
+                    Some(curr_color) => match is_in_font {
+                        true => Some(blend_colors(txt_color, curr_color)),
+                        false => bg_color.map(|bg_color| blend_colors(bg_color, curr_color))
+                    }
+                    None => None
                 }
+
+                false => match is_in_font {
+                    true => Some(txt_color),
+                    false => bg_color
+                }
+            };
+
+            if let Some(new_color) = new_color {
+                fb.set_pixel(x, y, new_color);
             }
         }
     }
@@ -176,7 +188,7 @@ pub fn draw_rich_slice(fb: &mut Framebuffer, rich_slice: &[RichChar], x0: i64, y
     let mut x = x0;
     for rich_char in rich_slice.iter() {
         let dy = (max_base_y - rich_char.font.base_y)  as i64;
-        draw_char(fb, rich_char.c, x, y0 + dy, rich_char.font, rich_char.color, rich_char.bg_color);
+        draw_char(fb, rich_char.c, x, y0 + dy, rich_char.font, rich_char.color, rich_char.bg_color, true);
         x += rich_char.font.char_w as i64;
     }
 }

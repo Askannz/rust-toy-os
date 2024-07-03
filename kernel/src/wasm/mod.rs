@@ -1,8 +1,12 @@
 use core::mem::size_of;
 use core::cell::RefCell;
+use alloc::string::ToString;
 use alloc::vec;
+use alloc::vec::Vec;
 use alloc::rc::Rc;
+use alloc::format;
 use alloc::{string::String, borrow::ToOwned};
+use alloc::collections::BTreeMap;
 use smoltcp::iface::SocketHandle;
 
 use smoltcp::wire::{Ipv4Address};
@@ -12,6 +16,7 @@ use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsCo
 use applib::{SystemState, Framebuffer, Rect};
 
 use crate::network::TcpStack;
+use crate::time::SystemClock;
 
 pub struct WasmEngine {
     engine: Engine,
@@ -94,6 +99,7 @@ fn write_to_wasm_mem<'a, T: Sized>(caller: &'a mut Caller<StoreData>, addr: i32,
     }
 }
 
+
 fn get_linear_memory(caller: &Caller<StoreData>) -> Memory {
     caller.get_export("memory")
         .expect("No WASM memory export")
@@ -115,7 +121,9 @@ struct StoreData {
     framebuffer: Option<WasmFramebufferDef>,
 
     tcp_stack: Rc<RefCell<TcpStack>>,
-    socket_handle: Option<SocketHandle>
+    socket_handle: Option<SocketHandle>,
+
+    timings: BTreeMap<String, u64>,
 }
 
 impl StoreData {
@@ -127,6 +135,7 @@ impl StoreData {
             win_rect: init_rect.clone(),
             tcp_stack,
             socket_handle: None,
+            timings: BTreeMap::new(),
         }
     }
 }
@@ -138,16 +147,24 @@ pub struct WasmApp {
 }
 
 impl WasmApp {
-    pub fn step(&mut self, system_state: &SystemState, system_fb: &mut Framebuffer, win_rect: &Rect) {
+    pub fn step(&mut self, system_state: &SystemState, clock: &SystemClock, system_fb: &mut Framebuffer, win_rect: &Rect) {
 
         let mut ctx = self.store.as_context_mut();
+        let data_mut = ctx.data_mut();
+        
+        data_mut.system_state = Some(system_state.clone());
+        data_mut.win_rect = win_rect.clone();
+        data_mut.timings.clear();
 
-        ctx.data_mut().system_state = Some(system_state.clone());
-        ctx.data_mut().win_rect = win_rect.clone();
-
+        let t0 = clock.time();
+        let fu0 = self.store.fuel_consumed().unwrap();
         self.wasm_step
             .call(&mut self.store, ())
             .expect("Failed to step WASM app");
+        let t1 = clock.time();
+        let fu1 = self.store.fuel_consumed().unwrap();
+
+        debug_stall(t0, t1, fu0, fu1, self.store.data());
 
 
         let wasm_fb_def = self.store.as_context().data().framebuffer.clone();
@@ -166,6 +183,31 @@ impl WasmApp {
 
             system_fb.copy_from_fb(&wasm_fb, &wasm_fb.shape_as_rect(), &win_rect, false);
         }
+    }
+}
+
+fn debug_stall(t0: f64, t1: f64, fu0: u64, fu1: u64, store_data: &StoreData) {
+
+    const STALL_THRESHOLD: f64 = 100f64;
+
+    if t1 - t0 > STALL_THRESHOLD {
+
+        let total_consumed = fu1 - fu0;
+        let total_consumed_f = total_consumed as f64;
+
+        let lines: Vec<String> = store_data.timings.iter().map(|(k, v)| {
+            format!("  {}: {}u ({:.1}%)", k, v, 100f64 * (*v as f64) / total_consumed_f)
+        })
+        .collect();
+
+        log::warn!(
+            "STALL ({:.0}ms > {:.0}ms)\n\
+            Total fuel consumed: {}u\n\
+            {}",
+            t1 - t0, STALL_THRESHOLD,
+            total_consumed,
+            lines.join("\n")
+        );
     }
 }
 
@@ -448,11 +490,20 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         read_len
     });
 
-    linker_impl!(m, "host_get_consumed_fuel", |caller: Caller<StoreData>| -> i32 {
-        caller.fuel_consumed()
-            .expect("Fuel metering disabled")
-            .try_into()
-            .unwrap()
+    linker_impl!(m, "host_get_consumed_fuel", |mut caller: Caller<StoreData>, consumed_addr: i32| {
+        let consumed = caller.fuel_consumed().expect("Fuel metering disabled");
+        write_to_wasm_mem(&mut caller, consumed_addr, &consumed.to_le_bytes());
+    });
+
+    linker_impl!(m, "host_save_timing", |mut caller: Caller<StoreData>, key_addr: i32, key_len: i32, consumed_addr: i32| {
+
+        let key_buf = get_wasm_mem_slice(&mut caller, key_addr, key_len);
+        let key = core::str::from_utf8(key_buf).expect("Invalid key").to_string();
+
+        let consumed_buf: [u8; 8] = get_wasm_mem_slice(&mut caller, consumed_addr, 8).try_into().unwrap();
+        let consumed: u64 = u64::from_le_bytes(consumed_buf);
+
+        caller.data_mut().timings.insert(key, consumed);
     });
 
 }

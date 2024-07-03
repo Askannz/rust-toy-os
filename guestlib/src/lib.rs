@@ -23,7 +23,8 @@ extern "C" {
     fn host_tcp_write(addr: i32, len: i32) -> i32;
     fn host_tcp_read(addr: i32, len: i32) -> i32;
 
-    fn host_get_consumed_fuel() -> i32;
+    fn host_get_consumed_fuel(addr: i32);
+    fn host_save_timing(key_addr: i32, key_len: i32, consumed_addr: i32);
 }
 
 
@@ -114,8 +115,26 @@ pub fn tcp_read(buf: &mut [u8]) -> usize {
 }
 
 pub fn get_consumed_fuel() -> u64 {
-    let fuel = unsafe { host_get_consumed_fuel() };
-    fuel as u64
+
+    let ptr = vec![0u8; 8].leak().as_mut_ptr();
+
+    unsafe { host_get_consumed_fuel(ptr as i32); }
+    
+    let s: &[u8; 8] = unsafe { core::slice::from_raw_parts(ptr, 8).try_into().unwrap() };
+
+    u64::from_le_bytes(*s)
+}
+
+pub fn save_timing(key: &str, consumed: u64) {
+
+    let key_buf = key.as_bytes();
+    let key_addr = key_buf.as_ptr() as i32;
+    let key_len = key_buf.len() as i32;
+
+    let consumed_buf = consumed.to_le_bytes();
+    let consumed_addr = consumed_buf.as_ptr() as i32;
+
+    unsafe { host_save_timing(key_addr, key_len, consumed_addr); }
 }
 
 // #[macro_export]

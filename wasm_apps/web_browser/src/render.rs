@@ -53,15 +53,24 @@ impl<'a> Webview<'a> {
 
         if let Some(html) = html_update {
 
-            self.state = match self.parse_html_to_layout(html) {
+            let fu0 = guestlib::get_consumed_fuel();
+            let parse_res = self.parse_html_to_layout(html);
+            let fu1 = guestlib::get_consumed_fuel();
+            guestlib::save_timing("html_parsing", fu1 - fu0);
+
+            self.state = match parse_res {
 
                 Ok(layout) => {
 
                     //debug_layout(&layout);
 
                     self.buffer.fill(Color::WHITE);
+
+                    let fu0 = guestlib::get_consumed_fuel();
                     draw_node(&mut self.buffer, &layout);
-        
+                    let fu1 = guestlib::get_consumed_fuel();
+                    guestlib::save_timing("layout_drawing", fu1 - fu0);
+
                     redraw = true;
 
                     State::Active {

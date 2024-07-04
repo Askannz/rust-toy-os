@@ -103,6 +103,10 @@ impl Socket {
     fn may_send(&self) -> bool {
         guestlib::tcp_may_send(self.handle_id)
     }
+    
+    fn close(&mut self) {
+        guestlib::tcp_close(self.handle_id)
+    }
 }
 
 
@@ -250,9 +254,7 @@ pub fn step() {
                 if *in_count >= state.buffer.len() {
                     let ip_addr = dns::parse_tcp_dns_response(&state.buffer);
 
-                    // TODO: close DNS socket
-
-
+                    dns_socket.close();
 
                     let handle_id = guestlib::tcp_connect(ip_addr, 443);
                     let https_socket = Socket { handle_id };
@@ -313,6 +315,8 @@ pub fn step() {
 
 
                 } else if n_plaintext == 0 && !tls_client.socket.may_recv() {
+
+                    tls_client.socket.close();
 
                     let http_string = core::str::from_utf8(&state.buffer).expect("Not UTF-8");
                     let html_string = get_html_string(http_string);

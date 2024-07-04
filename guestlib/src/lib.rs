@@ -22,6 +22,7 @@ extern "C" {
     fn host_tcp_may_recv(handle_id: i32) -> i32;
     fn host_tcp_write(addr: i32, len: i32, handle_id: i32) -> i32;
     fn host_tcp_read(addr: i32, len: i32, handle_id: i32) -> i32;
+    fn host_tcp_close(handle_id: i32);
 
     fn host_get_consumed_fuel(addr: i32);
     fn host_save_timing(key_addr: i32, key_len: i32, consumed_addr: i32);
@@ -113,6 +114,10 @@ pub fn tcp_read(buf: &mut [u8], handle_id: i32) -> usize {
         let read_len = host_tcp_read(addr, len, handle_id);
         read_len.try_into().unwrap()
     }
+}
+
+pub fn tcp_close(handle_id: i32) {
+    unsafe { host_tcp_close(handle_id) }
 }
 
 pub fn get_consumed_fuel() -> u64 {

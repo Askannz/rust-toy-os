@@ -514,6 +514,13 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         read_len
     });
 
+    linker_impl!(m, "host_tcp_close", |mut caller: Caller<StoreData>, handle_id: i32| {
+        let data_mut = caller.data_mut();
+        let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+        let socket_handle = data_mut.sockets_store.get_handle(handle_id).expect("No TCP connection");
+        tcp_stack.close(socket_handle);
+    });
+
     linker_impl!(m, "host_get_consumed_fuel", |mut caller: Caller<StoreData>, consumed_addr: i32| {
         let consumed = caller.fuel_consumed().expect("Fuel metering disabled");
         write_to_wasm_mem(&mut caller, consumed_addr, &consumed.to_le_bytes());

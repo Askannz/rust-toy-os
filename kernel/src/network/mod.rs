@@ -72,6 +72,8 @@ impl TcpStack {
 
         let socket_handle = self.sockets.add(socket);
 
+        log::debug!("Connected to port {} ({:?})", port, socket_handle);
+
         socket_handle
     }
 
@@ -89,7 +91,7 @@ impl TcpStack {
 
     pub fn write(&mut self, handle: SocketHandle, buf: &[u8]) -> usize {
         let socket = self.sockets.get_mut::<tcp::Socket>(handle);
-        log::debug!("Writing {}B to socket", buf.len());
+        log::debug!("Writing {}B to socket {:?}", buf.len(), handle);
         let sent_len = socket.send_slice(buf).unwrap();
         log::debug!("{}B sent", sent_len);
         sent_len
@@ -99,7 +101,7 @@ impl TcpStack {
 
         let socket = self.sockets.get_mut::<tcp::Socket>(handle);
 
-        socket.recv(|recv_buffer| {
+        let recv_len = socket.recv(|recv_buffer| {
 
             let src_len = recv_buffer.len();
             let dst_len = buf.len();
@@ -107,7 +109,18 @@ impl TcpStack {
 
             buf[..cpy_len].copy_from_slice(&recv_buffer[..cpy_len]);
             (cpy_len, cpy_len)
-        }).unwrap()
+        }).unwrap();
+
+        log::debug!("Received {}B from socket {:?}", recv_len, handle);
+
+        recv_len
+    }
+
+    pub fn close(&mut self, handle: SocketHandle) {
+        log::debug!("Closing socket {:?}", handle);
+        let socket = self.sockets.get_mut::<tcp::Socket>(handle);
+        socket.close();
+        self.sockets.remove(handle);
     }
 
     pub fn poll_interface(&mut self, clock: &SystemClock) {

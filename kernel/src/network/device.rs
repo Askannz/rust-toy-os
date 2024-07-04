@@ -79,7 +79,7 @@ impl<'a> phy::TxToken for TxToken<'a> {
         let mut buffer = Vec::new();
         buffer.resize(len, 0);
         let result = f(&mut buffer);
-        self.virtio_dev.try_send(buffer);
+        self.virtio_dev.send(buffer);
         result
     }
 }

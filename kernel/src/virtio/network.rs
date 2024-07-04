@@ -84,7 +84,7 @@ impl VirtioNetwork {
         Some(virtio_packet.data.to_vec())
     }
 
-    pub fn try_send(&mut self, value: Vec<u8>) -> Option<()> {
+    pub fn send(&mut self, value: Vec<u8>) {
 
         assert!(value.len() <= MAX_PACKET_SIZE);
 
@@ -110,8 +110,16 @@ impl VirtioNetwork {
         unsafe {
             self.transmitq1.try_push(vec![
                 QueueMessage::DevReadOnly { data: msg, len: Some(virtio_buf_len) },
-            ])
+            ]).unwrap()
         }
+
+        loop {
+            let resp_list_opt: Option<Vec<VirtioNetPacket>>  = unsafe { self.transmitq1.try_pop() };
+            if let Some(resp_list) = resp_list_opt {
+                assert_eq!(resp_list.len(), 1);
+                break;
+            }
+         }
     }
 }
 

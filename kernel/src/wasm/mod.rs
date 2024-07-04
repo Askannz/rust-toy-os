@@ -150,6 +150,8 @@ struct StoreData {
     sockets_store: SocketsStore,
 
     timings: BTreeMap<String, u64>,
+
+    qemu_dump: Option<Vec<u8>>,
 }
 
 impl StoreData {
@@ -163,6 +165,8 @@ impl StoreData {
             tcp_stack,
             sockets_store: SocketsStore::new(),
             timings: BTreeMap::new(),
+
+            qemu_dump: None,
         }
     }
 }
@@ -543,6 +547,17 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         let consumed: u64 = u64::from_le_bytes(consumed_buf);
 
         caller.data_mut().timings.insert(key, consumed);
+    });
+
+    linker_impl!(m, "host_qemu_dump", |mut caller: Caller<StoreData>, addr: i32, len: i32| {
+        let mem_slice = get_wasm_mem_slice(&caller, addr, len);
+        let buf = mem_slice.to_vec();
+
+        let data_mut = caller.data_mut();
+        let phys_addr = buf.as_ptr() as u64;
+        data_mut.qemu_dump = Some(buf);
+    
+        log::debug!("QEMU DUMP: pmemsave 0x{:x} {} pmem_dump.bin", phys_addr, len);
     });
 
 }

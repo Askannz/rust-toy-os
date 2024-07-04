@@ -26,6 +26,8 @@ extern "C" {
 
     fn host_get_consumed_fuel(addr: i32);
     fn host_save_timing(key_addr: i32, key_len: i32, consumed_addr: i32);
+
+    fn host_qemu_dump(addr: i32, len: i32);
 }
 
 
@@ -141,6 +143,12 @@ pub fn save_timing(key: &str, consumed: u64) {
     let consumed_addr = consumed_buf.as_ptr() as i32;
 
     unsafe { host_save_timing(key_addr, key_len, consumed_addr); }
+}
+
+pub fn qemu_dump(buf: &[u8]) {
+    let addr = buf.as_ptr() as i32;
+    let len = buf.len() as i32;
+    unsafe { host_qemu_dump(addr, len) };
 }
 
 // #[macro_export]

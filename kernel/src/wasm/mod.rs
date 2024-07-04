@@ -9,6 +9,8 @@ use alloc::{string::String, borrow::ToOwned};
 use alloc::collections::BTreeMap;
 use smoltcp::iface::SocketHandle;
 
+use rand::rngs::SmallRng;
+use rand::{RngCore, SeedableRng};
 use smoltcp::wire::{Ipv4Address};
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext, Memory};
 
@@ -143,6 +145,7 @@ struct StoreData {
     win_rect: Rect,
     framebuffer: Option<WasmFramebufferDef>,
 
+    rng: SmallRng,
     tcp_stack: Rc<RefCell<TcpStack>>,
     sockets_store: SocketsStore,
 
@@ -156,6 +159,7 @@ impl StoreData {
             system_state: None,
             framebuffer: None,
             win_rect: init_rect.clone(),
+            rng: SmallRng::seed_from_u64(0),
             tcp_stack,
             sockets_store: SocketsStore::new(),
             timings: BTreeMap::new(),
@@ -338,13 +342,17 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
 
         log::debug!("Function random_get() called (dest buffer {:#x})", buf);
 
-        let mem = get_linear_memory(&caller);
-        let mem_data = mem.data_mut(&mut caller);
-
         let buf = buf as usize;
         let buf_len = buf_len as usize;
 
-        mem_data[buf..buf+buf_len].fill(0xFF);
+        let mut rand_bytes = vec![0u8; buf_len];
+        let rng = &mut caller.data_mut().rng;
+        rng.fill_bytes(&mut rand_bytes);
+
+        let mem = get_linear_memory(&caller);
+        let mem_data = mem.data_mut(&mut caller);
+
+        mem_data[buf..buf+buf_len].copy_from_slice(&rand_bytes);
 
         0
     });

@@ -20,6 +20,7 @@ enumn = "0.1.12"
 wasmi = { version = "0.31.0", default-features = false }
 anyhow = { version = "1.0.75", default-features = false }
 chrono = { version = "0.4.35", default-features = false }
+rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }
 
 
 [[bin]]

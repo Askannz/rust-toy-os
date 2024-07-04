@@ -319,8 +319,10 @@ pub fn step() {
                     tls_client.socket.close();
 
                     let http_string = core::str::from_utf8(&state.buffer).expect("Not UTF-8");
-                    let html_string = get_html_string(http_string);
-                    state.request_state = RequestState::Render { domain: domain.clone(), html: html_string };
+                    //guestlib::qemu_dump(http_string.as_bytes());
+                    let (header, body) = parse_http(http_string);
+                    println!("HTTP response header:\n{}", header);
+                    state.request_state = RequestState::Render { domain: domain.clone(), html: body };
                 }
             }
 
@@ -352,17 +354,41 @@ pub fn step() {
     state.first_frame = false;
 }
 
-fn get_html_string(http_string: &str) -> String {
+fn parse_http(http_string: &str) -> (String, String) {
 
-    let s = http_string;
+    // TODO: this only works for Transfer-Encoding: chunked
 
-    let i1 = s.find("<html").expect("No <html> tag");
-    let (_, s) = s.split_at(i1);
+    #[derive(Debug, PartialEq, Clone, Copy)]
+    enum ParsingState {
+        ReadingHeader,
+        ReadingChunkSize,
+        ReadingChunk,
+    }
 
-    let i2 = s.find("</html>").expect("No </html> tag");
-    let (s, _) = s.split_at(i2);
+    let mut state = ParsingState::ReadingHeader;
 
-    s.to_string()
+    let mut header_parts = Vec::new();
+    let mut body_parts = Vec::new();
+
+    for line in http_string.split("\r\n") {
+        state = match state {
+            ParsingState::ReadingHeader if line.len() > 0 => {
+                header_parts.push(line);
+                ParsingState::ReadingHeader
+            }
+            ParsingState::ReadingHeader => ParsingState::ReadingChunkSize,
+            ParsingState::ReadingChunkSize => ParsingState::ReadingChunk,
+            ParsingState::ReadingChunk => {
+                body_parts.push(line);
+                ParsingState::ReadingChunkSize
+            },
+        };
+    }
+
+    let header = header_parts.join("\n");
+    let body = body_parts.join("");
+
+    (header, body)
 }
 
 fn parse_url(url: &str) -> (&str, &str) {

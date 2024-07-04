@@ -39,7 +39,7 @@ struct AppState<'a> {
 
 enum RequestState {
     Idle { domain: Option<String> },
-    Dns { domain: String, path: String, dns_state: DnsState },
+    Dns { domain: String, path: String, dns_socket: Socket, dns_state: DnsState },
     Https { domain: String, path: String, tls_client: TlsClient<Socket>, https_state: HttpsState },
     Render { domain: String, html: String },
 }
@@ -75,22 +75,33 @@ static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 const SCHEME: &str = "https://";
 const DNS_SERVER_IP: [u8; 4] = [1, 1, 1, 1];
 
-struct Socket;
+struct Socket { handle_id: i32 }
 
 
 impl Read for Socket {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        Ok(guestlib::tcp_read(buf))
+        Ok(guestlib::tcp_read(buf, self.handle_id))
     }
 }
 
 impl Write for Socket {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        Ok(guestlib::tcp_write(buf))
+        Ok(guestlib::tcp_write(buf, self.handle_id))
     }
 
     fn flush(&mut self) -> Result<()> {
         Ok(())
+    }
+}
+
+impl Socket {
+
+    fn may_recv(&self) -> bool {
+        guestlib::tcp_may_recv(self.handle_id)
+    }
+
+    fn may_send(&self) -> bool {
+        guestlib::tcp_may_send(self.handle_id)
     }
 }
 
@@ -185,19 +196,21 @@ pub fn step() {
             }
 
             if let Some((domain, path)) = url_data {
-                guestlib::tcp_connect(DNS_SERVER_IP, 53);
+                let handle_id = guestlib::tcp_connect(DNS_SERVER_IP, 53);
+                let dns_socket = Socket { handle_id };
                 state.request_state = RequestState::Dns { 
                     domain,
                     path,
+                    dns_socket,
                     dns_state: DnsState::Connecting
                 };
             }
         },
 
-        RequestState::Dns { domain, path, dns_state } => match dns_state {
+        RequestState::Dns { domain, path, dns_state, dns_socket } => match dns_state {
 
             DnsState::Connecting => {
-                let socket_ready = guestlib::tcp_may_send() && guestlib::tcp_may_recv();
+                let socket_ready = dns_socket.may_send() && dns_socket.may_recv();
                 if socket_ready {
                     let tcp_bytes = dns::make_tcp_dns_request(domain);
                     state.buffer.resize(tcp_bytes.len(), 0u8);
@@ -207,7 +220,7 @@ pub fn step() {
             },
 
             DnsState::Sending { out_count } => {
-                let n = guestlib::tcp_write(&state.buffer[*out_count..]);
+                let n = dns_socket.write(&state.buffer[*out_count..]).expect("Could not write to DNS socket");
                 *out_count += n;
 
                 if *out_count >= state.buffer.len() {
@@ -217,7 +230,7 @@ pub fn step() {
             }
 
             DnsState::ReceivingLen { in_count } => {
-                let n = guestlib::tcp_read(&mut state.buffer[*in_count..]);
+                let n = dns_socket.read(&mut state.buffer[*in_count..]).expect("Could not read from DNS socket");
                 *in_count += n;
 
                 if *in_count >= 2 {
@@ -231,16 +244,22 @@ pub fn step() {
             }
 
             DnsState::ReceivingResp { in_count } => {
-                let n = guestlib::tcp_read(&mut state.buffer[*in_count..]);
+                let n = dns_socket.read(&mut state.buffer[*in_count..]).expect("Could not read from DNS socket");
                 *in_count += n;
 
                 if *in_count >= state.buffer.len() {
                     let ip_addr = dns::parse_tcp_dns_response(&state.buffer);
-                    guestlib::tcp_connect(ip_addr, 443);
+
+                    // TODO: close DNS socket
+
+
+
+                    let handle_id = guestlib::tcp_connect(ip_addr, 443);
+                    let https_socket = Socket { handle_id };
                     state.request_state = RequestState::Https { 
                         domain: domain.clone(),
                         path: path.clone(),
-                        tls_client: TlsClient::new(Socket, domain),
+                        tls_client: TlsClient::new(https_socket, domain),
                         https_state: HttpsState::Connecting,
                     }
                 }
@@ -250,7 +269,7 @@ pub fn step() {
         RequestState::Https { domain, path, tls_client, https_state } => match https_state {
 
             HttpsState::Connecting => {
-                let socket_ready = guestlib::tcp_may_send() && guestlib::tcp_may_recv();
+                let socket_ready = tls_client.socket.may_send() && tls_client.socket.may_recv();
                 if socket_ready {
 
                     let http_string = format!(
@@ -293,7 +312,7 @@ pub fn step() {
                     tls_client.read_exact(&mut state.buffer[len..len+n_plaintext]).unwrap();
 
 
-                } else if n_plaintext == 0 && !guestlib::tcp_may_recv() {
+                } else if n_plaintext == 0 && !tls_client.socket.may_recv() {
 
                     let http_string = core::str::from_utf8(&state.buffer).expect("Not UTF-8");
                     let html_string = get_html_string(http_string);

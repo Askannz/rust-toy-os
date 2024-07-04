@@ -6,7 +6,7 @@ use rustls::pki_types::ServerName;
 use rustls::RootCertStore;
 
 pub struct TlsClient<T> {
-    socket: T,
+    pub socket: T,
     closing: bool,
     clean_closure: bool,
     tls_conn: rustls::ClientConnection,

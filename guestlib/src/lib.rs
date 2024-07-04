@@ -17,11 +17,11 @@ extern "C" {
     fn host_get_win_rect(addr: i32);
     fn host_set_framebuffer(addr: i32, w: i32, h: i32);
 
-    fn host_tcp_connect(ip_addr: i32, port: i32);
-    fn host_tcp_may_send() -> i32;
-    fn host_tcp_may_recv() -> i32;
-    fn host_tcp_write(addr: i32, len: i32) -> i32;
-    fn host_tcp_read(addr: i32, len: i32) -> i32;
+    fn host_tcp_connect(ip_addr: i32, port: i32) -> i32;
+    fn host_tcp_may_send(handle_id: i32) -> i32;
+    fn host_tcp_may_recv(handle_id: i32) -> i32;
+    fn host_tcp_write(addr: i32, len: i32, handle_id: i32) -> i32;
+    fn host_tcp_read(addr: i32, len: i32, handle_id: i32) -> i32;
 
     fn host_get_consumed_fuel(addr: i32);
     fn host_save_timing(key_addr: i32, key_len: i32, consumed_addr: i32);
@@ -82,34 +82,35 @@ pub fn get_framebuffer<'a>(handle: &'a mut FramebufferHandle) -> Framebuffer<'a>
 }
 
 
-pub fn tcp_connect(ip_addr: [u8; 4], port: u16) {
+pub fn tcp_connect(ip_addr: [u8; 4], port: u16) -> i32{
     let ip_addr: i32 = i32::from_le_bytes(ip_addr);
     let port: i32 = port.into();
-    unsafe { host_tcp_connect(ip_addr, port) }
+    let handle_id = unsafe { host_tcp_connect(ip_addr, port) };
+    handle_id
 }
 
-pub fn tcp_may_send() -> bool {
-    unsafe { host_tcp_may_send() != 0 }
+pub fn tcp_may_send(handle_id: i32) -> bool {
+    unsafe { host_tcp_may_send(handle_id) != 0 }
 }
 
-pub fn tcp_may_recv() -> bool {
-    unsafe { host_tcp_may_recv() != 0 }
+pub fn tcp_may_recv(handle_id: i32) -> bool {
+    unsafe { host_tcp_may_recv(handle_id) != 0 }
 }
 
-pub fn tcp_write(buf: &[u8]) -> usize {
+pub fn tcp_write(buf: &[u8], handle_id: i32) -> usize {
     unsafe {
         let addr = buf.as_ptr() as i32;
         let len = buf.len() as i32;
-        let written_len = host_tcp_write(addr, len);
+        let written_len = host_tcp_write(addr, len, handle_id);
         written_len.try_into().unwrap()
     }
 }
 
-pub fn tcp_read(buf: &mut [u8]) -> usize {
+pub fn tcp_read(buf: &mut [u8], handle_id: i32) -> usize {
     unsafe {
         let addr = buf.as_ptr() as i32;
         let len = buf.len() as i32;
-        let read_len = host_tcp_read(addr, len);
+        let read_len = host_tcp_read(addr, len, handle_id);
         read_len.try_into().unwrap()
     }
 }

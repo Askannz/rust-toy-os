@@ -114,6 +114,29 @@ struct WasmFramebufferDef {
     w: u32,
 }
 
+struct SocketsStore {
+    sockets: BTreeMap<i32, SocketHandle>,
+    next_id: i32
+}
+
+impl SocketsStore {
+
+    fn new() -> Self {
+        Self { sockets: BTreeMap::new(), next_id: 0 }
+    }
+
+    fn add_handle(&mut self, handle: SocketHandle) -> i32 {
+        let new_id = self.next_id;
+        self.next_id += 1;
+        self.sockets.insert(new_id, handle);
+        new_id
+    }
+
+    fn get_handle(&self, handle_id: i32) -> Option<SocketHandle> {
+        self.sockets.get(&handle_id).cloned()
+    }
+}
+
 struct StoreData {
     app_name: String,
     system_state: Option<SystemState>,
@@ -121,7 +144,7 @@ struct StoreData {
     framebuffer: Option<WasmFramebufferDef>,
 
     tcp_stack: Rc<RefCell<TcpStack>>,
-    socket_handle: Option<SocketHandle>,
+    sockets_store: SocketsStore,
 
     timings: BTreeMap<String, u64>,
 }
@@ -134,7 +157,7 @@ impl StoreData {
             framebuffer: None,
             win_rect: init_rect.clone(),
             tcp_stack,
-            socket_handle: None,
+            sockets_store: SocketsStore::new(),
             timings: BTreeMap::new(),
         }
     }
@@ -425,7 +448,7 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
 
     // TODO: proper socket handles rather than a single global socket
 
-    linker_impl!(m, "host_tcp_connect", |mut caller: Caller<StoreData>, ip_addr: i32, port: i32| {
+    linker_impl!(m, "host_tcp_connect", |mut caller: Caller<StoreData>, ip_addr: i32, port: i32| -> i32 {
         let data_mut = caller.data_mut();
         let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
 
@@ -433,31 +456,32 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         let port: u16 = port.try_into().expect("Invalid port value");
 
         let socket_handle = tcp_stack.connect(Ipv4Address(ip_bytes), port);
-        data_mut.socket_handle = Some(socket_handle);
+        let handle_id = data_mut.sockets_store.add_handle(socket_handle);
+        handle_id
     });
 
-    linker_impl!(m, "host_tcp_may_send", |caller: Caller<StoreData>| -> i32 {
+    linker_impl!(m, "host_tcp_may_send", |caller: Caller<StoreData>, handle_id: i32| -> i32 {
         let data = caller.data();
         let tcp_stack = data.tcp_stack.borrow_mut();
-        let socket_handle = data.socket_handle.expect("No TCP connection");
+        let socket_handle = data.sockets_store.get_handle(handle_id).expect("No TCP connection");
         tcp_stack.may_send(socket_handle).into()
     });
 
-    linker_impl!(m, "host_tcp_may_recv", |caller: Caller<StoreData>| -> i32 {
+    linker_impl!(m, "host_tcp_may_recv", |caller: Caller<StoreData>, handle_id: i32| -> i32 {
         let data = caller.data();
         let tcp_stack = data.tcp_stack.borrow_mut();
-        let socket_handle = data.socket_handle.expect("No TCP connection");
+        let socket_handle = data.sockets_store.get_handle(handle_id).expect("No TCP connection");
         tcp_stack.may_recv(socket_handle).into()
     });
 
-    linker_impl!(m, "host_tcp_write", |mut caller: Caller<StoreData>, addr: i32, len: i32| -> i32 {
+    linker_impl!(m, "host_tcp_write", |mut caller: Caller<StoreData>, addr: i32, len: i32, handle_id: i32| -> i32 {
 
         let buf = get_wasm_mem_slice(&mut caller, addr, len).to_vec();
 
         let data_mut = caller.data_mut();
         let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
 
-        let socket_handle = data_mut.socket_handle.expect("No TCP connection");
+        let socket_handle = data_mut.sockets_store.get_handle(handle_id).expect("No TCP connection");
 
         let written_len = tcp_stack.write(socket_handle, &buf);
 
@@ -466,7 +490,7 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         written_len
     });
 
-    linker_impl!(m, "host_tcp_read", |mut caller: Caller<StoreData>, addr: i32, len: i32| -> i32 {
+    linker_impl!(m, "host_tcp_read", |mut caller: Caller<StoreData>, addr: i32, len: i32, handle_id: i32| -> i32 {
 
         let len = len as usize;
         let addr = addr as usize;
@@ -476,7 +500,7 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         let read_len: usize = {
             let data_mut = caller.data_mut();
             let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
-            let socket_handle = data_mut.socket_handle.expect("No TCP connection");
+            let socket_handle = data_mut.sockets_store.get_handle(handle_id).expect("No TCP connection");
             tcp_stack.read(socket_handle, &mut buf)
         };
 

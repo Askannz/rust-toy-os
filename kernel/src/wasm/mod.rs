@@ -219,7 +219,7 @@ impl WasmApp {
 
 fn debug_stall(t0: f64, t1: f64, fu0: u64, fu1: u64, store_data: &StoreData) {
 
-    const STALL_THRESHOLD: f64 = 100f64;
+    const STALL_THRESHOLD: f64 = 1000.0 / 60.0;
 
     if t1 - t0 > STALL_THRESHOLD {
 

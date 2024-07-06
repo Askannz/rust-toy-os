@@ -217,8 +217,8 @@ pub fn step() {
                 let socket_ready = dns_socket.may_send() && dns_socket.may_recv();
                 if socket_ready {
                     let tcp_bytes = dns::make_tcp_dns_request(domain);
-                    state.buffer.resize(tcp_bytes.len(), 0u8);
-                    state.buffer.copy_from_slice(&tcp_bytes);
+                    state.buffer.clear();
+                    state.buffer.write(&tcp_bytes).unwrap();
                     *dns_state = DnsState::Sending { out_count: 0 };
                 }
             },
@@ -273,8 +273,9 @@ pub fn step() {
             HttpsState::Connecting => {
                 let socket_ready = tls_client.socket.may_send() && tls_client.socket.may_recv();
                 if socket_ready {
-
-                    let http_string = format!(
+                    state.buffer.clear();
+                    write!(
+                        &mut state.buffer,
                         "GET {} HTTP/1.1\r\n\
                         Host: {}\r\n\
                         Connection: close\r\n\
@@ -282,11 +283,8 @@ pub fn step() {
                         \r\n",
                         path,
                         domain
-                    );
-                    let http_bytes = http_string.as_bytes();
-
-                    state.buffer.resize(http_bytes.len(), 0u8);
-                    state.buffer.copy_from_slice(&http_bytes);
+                    ).unwrap();
+;
                     *https_state = HttpsState::Sending { out_count: 0 };
                 }
             },
@@ -298,7 +296,7 @@ pub fn step() {
                 *out_count += n;
 
                 if *out_count >= state.buffer.len() {
-                    state.buffer.resize(0, 0u8);
+                    state.buffer.clear();
                     *https_state = HttpsState::Receiving;
                 }
             },
@@ -307,14 +305,13 @@ pub fn step() {
 
                 let n_plaintext = tls_client.update();
 
-                if n_plaintext > 0 {
+                if tls_client.socket.may_recv() {
 
                     let len = state.buffer.len();
                     state.buffer.resize(len+n_plaintext, 0u8);
                     tls_client.read_exact(&mut state.buffer[len..len+n_plaintext]).unwrap();
 
-
-                } else if n_plaintext == 0 && !tls_client.socket.may_recv() {
+                } else {
 
                     tls_client.socket.close();
 

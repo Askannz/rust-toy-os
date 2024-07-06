@@ -1,18 +1,20 @@
-use std::io::{self, Read, Write};
+use std::io;
 use std::sync::Arc;
 
 use rustls::pki_types::ServerName;
 use rustls::RootCertStore;
 
-pub struct TlsClient<T> {
-    pub socket: T,
+use crate::socket::Socket;
+
+pub struct TlsClient {
+    socket: Socket,
     closed: bool,
     tls_conn: rustls::ClientConnection,
 }
 
-impl<T: Read + Write> TlsClient<T> {
+impl TlsClient {
     pub fn new(
-        sock: T,
+        sock: Socket,
         server_name: &str,
     ) -> Self {
 
@@ -96,8 +98,16 @@ impl<T: Read + Write> TlsClient<T> {
         };
     }
 
+    pub fn socket_ready(&self) -> bool {
+        self.socket.may_send() && self.socket.may_recv()
+    }
+
+    pub fn tls_closed(&self) -> bool {
+        self.closed
+    }
+
 }
-impl<T> io::Write for TlsClient<T> {
+impl io::Write for TlsClient {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         self.tls_conn.writer().write(bytes)
     }
@@ -107,7 +117,7 @@ impl<T> io::Write for TlsClient<T> {
     }
 }
 
-impl<T> io::Read for TlsClient<T> {
+impl io::Read for TlsClient {
     fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
         match self.tls_conn.reader().read(bytes) {
             //Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => Ok(0),

@@ -18,10 +18,12 @@ mod errors;
 mod tls;
 mod render;
 mod dns;
+mod socket;
 mod html_parsing;
 
 use render::Webview;
 use tls::TlsClient;
+use socket::Socket;
 
 struct AppState<'a> {
     fb_handle: FramebufferHandle,
@@ -40,7 +42,7 @@ struct AppState<'a> {
 enum RequestState {
     Idle { domain: Option<String> },
     Dns { domain: String, path: String, dns_socket: Socket, dns_state: DnsState },
-    Https { domain: String, path: String, tls_client: TlsClient<Socket>, https_state: HttpsState },
+    Https { domain: String, path: String, tls_client: TlsClient, https_state: HttpsState },
     Render { domain: String, html: String },
 }
 
@@ -75,39 +77,6 @@ static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 const SCHEME: &str = "https://";
 const DNS_SERVER_IP: [u8; 4] = [1, 1, 1, 1];
 
-struct Socket { handle_id: i32 }
-
-
-impl Read for Socket {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        Ok(guestlib::tcp_read(buf, self.handle_id))
-    }
-}
-
-impl Write for Socket {
-    fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        Ok(guestlib::tcp_write(buf, self.handle_id))
-    }
-
-    fn flush(&mut self) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl Socket {
-
-    fn may_recv(&self) -> bool {
-        guestlib::tcp_may_recv(self.handle_id)
-    }
-
-    fn may_send(&self) -> bool {
-        guestlib::tcp_may_send(self.handle_id)
-    }
-    
-    fn close(&mut self) {
-        guestlib::tcp_close(self.handle_id)
-    }
-}
 
 
 fn main() {}
@@ -200,8 +169,7 @@ pub fn step() {
             }
 
             if let Some((domain, path)) = url_data {
-                let handle_id = guestlib::tcp_connect(DNS_SERVER_IP, 53);
-                let dns_socket = Socket { handle_id };
+                let dns_socket = Socket::new(DNS_SERVER_IP, 53);
                 state.request_state = RequestState::Dns { 
                     domain,
                     path,
@@ -256,8 +224,7 @@ pub fn step() {
 
                     dns_socket.close();
 
-                    let handle_id = guestlib::tcp_connect(ip_addr, 443);
-                    let https_socket = Socket { handle_id };
+                    let https_socket = Socket::new(ip_addr, 443);
                     state.request_state = RequestState::Https { 
                         domain: domain.clone(),
                         path: path.clone(),
@@ -271,8 +238,7 @@ pub fn step() {
         RequestState::Https { domain, path, tls_client, https_state } => match https_state {
 
             HttpsState::Connecting => {
-                let socket_ready = tls_client.socket.may_send() && tls_client.socket.may_recv();
-                if socket_ready {
+                if tls_client.socket_ready() {
                     state.buffer.clear();
                     write!(
                         &mut state.buffer,
@@ -305,19 +271,18 @@ pub fn step() {
 
                 let n_plaintext = tls_client.update();
 
-                if tls_client.socket.may_recv() {
+                if n_plaintext > 0 {
 
                     let len = state.buffer.len();
                     state.buffer.resize(len+n_plaintext, 0u8);
                     tls_client.read_exact(&mut state.buffer[len..len+n_plaintext]).unwrap();
 
-                } else {
-
-                    tls_client.socket.close();
+                } else if tls_client.tls_closed() {
 
                     let http_string = core::str::from_utf8(&state.buffer).expect("Not UTF-8");
                     //guestlib::qemu_dump(http_string.as_bytes());
                     let (header, body) = parse_http(http_string);
+                    //guestlib::qemu_dump(body.as_bytes());
                     println!("HTTP response header:\n{}", header);
                     state.request_state = RequestState::Render { domain: domain.clone(), html: body };
                 }

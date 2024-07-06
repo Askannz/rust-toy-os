@@ -5,10 +5,11 @@ use crate::pci::PciDevice;
 use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};
 
 const Q_SIZE: usize = 64;
+const BUF_SIZE: usize = core::mem::size_of::<VirtioInputEvent>();
 
 pub struct VirtioInput {
     pub virtio_dev: VirtioDevice,
-    eventq: VirtioQueue<Q_SIZE>
+    eventq: VirtioQueue<Q_SIZE, BUF_SIZE>
 }
 
 impl VirtioInput {
@@ -53,6 +54,7 @@ impl VirtioInput {
                 self.eventq.try_push(vec![
                     QueueMessage::<VirtioInputEvent>::DevWriteOnly
                 ]);
+                self.eventq.notify_device();
             }
         }
 

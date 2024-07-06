@@ -1,4 +1,6 @@
 use core::convert::TryInto;
+use core::hash::Hasher;
+use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
@@ -103,11 +105,11 @@ impl<const Q_SIZE: usize> VirtQStorage<Q_SIZE> {
     }
 }
 
-pub struct VirtioQueue<const Q_SIZE: usize> {
+pub struct VirtioQueue<const Q_SIZE: usize, const BUF_SIZE: usize> {
     q_index: u16,
     storage: Box<VirtQStorage<Q_SIZE>>,
     pop_index: usize,
-    notify_ptr: VirtAddr
+    notify_ptr: VirtAddr,
 }
 
 pub trait VirtqSerializable: Clone + Default {}
@@ -150,7 +152,7 @@ pub struct VirtioPciCommonCfg {
     pub queue_device: u64
 }
 
-impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
+impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
 
     fn get_descriptor(&mut self) -> Option<usize> {
         for (desc_index, available) in self.storage.avail_desc.iter_mut().enumerate() {
@@ -191,8 +193,14 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
                 }
             };
 
-            let buffer = Box::new(buffer);
-            descriptor.addr = memory::get_mapper().ref_to_phys(Box::leak(buffer)).as_u64();
+            let mapper = memory::get_mapper();
+
+            unsafe { 
+                let virt_addr = mapper.phys_to_virt(PhysAddr::new(descriptor.addr));
+                let mut desc_buffer: Box<T> = Box::from_raw(virt_addr.as_mut_ptr());
+                *desc_buffer = buffer;
+                Box::leak(desc_buffer);
+            };
 
             if i < n - 1 {
                 descriptor.next = desc_indices[i + 1] as u16;
@@ -205,6 +213,11 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
         self.storage.driver_area.idx += 1;
 
+        Some(())
+    }
+
+    pub unsafe fn notify_device(&self) {
+
         let q_index: u8 = self.q_index.try_into().unwrap();
 
         let mut ptr = {
@@ -214,7 +227,6 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
         ptr.write(q_index as u16);
 
-        Some(())
     }
 
     pub unsafe fn try_pop<T: VirtqSerializable>(&mut self) -> Option<Vec<T>> {
@@ -237,12 +249,12 @@ impl<const Q_SIZE: usize> VirtioQueue<Q_SIZE> {
 
             let descriptor = self.storage.descriptor_area.get(desc_index).unwrap();
             //log::debug!("Received descriptor: {:?}", descriptor);
-            let buffer = unsafe { 
+            unsafe { 
                 let virt_addr = mapper.phys_to_virt(PhysAddr::new(descriptor.addr));
-                Box::from_raw(virt_addr.as_mut_ptr())
+                let desc_buffer: Box<T> = Box::from_raw(virt_addr.as_mut_ptr());
+                out.push(*desc_buffer.to_owned());
+                Box::leak(desc_buffer);
             };
-
-            out.push(*buffer);
 
             let next_desc = descriptor.next.into();
 
@@ -371,16 +383,23 @@ impl VirtioDevice {
         assert_eq!(status, 0x08);
     }
 
-    pub fn initialize_queue<const Q_SIZE: usize>(
+    pub fn initialize_queue<const Q_SIZE: usize, const BUF_SIZE: usize>(
         &mut self,
         q_index: u16,
-    ) -> VirtioQueue<Q_SIZE> {
+    ) -> VirtioQueue<Q_SIZE, BUF_SIZE> {
 
         let mapper = memory::get_mapper();
 
         // TODO: prevent a queue from being initialized twice
 
-        let storage = Box::new(VirtQStorage::new());
+        let mut storage = Box::new(VirtQStorage::new());
+
+        for descriptor in storage.descriptor_area.iter_mut(){
+            let buffer = Box::new([0u8; BUF_SIZE]);
+            let buf_ref = Box::leak(buffer);
+            let pys_addr =  memory::get_mapper().ref_to_phys(buf_ref);
+            descriptor.addr = pys_addr.as_u64();
+        }
 
         // Calculating addresses
     
@@ -404,6 +423,7 @@ impl VirtioDevice {
             let q_size: usize = self.common_config.map(|s| &s.queue_size).read().into();
             assert_eq!(q_size, Q_SIZE);
         }
+        
 
         let notify_ptr = self.get_queue_notify_ptr(q_index);
 
@@ -411,7 +431,7 @@ impl VirtioDevice {
             q_index,
             storage,
             pop_index: 0,
-            notify_ptr
+            notify_ptr,
         }
     }
 

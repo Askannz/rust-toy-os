@@ -10,6 +10,8 @@ const Q_SIZE: usize = 256;
 // https://docs.oasis-open.org/virtio/virtio/v1.1/csprd01/virtio-v1.1-csprd01.html#x1-2050006
 pub const MAX_PACKET_SIZE: usize = 1514;
 
+const BUF_SIZE: usize = core::mem::size_of::<VirtioNetPacket>();
+
 #[repr(u32)]
 #[allow(non_camel_case_types)]
 enum NetworkFeatureBits {
@@ -19,8 +21,8 @@ enum NetworkFeatureBits {
 pub struct VirtioNetwork {
     pub virtio_dev: VirtioDevice,
     pub mac_addr: [u8; 6],
-    receiveq1: VirtioQueue<Q_SIZE>,
-    transmitq1: VirtioQueue<Q_SIZE>,
+    receiveq1: VirtioQueue<Q_SIZE, BUF_SIZE>,
+    transmitq1: VirtioQueue<Q_SIZE, BUF_SIZE>,
 }
 
 #[repr(C)]
@@ -79,6 +81,7 @@ impl VirtioNetwork {
             self.receiveq1.try_push(vec![
                 QueueMessage::<VirtioNetPacket>::DevWriteOnly
             ]).unwrap();
+            self.receiveq1.notify_device();
         }
 
         Some(virtio_packet.data.to_vec())
@@ -110,7 +113,8 @@ impl VirtioNetwork {
         unsafe {
             self.transmitq1.try_push(vec![
                 QueueMessage::DevReadOnly { data: msg, len: Some(virtio_buf_len) },
-            ]).unwrap()
+            ]).unwrap();
+            self.transmitq1.notify_device();
         }
 
         loop {

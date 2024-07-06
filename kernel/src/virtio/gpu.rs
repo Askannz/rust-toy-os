@@ -10,11 +10,12 @@ pub const W: usize = 1366;
 pub const H: usize = 768;
 
 const Q_SIZE: usize = 64;
+const BUF_SIZE: usize = core::mem::size_of::<GpuVirtioMsg>();
 
 pub struct VirtioGPU {
     pub virtio_dev: VirtioDevice,
     pub framebuffer: Box<[u8]>,
-    controlq: VirtioQueue<Q_SIZE>
+    controlq: VirtioQueue<Q_SIZE, BUF_SIZE>
 }
 
 #[repr(C)]
@@ -117,6 +118,7 @@ impl VirtioGPU {
                 QueueMessage::DevReadOnly { data: input, len: None },
                 QueueMessage::DevWriteOnly
             ]).unwrap();
+            self.controlq.notify_device();
         }
 
 

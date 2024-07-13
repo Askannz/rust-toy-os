@@ -7,6 +7,7 @@ use std::fmt;
 
 use core::cell::OnceCell;
 use alloc::format;
+use alloc::collections::BTreeMap;
 use guestlib::{FramebufferHandle};
 use applib::{Color, Rect};
 
@@ -131,6 +132,7 @@ pub fn step() {
 
     let url_override = match state.first_frame {
         true => Some("https://news.ycombinator.com".to_owned()),
+        //true => Some("https://en.wikipedia.org/wiki/Rust".to_owned()),
         false => match &state.request_state {
             RequestState::Dns { domain, path, .. } => Some(format!("{}{}{}", SCHEME, domain, path)),
             _ => None,
@@ -283,7 +285,6 @@ pub fn step() {
                     //guestlib::qemu_dump(http_string.as_bytes());
                     let (header, body) = parse_http(http_string);
                     //guestlib::qemu_dump(body.as_bytes());
-                    println!("HTTP response header:\n{}", header);
                     state.request_state = RequestState::Render { domain: domain.clone(), html: body };
                 }
             }
@@ -316,39 +317,67 @@ pub fn step() {
     state.first_frame = false;
 }
 
-fn parse_http(http_string: &str) -> (String, String) {
+fn parse_http(http_response: &str) -> (HttpHeader, String) {
 
-    // TODO: this only works for Transfer-Encoding: chunked
+    let (header, body) = parse_header(http_response);
+    let transfer_encoding = header.get("transfer-encoding");
+
+    println!("Transfer-encoding: {:?}", transfer_encoding);
+
+    let body = match transfer_encoding.map(|s| s.as_str()) {
+        Some("chunked") => {
+            println!("De-chunking response body");
+            dechunk_body(body)
+        },
+        _ => body.to_owned()
+    };
+
+    (header, body)
+
+}
+
+fn dechunk_body(body: &str) -> String {
 
     #[derive(Debug, PartialEq, Clone, Copy)]
     enum ParsingState {
-        ReadingHeader,
         ReadingChunkSize,
         ReadingChunk,
     }
 
-    let mut state = ParsingState::ReadingHeader;
+    let mut state = ParsingState::ReadingChunkSize;
 
-    let mut header_parts = Vec::new();
-    let mut body_parts = Vec::new();
+    let mut chunks = Vec::new();
 
-    for line in http_string.split("\r\n") {
+    for line in body.split("\r\n") {
         state = match state {
-            ParsingState::ReadingHeader if line.len() > 0 => {
-                header_parts.push(line);
-                ParsingState::ReadingHeader
-            }
-            ParsingState::ReadingHeader => ParsingState::ReadingChunkSize,
             ParsingState::ReadingChunkSize => ParsingState::ReadingChunk,
             ParsingState::ReadingChunk => {
-                body_parts.push(line);
+                chunks.push(line);
                 ParsingState::ReadingChunkSize
             },
         };
     }
 
-    let header = header_parts.join("\n");
-    let body = body_parts.join("");
+    chunks.join("")
+}
+
+type HttpHeader = BTreeMap<String, String>;
+
+fn parse_header(http_response: &str) ->  (HttpHeader, &str){
+
+    let i = http_response.find("\r\n\r\n").unwrap();
+
+    let (header_str, body) = http_response.split_at(i);
+
+    println!("HTTP response header:\n{}", header_str);
+
+    let header = header_str.split("\r\n").filter_map(|line| {
+        let (key, val) = line.split_once(":")?;
+        let val = val.trim().to_owned();
+        let key = key.to_lowercase();
+        Some((key, val))
+    })
+    .collect();
 
     (header, body)
 }

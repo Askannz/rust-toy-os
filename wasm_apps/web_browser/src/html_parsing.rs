@@ -37,7 +37,7 @@ pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
                     match parent_id {
     
                         None => {
-                            println!(
+                            log::warn!(
                                 "Unexpected closing tag on line {} col {}: </{}> (no parent)",
                                 chunk.line+1, chunk.col+1, name
                             );
@@ -59,7 +59,7 @@ pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
                                 parent_id = tree.get_parent(p_id)?;
                                 break;
                             } else {
-                                println!(
+                                log::warn!(
                                     "Unexpected closing tag on line {} col {}: </{}>. Discarding parent <{}>.",
                                     chunk.line+1, chunk.col+1, name, curr_tag_name
                                 );

@@ -8,7 +8,7 @@ use std::fmt;
 use core::cell::OnceCell;
 use alloc::format;
 use alloc::collections::BTreeMap;
-use guestlib::{FramebufferHandle};
+use guestlib::{FramebufferHandle, WasmLogger};
 use applib::{Color, Rect};
 
 
@@ -25,6 +25,9 @@ mod html_parsing;
 use render::Webview;
 use tls::TlsClient;
 use socket::Socket;
+
+static LOGGER: WasmLogger = WasmLogger;
+const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState<'a> {
     fb_handle: FramebufferHandle,
@@ -84,6 +87,9 @@ fn main() {}
 
 #[no_mangle]
 pub fn init() -> () {
+
+    log::set_max_level(LOGGING_LEVEL);
+    log::set_logger(&LOGGER).unwrap();
 
     let win_rect = guestlib::get_win_rect();
     let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
@@ -301,7 +307,7 @@ pub fn step() {
     let new_state_debug = format!("{:?}", state.request_state);
 
     if new_state_debug != prev_state_debug {
-        println!("Request state change: {} => {}", prev_state_debug, new_state_debug);
+        log::info!("Request state change: {} => {}", prev_state_debug, new_state_debug);
     }
 
     let redraw = redraw_button || redraw_url_bar || redraw_view || state.first_frame;
@@ -322,11 +328,9 @@ fn parse_http(http_response: &str) -> (HttpHeader, String) {
     let (header, body) = parse_header(http_response);
     let transfer_encoding = header.get("transfer-encoding");
 
-    println!("Transfer-encoding: {:?}", transfer_encoding);
-
     let body = match transfer_encoding.map(|s| s.as_str()) {
         Some("chunked") => {
-            println!("De-chunking response body");
+            log::info!("De-chunking response body");
             dechunk_body(body)
         },
         _ => body.to_owned()
@@ -369,7 +373,7 @@ fn parse_header(http_response: &str) ->  (HttpHeader, &str){
 
     let (header_str, body) = http_response.split_at(i);
 
-    println!("HTTP response header:\n{}", header_str);
+    log::debug!("HTTP response header:\n{}", header_str);
 
     let header = header_str.split("\r\n").filter_map(|line| {
         let (key, val) = line.split_once(":")?;

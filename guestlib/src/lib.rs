@@ -4,7 +4,9 @@ extern crate alloc;
 
 use core::fmt::Debug;
 use core::mem::size_of;
-use alloc::{vec};
+use alloc::vec;
+use alloc::format;
+use log::{Log, Metadata, Record};
 use applib::{SystemState, Framebuffer, Rect};
 
 #[global_allocator]
@@ -13,6 +15,7 @@ static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
 extern "C" {
 
     fn host_print_console(addr: i32, len: i32);
+    fn host_log(addr: i32, len: i32, level: i32);
     fn host_get_system_state(addr: i32);
     fn host_get_win_rect(addr: i32);
     fn host_set_framebuffer(addr: i32, w: i32, h: i32);
@@ -44,6 +47,7 @@ pub fn print_console(s: &str) {
     let len = buf.len() as i32;
     unsafe { host_print_console(addr, len) };
 }
+
 
 pub fn get_system_state() -> SystemState {
     let mut buf = [0u8; size_of::<SystemState>()];
@@ -149,6 +153,40 @@ pub fn qemu_dump(buf: &[u8]) {
     let addr = buf.as_ptr() as i32;
     let len = buf.len() as i32;
     unsafe { host_qemu_dump(addr, len) };
+}
+
+
+pub struct WasmLogger;
+
+
+impl Log for WasmLogger {
+
+    // TODO
+    fn enabled(&self, _metadata: &Metadata<'_>) -> bool {
+        true
+    }
+
+    fn log(&self, record: &Record<'_>) {
+
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+
+        let s = format!(
+            "{} -- {}",
+            record.module_path().unwrap(),
+            record.args(),
+        );
+ 
+        let buf = s.as_bytes();
+        let addr = buf.as_ptr() as i32;
+        let len = buf.len() as i32;
+        let level = record.level() as i32;
+
+        unsafe { host_log(addr, len, level) };
+    }
+
+    fn flush(&self) {}
 }
 
 // #[macro_export]

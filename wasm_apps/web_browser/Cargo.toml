@@ -14,6 +14,7 @@ ego-tree = "0.6.2"
 dns-message-parser = "0.7.0"
 bytes = "1.6.0"
 html-escape = "0.2.13"
+log = { version = "0.4.20", default-features = false }
 
 # To avoid error about missing tests
 [[bin]]

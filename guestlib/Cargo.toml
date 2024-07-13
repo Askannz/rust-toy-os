@@ -22,3 +22,4 @@ bench = false
 [dependencies]
 dlmalloc = { version = "0.2.4", features = ["global"] }
 applib = { path = "../applib" }
+log = { version = "0.4.20", default-features = false }

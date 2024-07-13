@@ -434,6 +434,24 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         log::debug!("{}: {}", app_name, s);
     });
 
+    linker_impl!(m, "host_log", |caller: Caller<StoreData>, addr: i32, len: i32, level| {
+        let ctx = caller.as_context();
+        let app_name = &ctx.data().app_name;
+        let mem_slice = get_wasm_mem_slice(&caller, addr, len);
+
+        let s = core::str::from_utf8(mem_slice)
+            .expect("Not UTF-8")
+            .trim_end();
+
+        match level {
+            1 => log::error!("{}", s),
+            2 => log::warn!("{}", s),
+            3 => log::info!("{}", s),
+            4 => log::debug!("{}", s),
+            _ => log::trace!("{}", s),
+        };
+    });
+
     linker_impl!(m, "host_get_system_state", |mut caller: Caller<StoreData>, addr: i32| {
 
         let system_state = caller.data()

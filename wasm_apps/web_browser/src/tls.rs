@@ -63,7 +63,7 @@ impl TlsClient {
         match self.tls_conn.read_tls(&mut self.socket) {
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => return 0,
             Err(error) => {
-                println!("TLS read error: {:?}", error);
+                log::error!("TLS read error: {:?}", error);
                 self.closed = true;
                 return 0;
             },
@@ -73,7 +73,7 @@ impl TlsClient {
         let io_state = match self.tls_conn.process_new_packets() {
             Ok(io_state) => io_state,
             Err(err) => {
-                println!("TLS error: {:?}", err);
+                log::error!("TLS error: {:?}", err);
                 self.closed = true;
                 return 0;
             }
@@ -90,7 +90,7 @@ impl TlsClient {
         match self.tls_conn.write_tls(&mut self.socket) {
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => return,
             Err(error) => {
-                println!("TLS write error: {:?}", error);
+                log::error!("TLS write error: {:?}", error);
                 self.closed = true;
                 return;
             },

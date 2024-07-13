@@ -58,8 +58,12 @@ pub fn make_tcp_dns_request(domain_name: &str) -> Vec<u8> {
 pub fn parse_tcp_dns_response(buf: &[u8]) -> [u8; 4] {
     let bytes = Bytes::copy_from_slice(buf);
     let dns = Dns::decode(bytes).expect("Invalid DNS response");
-    match dns.answers.get(0) {
-        Some(RR::A(ans)) => ans.ipv4_addr.octets(),
-        _ => panic!("Invalid DNS response"),
-    }
+
+    let ip_addr = dns.answers.iter().find_map(|ans| match ans {
+        RR::A(ans) => Some(ans.ipv4_addr.octets()),
+        _ => None,
+    })
+    .expect("Invalid DNS response (no A record)");
+
+    ip_addr
 }

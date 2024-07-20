@@ -26,6 +26,8 @@ pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
 
             ChunkType::Tag => match parse_tag(chunk.s)? {
 
+                ParsedTag::Comment => (),
+
                 ParsedTag::Open { name, attrs, is_void } => {
                     let data = NodeData::Tag { name, attrs };
                     let new_id = Some(tree.add_node(parent_id, data)?);
@@ -104,7 +106,8 @@ fn check_is_void_element(tag_name: &str) -> bool {
 #[derive(Debug)]
 enum ParsedTag {
     Open { name: String, attrs: BTreeMap<String, String>, is_void: bool },
-    Close { name: String }
+    Close { name: String },
+    Comment,
 }
 
 fn parse_tag(s: &str) -> Result<ParsedTag, HtmlError> {
@@ -120,6 +123,10 @@ fn parse_tag(s: &str) -> Result<ParsedTag, HtmlError> {
         return Err(HtmlError::new("Missing < >"));
     }
 
+    if s.starts_with("<!--") || s.ends_with("-->") {
+        return  Ok(ParsedTag::Comment);
+    }
+
     let s = &s[1..s.len()-1];
 
     let c2 = s.chars().next().unwrap();
@@ -128,7 +135,7 @@ fn parse_tag(s: &str) -> Result<ParsedTag, HtmlError> {
         _ => (s, false)
     };
 
-    let (name, s) = s.split_once(' ').unwrap_or((s, ""));
+    let (name, s) = s.split_once(|c: char| c.is_whitespace()).unwrap_or((s, ""));
     let name = name.to_string();
 
     if closing {

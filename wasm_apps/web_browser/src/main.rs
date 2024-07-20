@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use std::io::{Result, Read, Write};
+use std::io::{Read, Write};
 
 use std::fmt::Debug;
 use std::fmt;
@@ -155,7 +155,41 @@ pub fn step() {
     let redraw_view = state.webview.update(&win_input_state, html_update);
 
     let prev_state_debug = format!("{:?}", state.request_state);
+    try_update_request_state(state);
+    let new_state_debug = format!("{:?}", state.request_state);
 
+    if new_state_debug != prev_state_debug {
+        log::info!("Request state change: {} => {}", prev_state_debug, new_state_debug);
+    }
+
+    let redraw = redraw_button || redraw_url_bar || redraw_view || state.first_frame;
+
+    if !redraw { return; }
+
+    let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
+    framebuffer.fill(Color::WHITE);
+
+    state.webview.draw(&mut framebuffer);
+    state.button.draw(&mut framebuffer);
+    state.url_bar.draw(&mut framebuffer);
+    state.first_frame = false;
+}
+
+fn try_update_request_state(state: &mut AppState) {
+
+    match update_request_state(state) {
+        Ok(_) => (),
+        Err(err) => {
+            log::error!("{}", err);
+            let err_html = format!("<b>{}</b>", err);
+            state.request_state = RequestState::Render { domain: "ERROR".to_owned(), html: err_html }
+        }
+    }
+
+}
+
+fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
+    
     match &mut state.request_state {
     
         RequestState::Idle { domain: current_domain } => {
@@ -228,7 +262,7 @@ pub fn step() {
                 *in_count += n;
 
                 if *in_count >= state.buffer.len() {
-                    let ip_addr = dns::parse_tcp_dns_response(&state.buffer);
+                    let ip_addr = dns::parse_tcp_dns_response(&state.buffer)?;
 
                     dns_socket.close();
 
@@ -258,7 +292,6 @@ pub fn step() {
                         path,
                         domain
                     ).unwrap();
-;
                     *https_state = HttpsState::Sending { out_count: 0 };
                 }
             },
@@ -304,23 +337,7 @@ pub fn step() {
         },
     };
 
-    let new_state_debug = format!("{:?}", state.request_state);
-
-    if new_state_debug != prev_state_debug {
-        log::info!("Request state change: {} => {}", prev_state_debug, new_state_debug);
-    }
-
-    let redraw = redraw_button || redraw_url_bar || redraw_view || state.first_frame;
-
-    if !redraw { return; }
-
-    let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
-    framebuffer.fill(Color::WHITE);
-
-    state.webview.draw(&mut framebuffer);
-    state.button.draw(&mut framebuffer);
-    state.url_bar.draw(&mut framebuffer);
-    state.first_frame = false;
+    Ok(())
 }
 
 fn parse_http(http_response: &str) -> (HttpHeader, String) {

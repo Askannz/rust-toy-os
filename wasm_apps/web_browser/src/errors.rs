@@ -6,7 +6,7 @@ pub struct HtmlError { pub msg: String }
 
 impl fmt::Display for HtmlError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "HTML Error: {}", self.msg)
+        write!(f, "{}", self.msg)
     }
 }
 

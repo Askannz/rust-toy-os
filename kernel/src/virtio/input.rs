@@ -30,8 +30,8 @@ impl VirtioInput {
         virtio_dev.write_status(0x04);  // DRIVER_OK
 
 
-        let msg = vec![QueueMessage::<VirtioInputEvent>::DevWriteOnly];
-        unsafe { while eventq.try_push(msg.clone()).is_some() {} };
+        let msg = [QueueMessage::<VirtioInputEvent>::DevWriteOnly];
+        unsafe { while eventq.try_push(&msg).is_some() {} };
 
         VirtioInput {
             virtio_dev,
@@ -43,15 +43,14 @@ impl VirtioInput {
 
         let mut out = Vec::new();
 
-        while let Some(resp_list) = unsafe { self.eventq.try_pop() } {
-            assert_eq!(resp_list.len(), 1);
+        while let Some(resp_list) = unsafe { self.eventq.try_pop::<_, 1>() } {
             // TODO: check response status code
             let event = resp_list.into_iter().next().unwrap();
             out.push(event);
 
             // TODO: unwrap()
             unsafe{
-                self.eventq.try_push(vec![
+                self.eventq.try_push(&[
                     QueueMessage::<VirtioInputEvent>::DevWriteOnly
                 ]);
                 self.eventq.notify_device();

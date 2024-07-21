@@ -57,9 +57,9 @@ impl VirtioNetwork {
             virtio_dev.read_device_specific_config::<VirtioNetConfig>()
         };
 
-        let msg = vec![QueueMessage::<VirtioNetPacket>::DevWriteOnly];
+        let msg = [QueueMessage::<VirtioNetPacket>::DevWriteOnly];
 
-        unsafe { while receiveq1.try_push(msg.clone()).is_some() {} }
+        unsafe { while receiveq1.try_push(&msg).is_some() {} }
 
         VirtioNetwork {
             virtio_dev,
@@ -72,13 +72,12 @@ impl VirtioNetwork {
 
     pub fn try_recv(&mut self) -> Option<Vec<u8>> {
 
-        let resp_list = unsafe { self.receiveq1.try_pop()? };
-        assert_eq!(resp_list.len(), 1);
+        let resp_list = unsafe { self.receiveq1.try_pop::<_, 1>()? };
 
         let virtio_packet: VirtioNetPacket = resp_list[0];
 
         unsafe {
-            self.receiveq1.try_push(vec![
+            self.receiveq1.try_push(&[
                 QueueMessage::<VirtioNetPacket>::DevWriteOnly
             ]).unwrap();
             self.receiveq1.notify_device();
@@ -111,16 +110,15 @@ impl VirtioNetwork {
         let virtio_buf_len = value.len() + core::mem::size_of::<VirtioNetHdr>();
 
         unsafe {
-            self.transmitq1.try_push(vec![
+            self.transmitq1.try_push(&[
                 QueueMessage::DevReadOnly { data: msg, len: Some(virtio_buf_len) },
             ]).unwrap();
             self.transmitq1.notify_device();
         }
 
         loop {
-            let resp_list_opt: Option<Vec<VirtioNetPacket>>  = unsafe { self.transmitq1.try_pop() };
-            if let Some(resp_list) = resp_list_opt {
-                assert_eq!(resp_list.len(), 1);
+            let resp_list_opt  = unsafe { self.transmitq1.try_pop::<VirtioNetPacket, 1>() };
+            if let Some(_) = resp_list_opt {
                 break;
             }
          }

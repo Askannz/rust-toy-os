@@ -4,9 +4,10 @@ use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-use core::mem;
+use core::{mem, usize};
 use x86_64::{VirtAddr, PhysAddr};
 use volatile::Volatile;
+use arrayvec::ArrayVec;
 
 use crate::pci::{PciDevice, PciBar, PciConfigSpace};
 use crate::memory;
@@ -154,7 +155,7 @@ pub struct VirtioPciCommonCfg {
 
 impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
 
-    fn get_descriptor(&mut self) -> Option<usize> {
+    fn take_descriptor(&mut self) -> Option<usize> {
         for (desc_index, available) in self.storage.avail_desc.iter_mut().enumerate() {
             if *available {
                 *available = false;
@@ -164,27 +165,47 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
         return None
     }
 
-    pub unsafe fn try_push<T: VirtqSerializable>(&mut self, messages: Vec<QueueMessage<T>>) -> Option<()> {
+    fn return_descriptor(&mut self, desc_index: usize){
+        self.storage.avail_desc[desc_index] = true;
+    }
+
+    pub unsafe fn try_push<T: VirtqSerializable, const N: usize>(&mut self, messages: &[QueueMessage<T>; N]) -> Option<()> {
 
         let n = messages.len();
+        assert!(n > 0);
 
-        let desc_indices: Vec<usize> = (0..n)
-            .map(|_| self.get_descriptor())
-            .collect::<Option<Vec<usize>>>()?;
+        let desc_indices = {
+            let mut desc_indices = [0usize; N];
+            for i in 0..N {
+                match self.take_descriptor() {
+                    Some(desc_index) => desc_indices[i] = desc_index,
+                    None => {  // We couldn't reserve the required number of descriptors
+    
+                        // Returning already reserved descriptors and bailing out
+                        for desc_index in &desc_indices[..i] {
+                            self.return_descriptor(*desc_index)
+                        }
+                        return None
+                    }
+                }
+            }
+            desc_indices
+        };
 
         for (i, msg) in messages.into_iter().enumerate() {
 
             let desc_index = desc_indices[i];
+
             let descriptor = self.storage.descriptor_area.get_mut(desc_index).unwrap();
 
             let buffer = match msg {
                 QueueMessage::DevReadOnly { data, len } => {
                     descriptor.flags = 0x0;
-                    descriptor.len = match len {
+                    descriptor.len = match *len {
                         Some(len) => len,
                         None => mem::size_of::<T>()
                     } as u32;
-                    data
+                    data.clone()
                 },
                 QueueMessage::DevWriteOnly => {
                     descriptor.flags = 0x2;
@@ -229,7 +250,7 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
 
     }
 
-    pub unsafe fn try_pop<T: VirtqSerializable>(&mut self) -> Option<Vec<T>> {
+    pub unsafe fn try_pop<T: VirtqSerializable, const N: usize>(&mut self) -> Option<[T; N]> {
 
         let mapper = memory::get_mapper();
 
@@ -242,7 +263,7 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
         let it: VirtqUsedElem = self.storage.device_area.ring[idx % Q_SIZE];
         //log::debug!("Received element: {:?}", it);
 
-        let mut out = Vec::new();
+        let mut out = ArrayVec::<T, N>::new();
         let mut desc_index: usize = it.id.try_into().unwrap();
 
         loop {
@@ -258,7 +279,7 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
 
             let next_desc = descriptor.next.into();
 
-            self.storage.avail_desc[desc_index] = true;
+            self.return_descriptor(desc_index);
 
             if next_desc != 0 {
                 desc_index = next_desc
@@ -269,7 +290,7 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
 
         self.pop_index += 1;
 
-        Some(out)
+        Some(out.into_inner().unwrap_or_else(|_| panic!("Not enough buffers received")))
     }
 }
 

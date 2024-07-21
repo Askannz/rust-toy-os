@@ -80,7 +80,6 @@ impl VirtioNetwork {
             self.receiveq1.try_push(&[
                 QueueMessage::<VirtioNetPacket>::DevWriteOnly
             ]).unwrap();
-            self.receiveq1.notify_device();
         }
 
         Some(virtio_packet.data.to_vec())

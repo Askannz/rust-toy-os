@@ -53,7 +53,6 @@ impl VirtioInput {
                 self.eventq.try_push(&[
                     QueueMessage::<VirtioInputEvent>::DevWriteOnly
                 ]);
-                self.eventq.notify_device();
             }
         }
 

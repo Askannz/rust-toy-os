@@ -3,11 +3,12 @@ extern crate alloc;
 use std::io::{Read, Write};
 
 use std::fmt::Debug;
-use std::fmt;
+use std::{any, fmt};
 
 use core::cell::OnceCell;
 use alloc::format;
 use alloc::collections::BTreeMap;
+use anyhow::Context;
 use guestlib::{FramebufferHandle, WasmLogger};
 use applib::{Color, Rect};
 
@@ -15,7 +16,6 @@ use applib::{Color, Rect};
 use applib::ui::button::{Button, ButtonConfig};
 use applib::ui::text::{EditableText, EditableTextConfig};
 
-mod errors;
 mod tls;
 mod render;
 mod dns;
@@ -80,7 +80,7 @@ static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
 const SCHEME: &str = "https://";
 const DNS_SERVER_IP: [u8; 4] = [1, 1, 1, 1];
-
+const BUFFER_SIZE: usize = 100_000;
 
 
 fn main() {}
@@ -120,7 +120,7 @@ pub fn init() -> () {
         webview: Webview::new(&rect_webview),
 
         first_frame: true,
-        buffer: vec![0u8; 100_000],
+        buffer: vec![0u8; BUFFER_SIZE],
         request_state: RequestState::Idle { domain: None },
     };
     unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")); }
@@ -181,14 +181,33 @@ fn try_update_request_state(state: &mut AppState) {
         Ok(_) => (),
         Err(err) => {
             log::error!("{}", err);
-            let err_html = format!("<b>{}</b>", err);
-            state.request_state = RequestState::Render { domain: "ERROR".to_owned(), html: err_html }
+            state.request_state = RequestState::Render { 
+                domain: "ERROR".to_owned(),
+                html: make_error_html(err),
+            }
         }
     }
 
 }
 
-fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
+fn make_error_html(error: anyhow::Error) -> String {
+
+    let errors: Vec<String> = error.chain().enumerate()
+    .map(|(i, sub_err)| format!(
+        "<p>{}: {}</p>", i, sub_err
+    ))
+    .collect();
+
+    format!(
+        "<html>\n\
+        <p bgcolor=\"#ff0000\">ERROR</p>\n\
+        {}
+        </html>\n",
+        errors.join("\n")
+    )
+}
+
+fn update_request_state(state: &mut AppState) -> anyhow::Result<()>{
     
     match &mut state.request_state {
     
@@ -211,7 +230,7 @@ fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
             }
 
             if let Some((domain, path)) = url_data {
-                let dns_socket = Socket::new(DNS_SERVER_IP, 53);
+                let dns_socket = Socket::new(DNS_SERVER_IP, 53)?;
                 state.request_state = RequestState::Dns { 
                     domain,
                     path,
@@ -228,13 +247,13 @@ fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
                 if socket_ready {
                     let tcp_bytes = dns::make_tcp_dns_request(domain);
                     state.buffer.clear();
-                    state.buffer.write(&tcp_bytes).unwrap();
+                    state.buffer.write(&tcp_bytes)?;
                     *dns_state = DnsState::Sending { out_count: 0 };
                 }
             },
 
             DnsState::Sending { out_count } => {
-                let n = dns_socket.write(&state.buffer[*out_count..]).expect("Could not write to DNS socket");
+                let n = dns_socket.write(&state.buffer[*out_count..]).context("Could not write to DNS socket")?;
                 *out_count += n;
 
                 if *out_count >= state.buffer.len() {
@@ -244,12 +263,12 @@ fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
             }
 
             DnsState::ReceivingLen { in_count } => {
-                let n = dns_socket.read(&mut state.buffer[*in_count..]).expect("Could not read from DNS socket");
+                let n = dns_socket.read(&mut state.buffer[*in_count..]).context("Could not read from DNS socket")?;
                 *in_count += n;
 
                 if *in_count >= 2 {
-                    let len_bytes: [u8; 2] = state.buffer.as_slice().try_into().unwrap();
-                    let dns_len: usize = u16::from_be_bytes(len_bytes).try_into().expect("Invalid DNS response data");
+                    let len_bytes: [u8; 2] = state.buffer.as_slice().try_into()?;
+                    let dns_len: usize = u16::from_be_bytes(len_bytes).try_into().context("Invalid DNS response data")?;
 
                     state.buffer.resize(dns_len, 0u8);
 
@@ -258,7 +277,7 @@ fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
             }
 
             DnsState::ReceivingResp { in_count } => {
-                let n = dns_socket.read(&mut state.buffer[*in_count..]).expect("Could not read from DNS socket");
+                let n = dns_socket.read(&mut state.buffer[*in_count..]).context("Could not read from DNS socket")?;
                 *in_count += n;
 
                 if *in_count >= state.buffer.len() {
@@ -266,7 +285,7 @@ fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
 
                     dns_socket.close();
 
-                    let https_socket = Socket::new(ip_addr, 443);
+                    let https_socket = Socket::new(ip_addr, 443)?;
                     state.request_state = RequestState::Https { 
                         domain: domain.clone(),
                         path: path.clone(),
@@ -291,7 +310,7 @@ fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
                         \r\n",
                         path,
                         domain
-                    ).unwrap();
+                    )?;
                     *https_state = HttpsState::Sending { out_count: 0 };
                 }
             },
@@ -299,7 +318,7 @@ fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
             HttpsState::Sending { out_count } => {
 
                 tls_client.update();
-                let n = tls_client.write(&state.buffer[*out_count..]).unwrap();
+                let n = tls_client.write(&state.buffer[*out_count..])?;
                 *out_count += n;
 
                 if *out_count >= state.buffer.len() {
@@ -316,13 +335,13 @@ fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
 
                     let len = state.buffer.len();
                     state.buffer.resize(len+n_plaintext, 0u8);
-                    tls_client.read_exact(&mut state.buffer[len..len+n_plaintext]).unwrap();
+                    tls_client.read_exact(&mut state.buffer[len..len+n_plaintext])?;
 
                 } else if tls_client.tls_closed() {
 
-                    let http_string = core::str::from_utf8(&state.buffer).expect("Not UTF-8");
+                    let http_string = core::str::from_utf8(&state.buffer)?;
                     //guestlib::qemu_dump(http_string.as_bytes());
-                    let (header, body) = parse_http(http_string);
+                    let (_header, body) = parse_http(http_string)?;
                     //guestlib::qemu_dump(body.as_bytes());
                     state.request_state = RequestState::Render { domain: domain.clone(), html: body };
                 }
@@ -340,9 +359,9 @@ fn update_request_state(state: &mut AppState) -> Result<(), HtmlError>{
     Ok(())
 }
 
-fn parse_http(http_response: &str) -> (HttpHeader, String) {
+fn parse_http(http_response: &str) -> anyhow::Result<(HttpHeader, String)> {
 
-    let (header, body) = parse_header(http_response);
+    let (header, body) = parse_header(http_response)?;
     let transfer_encoding = header.get("transfer-encoding");
 
     let body = match transfer_encoding.map(|s| s.as_str()) {
@@ -353,7 +372,7 @@ fn parse_http(http_response: &str) -> (HttpHeader, String) {
         _ => body.to_owned()
     };
 
-    (header, body)
+    Ok((header, body))
 
 }
 
@@ -384,9 +403,9 @@ fn dechunk_body(body: &str) -> String {
 
 type HttpHeader = BTreeMap<String, String>;
 
-fn parse_header(http_response: &str) ->  (HttpHeader, &str){
+fn parse_header(http_response: &str) ->  anyhow::Result<(HttpHeader, &str)>{
 
-    let i = http_response.find("\r\n\r\n").unwrap();
+    let i = http_response.find("\r\n\r\n").ok_or(anyhow::anyhow!("Could not locate header"))?;
 
     let (header_str, body) = http_response.split_at(i);
 
@@ -400,7 +419,7 @@ fn parse_header(http_response: &str) ->  (HttpHeader, &str){
     })
     .collect();
 
-    (header, body)
+    Ok((header, body))
 }
 
 fn parse_url(url: &str) -> (&str, &str) {

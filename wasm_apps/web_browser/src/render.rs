@@ -1,4 +1,4 @@
-use std::error::Error;
+use anyhow::anyhow;
 
 use applib::{Color, Rect, Framebuffer};
 use applib::drawing::primitives::{draw_rect, blend_rect};
@@ -7,7 +7,6 @@ use applib::drawing::text::{HACK_15, Font};
 use applib::input::{InputState, InputEvent, PointerState};
 
 use crate::html_parsing::{parse_html, HtmlTree, NodeId, NodeData as HtmlNodeData};
-use crate::errors::HtmlError;
 
 pub struct Webview<'a> {
     state: State,
@@ -160,11 +159,11 @@ impl<'a> Webview<'a> {
         None
     }
 
-    fn parse_html_to_layout(&mut self, html: &str) -> Result<LayoutNode, HtmlError> {
+    fn parse_html_to_layout(&mut self, html: &str) -> anyhow::Result<LayoutNode> {
 
         let tree = parse_html(html)?;
         self.parse_node(&tree, NodeId(0), 0, 0, false)
-            .ok_or(HtmlError::new("Error computing HTML layout"))
+            .ok_or(anyhow!("Error computing HTML layout"))
     }
 
     fn parse_node<'b>(&mut self, tree: &HtmlTree, node_id: NodeId, mut x0: i64, mut y0: i64, link: bool) -> Option<LayoutNode> {

@@ -476,18 +476,28 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         });
     });
 
-    // TODO: proper socket handles rather than a single global socket
-
     linker_impl!(m, "host_tcp_connect", |mut caller: Caller<StoreData>, ip_addr: i32, port: i32| -> i32 {
-        let data_mut = caller.data_mut();
-        let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
 
-        let ip_bytes = ip_addr.to_le_bytes();
-        let port: u16 = port.try_into().expect("Invalid port value");
+        let mut try_connect = || -> anyhow::Result<i32> {
+            let data_mut = caller.data_mut();
+            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+    
+            let ip_bytes = ip_addr.to_le_bytes();
+            let port: u16 = port.try_into().expect("Invalid port value");
+    
+            let socket_handle = tcp_stack.connect(Ipv4Address(ip_bytes), port)?;
+            let handle_id = data_mut.sockets_store.add_handle(socket_handle);
+            Ok(handle_id)
+        };
 
-        let socket_handle = tcp_stack.connect(Ipv4Address(ip_bytes), port);
-        let handle_id = data_mut.sockets_store.add_handle(socket_handle);
-        handle_id
+        match try_connect() {
+            Ok(handle_id) => handle_id,
+            Err(err) => {
+                log::error!("{}", err);
+                -1
+            }
+        }
+
     });
 
     linker_impl!(m, "host_tcp_may_send", |caller: Caller<StoreData>, handle_id: i32| -> i32 {
@@ -506,42 +516,63 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
 
     linker_impl!(m, "host_tcp_write", |mut caller: Caller<StoreData>, addr: i32, len: i32, handle_id: i32| -> i32 {
 
-        let buf = get_wasm_mem_slice(&mut caller, addr, len).to_vec();
+        let mut try_write = || -> anyhow::Result<i32> {
+            let buf = get_wasm_mem_slice(&mut caller, addr, len).to_vec();
 
-        let data_mut = caller.data_mut();
-        let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+            let data_mut = caller.data_mut();
+            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+    
+            let socket_handle = data_mut.sockets_store.get_handle(handle_id).expect("No TCP connection");
+    
+            let written_len = tcp_stack.write(socket_handle, &buf)?;
 
-        let socket_handle = data_mut.sockets_store.get_handle(handle_id).expect("No TCP connection");
+            let written_len: i32 = written_len.try_into().map_err(anyhow::Error::msg)?;
+    
+            Ok(written_len)
+        };
 
-        let written_len = tcp_stack.write(socket_handle, &buf);
-
-        let written_len: i32 = written_len.try_into().unwrap();
-
-        written_len
+        match try_write() {
+            Ok(written_len) => written_len,
+            Err(err) => {
+                log::error!("{}", err);
+                -1
+            }
+        }
     });
 
     linker_impl!(m, "host_tcp_read", |mut caller: Caller<StoreData>, addr: i32, len: i32, handle_id: i32| -> i32 {
 
-        let len = len as usize;
-        let addr = addr as usize;
+        let mut try_read = || -> anyhow::Result<i32> {
 
-        let mut buf = vec![0; len];
-
-        let read_len: usize = {
-            let data_mut = caller.data_mut();
-            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
-            let socket_handle = data_mut.sockets_store.get_handle(handle_id).expect("No TCP connection");
-            tcp_stack.read(socket_handle, &mut buf)
+            let len = len as usize;
+            let addr = addr as usize;
+    
+            let mut buf = vec![0; len];
+    
+            let read_len: usize = {
+                let data_mut = caller.data_mut();
+                let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
+                let socket_handle = data_mut.sockets_store.get_handle(handle_id).expect("No TCP connection");
+                tcp_stack.read(socket_handle, &mut buf)?
+            };
+    
+            let mem = get_linear_memory(&caller);
+            let mem_data = mem.data_mut(&mut caller);
+    
+            mem_data[addr..addr+read_len].copy_from_slice(&buf[..read_len]);
+    
+            let read_len: i32 = read_len.try_into().unwrap();
+    
+            Ok(read_len)
         };
 
-        let mem = get_linear_memory(&caller);
-        let mem_data = mem.data_mut(&mut caller);
-
-        mem_data[addr..addr+read_len].copy_from_slice(&buf[..read_len]);
-
-        let read_len: i32 = read_len.try_into().unwrap();
-
-        read_len
+        match try_read() {
+            Ok(read_len) => read_len,
+            Err(err) => {
+                log::error!("{}", err);
+                -1
+            }
+        }
     });
 
     linker_impl!(m, "host_tcp_close", |mut caller: Caller<StoreData>, handle_id: i32| {

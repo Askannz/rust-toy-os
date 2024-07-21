@@ -1,13 +1,8 @@
-use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::error::Error;
-use std::marker::PhantomData;
-use std::result::Result;
-use std::fmt;
 
-use crate::errors::HtmlError;
+use anyhow::anyhow;
 
-pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
+pub fn parse_html(html: &str) -> anyhow::Result<HtmlTree> {
 
     let mut tree = HtmlTree::new();
     let mut parent_id = None;
@@ -50,10 +45,10 @@ pub fn parse_html(html: &str) -> Result<HtmlTree, HtmlError> {
 
                             let curr_tag_name = match &tree.get_node(p_id).unwrap().data {
                                 NodeData::Tag { name, .. } => name,
-                                _ => return Err(HtmlError::new(&format!(
+                                _ => return Err(anyhow!(
                                         "line {} col {}: parent node is Text, should not happen",
                                         chunk.line+1, chunk.col+1
-                                    ))),
+                                    )),
                             };
 
 
@@ -110,17 +105,17 @@ enum ParsedTag {
     Comment,
 }
 
-fn parse_tag(s: &str) -> Result<ParsedTag, HtmlError> {
+fn parse_tag(s: &str) -> anyhow::Result<ParsedTag> {
 
     if s.len() < 3 {
-        return Err(HtmlError::new("Invalid tag"));
+        return Err(anyhow!("Invalid tag"));
     }
 
     let c0 = s.chars().next().unwrap();
     let c1 = s.chars().next_back().unwrap();
 
     if c0 != '<' || c1 != '>' {
-        return Err(HtmlError::new("Missing < >"));
+        return Err(anyhow!("Missing < >"));
     }
 
     if s.starts_with("<!--") || s.ends_with("-->") {
@@ -149,7 +144,7 @@ fn parse_tag(s: &str) -> Result<ParsedTag, HtmlError> {
 
 }
 
-fn parse_attrs(s: &str) -> Result<BTreeMap<String, String>, HtmlError> {
+fn parse_attrs(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 
     #[derive(Debug, Clone, Copy)]
     enum State<'a> { 
@@ -184,7 +179,7 @@ fn parse_attrs(s: &str) -> Result<BTreeMap<String, String>, HtmlError> {
             },
             (_, State::InVal { key, i1 }) => State::InVal { key, i1 },
 
-            _ => return Err(HtmlError::new("Invalid attributes"))
+            _ => return Err(anyhow!("Invalid attributes"))
         }
     }
 
@@ -297,19 +292,19 @@ impl HtmlTree {
         self.nodes.get_mut(node_id.0).map(|node| &mut node.data)
     }
 
-    fn add_node(&mut self, parent_id: Option<NodeId>, data: NodeData) -> Result<NodeId, HtmlError> {
+    fn add_node(&mut self, parent_id: Option<NodeId>, data: NodeData) -> anyhow::Result<NodeId> {
 
         let child_id = NodeId(self.nodes.len());
 
         let mut child = Node { data, parent: None, children: Vec::new() };
 
         if let Some(parent_id) = parent_id {
-            let parent_node = self.nodes.get_mut(parent_id.0).ok_or(HtmlError::new("No such parent ID"))?;
+            let parent_node = self.nodes.get_mut(parent_id.0).ok_or(anyhow!("No such parent ID"))?;
             parent_node.children.push(child_id);
             child.parent = Some(parent_id);
         } else {
             if child_id != NodeId(0) {
-                return Err(HtmlError::new("Tree already has a root node"));
+                return Err(anyhow!("Tree already has a root node"));
             }
             child.parent = None;
         }
@@ -319,8 +314,8 @@ impl HtmlTree {
         Ok(child_id)
     }
 
-    fn get_parent(&self, node_id: NodeId) -> Result<Option<NodeId>, HtmlError> {
-        let parent_node = self.nodes.get(node_id.0).ok_or(HtmlError::new("No such parent ID"))?;
+    fn get_parent(&self, node_id: NodeId) -> anyhow::Result<Option<NodeId>> {
+        let parent_node = self.nodes.get(node_id.0).ok_or(anyhow!("No such parent ID"))?;
         Ok(parent_node.parent)
     }
 

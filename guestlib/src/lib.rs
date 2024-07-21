@@ -89,11 +89,18 @@ pub fn get_framebuffer<'a>(handle: &'a mut FramebufferHandle) -> Framebuffer<'a>
 }
 
 
-pub fn tcp_connect(ip_addr: [u8; 4], port: u16) -> i32{
+pub fn tcp_connect(ip_addr: [u8; 4], port: u16) -> anyhow::Result<i32> {
+
     let ip_addr: i32 = i32::from_le_bytes(ip_addr);
     let port: i32 = port.into();
-    let handle_id = unsafe { host_tcp_connect(ip_addr, port) };
-    handle_id
+    let retval = unsafe { host_tcp_connect(ip_addr, port) };
+    
+    if retval < 0 {
+        Err(anyhow::Error::msg("TCP connect failed"))
+    } else {
+        let handle_id = retval;
+        Ok(handle_id)
+    }
 }
 
 pub fn tcp_may_send(handle_id: i32) -> bool {
@@ -104,21 +111,35 @@ pub fn tcp_may_recv(handle_id: i32) -> bool {
     unsafe { host_tcp_may_recv(handle_id) != 0 }
 }
 
-pub fn tcp_write(buf: &[u8], handle_id: i32) -> usize {
-    unsafe {
+pub fn tcp_write(buf: &[u8], handle_id: i32) -> anyhow::Result<usize> {
+
+    let retval = unsafe {
         let addr = buf.as_ptr() as i32;
         let len = buf.len() as i32;
-        let written_len = host_tcp_write(addr, len, handle_id);
-        written_len.try_into().unwrap()
+        host_tcp_write(addr, len, handle_id)
+    };
+
+    if retval < 0 {
+        Err(anyhow::Error::msg("TCP write failed"))
+    } else {
+        let written_len = retval.try_into().map_err(anyhow::Error::msg)?;
+        Ok(written_len)
     }
 }
 
-pub fn tcp_read(buf: &mut [u8], handle_id: i32) -> usize {
-    unsafe {
+pub fn tcp_read(buf: &mut [u8], handle_id: i32) -> anyhow::Result<usize> {
+
+    let retval = unsafe {
         let addr = buf.as_ptr() as i32;
         let len = buf.len() as i32;
-        let read_len = host_tcp_read(addr, len, handle_id);
-        read_len.try_into().unwrap()
+        host_tcp_read(addr, len, handle_id)
+    };
+
+    if retval < 0 {
+        Err(anyhow::Error::msg("TCP read failed"))
+    } else {
+        let read_len = retval.try_into().map_err(anyhow::Error::msg)?;
+        Ok(read_len)
     }
 }
 

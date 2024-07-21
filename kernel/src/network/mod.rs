@@ -1,5 +1,7 @@
 mod device;
 
+use core::any;
+
 use alloc::vec;
 
 
@@ -57,7 +59,7 @@ impl TcpStack {
 
     }
 
-    pub fn connect(&mut self, addr: Ipv4Address, port: u16) -> SocketHandle {
+    pub fn connect(&mut self, addr: Ipv4Address, port: u16) -> anyhow::Result<SocketHandle> {
 
         let mut socket = {
             let tcp_rx_buffer = tcp::SocketBuffer::new(vec![0u8; BUF_SIZE]);
@@ -67,14 +69,14 @@ impl TcpStack {
 
         let cx = self.interface.context();
 
-        socket.connect(cx, (addr, port), self.next_port).unwrap();
+        socket.connect(cx, (addr, port), self.next_port).map_err(anyhow::Error::msg)?;
         self.next_port += 1;
 
         let socket_handle = self.sockets.add(socket);
 
         log::debug!("Connected to port {} ({:?})", port, socket_handle);
 
-        socket_handle
+        Ok(socket_handle)
     }
 
     pub fn get_socket_state(&self, handle: SocketHandle) -> tcp::State {
@@ -89,15 +91,15 @@ impl TcpStack {
         self.sockets.get::<tcp::Socket>(handle).may_recv()
     }
 
-    pub fn write(&mut self, handle: SocketHandle, buf: &[u8]) -> usize {
+    pub fn write(&mut self, handle: SocketHandle, buf: &[u8]) -> anyhow::Result<usize> {
         let socket = self.sockets.get_mut::<tcp::Socket>(handle);
         log::debug!("Writing {}B to socket {:?}", buf.len(), handle);
-        let sent_len = socket.send_slice(buf).unwrap();
+        let sent_len = socket.send_slice(buf).map_err(anyhow::Error::msg)?;
         log::debug!("{}B sent", sent_len);
-        sent_len
+        Ok(sent_len)
     }
 
-    pub fn read(&mut self, handle: SocketHandle, buf: &mut [u8]) -> usize {
+    pub fn read(&mut self, handle: SocketHandle, buf: &mut [u8]) -> anyhow::Result<usize> {
 
         let socket = self.sockets.get_mut::<tcp::Socket>(handle);
 
@@ -109,11 +111,11 @@ impl TcpStack {
 
             buf[..cpy_len].copy_from_slice(&recv_buffer[..cpy_len]);
             (cpy_len, cpy_len)
-        }).unwrap();
+        }).map_err(anyhow::Error::msg)?;
 
         log::debug!("Received {}B from socket {:?}", recv_len, handle);
 
-        recv_len
+        Ok(recv_len)
     }
 
     pub fn close(&mut self, handle: SocketHandle) {

@@ -1,29 +1,30 @@
-use std::io::{Result, Read, Write};
-
+use std::io;
 pub struct Socket { handle_id: i32 }
 
 
-impl Read for Socket {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        Ok(guestlib::tcp_read(buf, self.handle_id))
+impl io::Read for Socket {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        guestlib::tcp_read(buf, self.handle_id)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err.to_string()))
     }
 }
 
-impl Write for Socket {
-    fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        Ok(guestlib::tcp_write(buf, self.handle_id))
+impl io::Write for Socket {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        guestlib::tcp_write(buf, self.handle_id)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err.to_string()))
     }
 
-    fn flush(&mut self) -> Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
 }
 
 impl Socket {
 
-    pub fn new(ip_addr: [u8; 4], port: u16) -> Self {
-        let handle_id = guestlib::tcp_connect(ip_addr, port);
-        Socket { handle_id }
+    pub fn new(ip_addr: [u8; 4], port: u16) -> anyhow::Result<Self> {
+        let handle_id = guestlib::tcp_connect(ip_addr, port)?;
+        Ok(Socket { handle_id })
     }
 
     pub fn may_recv(&self) -> bool {

@@ -6,8 +6,6 @@ use bytes::{Bytes};
 use dns_message_parser::{Dns, Flags, Opcode, RCode, rr::RR};
 use dns_message_parser::question::{QClass, QType, Question};
 
-use crate::errors::HtmlError;
-
 
 pub fn make_tcp_dns_request(domain_name: &str) -> Vec<u8> {
 
@@ -57,7 +55,7 @@ pub fn make_tcp_dns_request(domain_name: &str) -> Vec<u8> {
     tcp_bytes
 }
 
-pub fn parse_tcp_dns_response(buf: &[u8]) -> Result<[u8; 4], HtmlError> {
+pub fn parse_tcp_dns_response(buf: &[u8]) -> anyhow::Result<[u8; 4]> {
     let bytes = Bytes::copy_from_slice(buf);
     let dns = Dns::decode(bytes).expect("Invalid DNS response");
 
@@ -65,7 +63,7 @@ pub fn parse_tcp_dns_response(buf: &[u8]) -> Result<[u8; 4], HtmlError> {
         RR::A(ans) => Some(ans.ipv4_addr.octets()),
         _ => None,
     })
-    .ok_or(HtmlError::new("Invalid DNS response (no A record)"))?;
+    .ok_or(anyhow::Error::msg("Invalid DNS response (no A record)"))?;
 
     Ok(ip_addr)
 }

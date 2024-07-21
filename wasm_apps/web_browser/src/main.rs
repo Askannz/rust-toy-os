@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 
 use std::fmt::Debug;
 use std::{any, fmt};
+use std::borrow::Cow;
 
 use core::cell::OnceCell;
 use alloc::format;
@@ -14,6 +15,7 @@ use applib::{Color, Rect};
 
 
 use applib::ui::button::{Button, ButtonConfig};
+use applib::ui::progress_bar::{ProgressBar, ProgressBarConfig};
 use applib::ui::text::{EditableText, EditableTextConfig};
 
 mod tls;
@@ -33,6 +35,7 @@ struct AppState<'a> {
     fb_handle: FramebufferHandle,
     button: Button,
     url_bar: EditableText,
+    progress_bar: ProgressBar,
 
     webview: render::Webview<'a>,
 
@@ -62,7 +65,7 @@ enum DnsState {
 enum HttpsState {
     Connecting,
     Sending { out_count: usize },
-    Receiving,
+    Receiving { in_count: usize },
 }
 
 impl Debug for RequestState {
@@ -73,6 +76,24 @@ impl Debug for RequestState {
             RequestState::Https { https_state, .. } => write!(f, "HTTPS {:?}", https_state),
             RequestState::Render { .. } => write!(f, "Render"),
         }
+    }
+}
+
+fn get_progress_repr(request_state: &RequestState) -> (u64, Cow<str>) {
+    match request_state {
+        RequestState::Dns { dns_state, .. } => match dns_state {
+            DnsState::Connecting => (0, Cow::Borrowed("DNS: connecting")),
+            DnsState::Sending { out_count } => (1, Cow::Owned(format!("DNS: sent {} bytes", out_count))),
+            DnsState::ReceivingLen { .. } => (2, Cow::Borrowed("DNS: receiving response length")),
+            DnsState::ReceivingResp { in_count } => (3, Cow::Owned(format!("DNS: received {} bytes", in_count))),
+        },
+        RequestState::Https { https_state, .. } => match https_state {
+            HttpsState::Connecting => (4, Cow::Borrowed("HTTPS: connecting")),
+            HttpsState::Sending { out_count } => (5, Cow::Owned(format!("HTTPS: sent {} bytes", out_count))),
+            HttpsState::Receiving { in_count } => (6, Cow::Owned(format!("HTTPS: received {} bytes", in_count))),
+        },
+        RequestState::Render { .. } => (7, Cow::Borrowed("Rendering")),
+        RequestState::Idle { .. } => (8, Cow::Borrowed("")),
     }
 }
 
@@ -101,7 +122,8 @@ pub fn init() -> () {
 
     let rect_button = Rect { x0: (win_w - button_w).into(), y0: 0, w: button_w, h: bar_h };
     let rect_url_bar = Rect { x0: 0, y0: 0, w: win_w - button_w, h: bar_h };
-    let rect_webview = Rect  { x0: 0, y0: rect_button.h.into(), w: win_w, h: win_h };
+    let rect_progress_bar = Rect { x0: 0, y0: bar_h.into(), w: win_w, h: bar_h };
+    let rect_webview = Rect  { x0: 0, y0: (2 * bar_h).into(), w: win_w, h: win_h - 2 * bar_h};
 
     let state = AppState { 
         fb_handle,
@@ -114,6 +136,14 @@ pub fn init() -> () {
             rect: rect_url_bar,
             color: Color::WHITE,
             bg_color: Some(Color::rgb(128, 128, 128)),
+            ..Default::default()
+        }),
+        progress_bar: ProgressBar::new(&ProgressBarConfig {
+            rect: rect_progress_bar,
+            max_val: 8,
+            bg_color: Color::rgb(128, 128, 128),
+            bar_color: Color::rgb(128, 128, 255),
+            text_color: Color::WHITE,
             ..Default::default()
         }),
 
@@ -150,6 +180,9 @@ pub fn step() {
         _ => None
     };
 
+    let (prog_val, prog_str) = get_progress_repr(&state.request_state);
+    
+    let redraw_progress_bar = state.progress_bar.update(prog_val, prog_str.as_ref());
     let redraw_button = state.button.update(&win_input_state);
     let redraw_url_bar = state.url_bar.update(&win_input_state, url_override.as_deref());
     let redraw_view = state.webview.update(&win_input_state, html_update);
@@ -162,13 +195,14 @@ pub fn step() {
         log::info!("Request state change: {} => {}", prev_state_debug, new_state_debug);
     }
 
-    let redraw = redraw_button || redraw_url_bar || redraw_view || state.first_frame;
+    let redraw = redraw_progress_bar || redraw_button || redraw_url_bar || redraw_view || state.first_frame;
 
     if !redraw { return; }
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
     framebuffer.fill(Color::WHITE);
 
+    state.progress_bar.draw(&mut framebuffer);
     state.webview.draw(&mut framebuffer);
     state.button.draw(&mut framebuffer);
     state.url_bar.draw(&mut framebuffer);
@@ -323,13 +357,14 @@ fn update_request_state(state: &mut AppState) -> anyhow::Result<()>{
 
                 if *out_count >= state.buffer.len() {
                     state.buffer.clear();
-                    *https_state = HttpsState::Receiving;
+                    *https_state = HttpsState::Receiving { in_count: 0 };
                 }
             },
 
-            HttpsState::Receiving => {
+            HttpsState::Receiving { in_count } => {
 
                 let n_plaintext = tls_client.update();
+                *in_count += n_plaintext;
 
                 if n_plaintext > 0 {
 

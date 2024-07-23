@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use core::{mem, usize};
 use x86_64::{VirtAddr, PhysAddr};
 use volatile::Volatile;
-use arrayvec::ArrayVec;
+use tinyvec::ArrayVec;
 
 use crate::pci::{PciDevice, PciBar, PciConfigSpace};
 use crate::memory;
@@ -263,7 +263,7 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
         let it: VirtqUsedElem = self.storage.device_area.ring[idx % Q_SIZE];
         //log::debug!("Received element: {:?}", it);
 
-        let mut out = ArrayVec::<T, N>::new();
+        let mut out = ArrayVec::<[T; N]>::new();
         let mut desc_index: usize = it.id.try_into().unwrap();
 
         loop {
@@ -290,7 +290,7 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
 
         self.pop_index += 1;
 
-        Some(out.into_inner().unwrap_or_else(|_| panic!("Not enough buffers received")))
+        Some(out.into_inner())
     }
 }
 

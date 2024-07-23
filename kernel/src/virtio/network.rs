@@ -3,6 +3,7 @@ use core::mem::MaybeUninit;
 
 use alloc::vec;
 use alloc::vec::Vec;
+use tinyvec::ArrayVec;
 use crate::pci::PciDevice;
 use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable};
 
@@ -70,7 +71,7 @@ impl VirtioNetwork {
     }
 
 
-    pub fn try_recv(&mut self) -> Option<Vec<u8>> {
+    pub fn try_recv(&mut self) -> Option<[u8; MAX_PACKET_SIZE]> {
 
         let resp_list = unsafe { self.receiveq1.try_pop::<_, 1>()? };
 
@@ -82,16 +83,13 @@ impl VirtioNetwork {
             ]).unwrap();
         }
 
-        Some(virtio_packet.data.to_vec())
+        Some(virtio_packet.data)
     }
 
-    pub fn send(&mut self, value: Vec<u8>) {
+    pub fn send(&mut self, mut data: ArrayVec<[u8; MAX_PACKET_SIZE]>) {
 
-        assert!(value.len() <= MAX_PACKET_SIZE);
-
-        let mut data = [0x00; MAX_PACKET_SIZE];
-
-        data[0..value.len()].copy_from_slice(&value[0..value.len()]);
+        let len = data.len();
+        data.resize(MAX_PACKET_SIZE, 0x00);
 
         let msg = VirtioNetPacket {
             hdr: VirtioNetHdr { 
@@ -103,10 +101,10 @@ impl VirtioNetwork {
                 csum_offset: 0x0,
                 num_buffers: 0x0
             },
-            data
+            data: data.into_inner()
         };
 
-        let virtio_buf_len = value.len() + core::mem::size_of::<VirtioNetHdr>();
+        let virtio_buf_len = len + core::mem::size_of::<VirtioNetHdr>();
 
         unsafe {
             self.transmitq1.try_push(&[

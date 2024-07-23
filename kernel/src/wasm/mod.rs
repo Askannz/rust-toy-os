@@ -547,7 +547,7 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
             let len = len as usize;
             let addr = addr as usize;
     
-            let mut buf = vec![0; len];
+            let mut buf = vec![0u8; len];
     
             let read_len: usize = {
                 let data_mut = caller.data_mut();

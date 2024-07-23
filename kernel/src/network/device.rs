@@ -3,7 +3,7 @@
     https://github.com/smoltcp-rs/smoltcp/blob/533f103a9544fa0de7d75383b13fc021f7b0642b/src/phy/loopback.rs
 */
 
-use alloc::vec::Vec;
+use tinyvec::ArrayVec;
 
 use smoltcp::phy::{self, Device, DeviceCapabilities, Medium};
 use smoltcp::time::Instant;
@@ -54,7 +54,7 @@ impl Device for SmolTcpVirtio {
 
 #[doc(hidden)]
 pub struct RxToken {
-    buffer: Vec<u8>,
+    buffer: [u8; MAX_PACKET_SIZE],
 }
 
 impl phy::RxToken for RxToken {
@@ -76,8 +76,8 @@ impl<'a> phy::TxToken for TxToken<'a> {
     where
         F: FnOnce(&mut [u8]) -> R,
     {
-        let mut buffer = Vec::new();
-        buffer.resize(len, 0);
+        let mut buffer = ArrayVec::<[u8; MAX_PACKET_SIZE]>::new();
+        for _ in 0..len { buffer.push(0x00); }
         let result = f(&mut buffer);
         self.virtio_dev.send(buffer);
         result

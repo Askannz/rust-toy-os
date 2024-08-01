@@ -1,25 +1,32 @@
 {
 	"folders": [
 		{
-			"path": "wasm_apps/terminal"
-		},
-		{
+			"name": "kernel",
 			"path": "kernel"
 		},
 		{
+			"name": "applib",
 			"path": "applib"
 		},
 		{
+			"name": "guestlib",
 			"path": "guestlib"
 		},
 		{
+			"name": "chronometer",
 			"path": "wasm_apps/chronometer"
 		},
 		{
+			"name": "cube_3d",
 			"path": "wasm_apps/cube_3d"
 		},
 		{
+			"name": "web_browser",
 			"path": "wasm_apps/web_browser"
+		},
+		{
+			"name": "terminal",
+			"path": "wasm_apps/terminal"
 		}
 	],
 	"settings": {}

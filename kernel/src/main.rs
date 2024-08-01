@@ -17,7 +17,7 @@ use applib::{Color, Rect, Framebuffer, SystemState, decode_png};
 use applib::input::{InputState, InputEvent};
 use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
-use applib::ui::button::{Button, ButtonConfig};
+use applib::ui::button::{Button, ButtonState};
 
 extern crate alloc;
 
@@ -51,7 +51,6 @@ struct AppDescriptor {
 struct App {
     wasm_app: WasmApp,
     descriptor: AppDescriptor,
-    button: Button,
     is_open: bool,
     rect: Rect,
     grab_pos: Option<(i64, i64)>,
@@ -160,12 +159,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         rect: app_desc.init_win_rect.clone(),
         grab_pos: None,
         time_used: 0.0,
-        button: Button::new(&ButtonConfig {
-            rect: app_desc.launch_rect.clone(),
-            text: app_desc.name.to_string(),
-            icon: app_desc.icon,
-            ..Default::default()
-        })
     }).collect();
 
     log::info!("Applications loaded");
@@ -229,9 +222,16 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 
     for app in applications.iter_mut() {
 
-        app.button.update(input_state);
-        app.button.draw(fb);
-        if app.button.is_fired() && !app.is_open {
+        let button_state = ButtonState {
+            rect: app.descriptor.launch_rect.clone(),
+            text: app.descriptor.name.to_string(),
+            icon: app.descriptor.icon,
+            ..Default::default()
+        };
+
+        let is_button_fired = Button::update(fb, input_state, &button_state);
+
+        if is_button_fired && !app.is_open {
             log::info!("{} is open", app.descriptor.name);
             app.is_open = true;
         }

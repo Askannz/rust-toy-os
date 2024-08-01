@@ -14,7 +14,7 @@ use guestlib::{FramebufferHandle, WasmLogger};
 use applib::{Color, Rect};
 
 
-use applib::ui::button::{Button, ButtonConfig};
+use applib::ui::button::{Button, ButtonState};
 use applib::ui::progress_bar::{ProgressBar, ProgressBarConfig};
 use applib::ui::text::{EditableText, EditableTextConfig};
 
@@ -33,7 +33,6 @@ const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState<'a> {
     fb_handle: FramebufferHandle,
-    button: Button,
     url_bar: EditableText,
     progress_bar: ProgressBar,
 
@@ -103,6 +102,9 @@ const SCHEME: &str = "https://";
 const DNS_SERVER_IP: [u8; 4] = [1, 1, 1, 1];
 const BUFFER_SIZE: usize = 100_000;
 
+const button_w: u32 = 100;
+const bar_h: u32 = 25;
+
 
 fn main() {}
 
@@ -117,21 +119,12 @@ pub fn init() -> () {
 
     let Rect { w: win_w, h: win_h, .. } = win_rect;
 
-    let button_w = 100;
-    let bar_h = 25;
-
-    let rect_button = Rect { x0: (win_w - button_w).into(), y0: 0, w: button_w, h: bar_h };
     let rect_url_bar = Rect { x0: 0, y0: 0, w: win_w - button_w, h: bar_h };
     let rect_progress_bar = Rect { x0: 0, y0: bar_h.into(), w: win_w, h: bar_h };
     let rect_webview = Rect  { x0: 0, y0: (2 * bar_h).into(), w: win_w, h: win_h - 2 * bar_h};
 
     let state = AppState { 
         fb_handle,
-        button: Button::new(&ButtonConfig {
-            rect: rect_button,
-            text: "GO".into(),
-            ..Default::default()
-        }),
         url_bar: EditableText::new(&EditableTextConfig {
             rect: rect_url_bar,
             color: Color::WHITE,
@@ -163,8 +156,22 @@ pub fn step() {
 
     let system_state = guestlib::get_system_state();
     let win_rect = guestlib::get_win_rect();
-
     let win_input_state = system_state.input.change_origin(&win_rect);
+    
+    let is_button_fired = {
+
+        // TODO: this should only be needed once...
+        let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
+        framebuffer.fill(Color::WHITE);
+
+        let rect_button = Rect { x0: (win_rect.w - button_w).into(), y0: 0, w: button_w, h: bar_h };
+        let button_state = ButtonState {
+            rect: rect_button,
+            text: "GO".into(),
+            ..Default::default()
+        };
+        Button::update(&mut framebuffer, &win_input_state, &button_state)
+    };
 
     let url_override = match state.first_frame {
         true => Some("https://news.ycombinator.com".to_owned()),
@@ -183,35 +190,33 @@ pub fn step() {
     let (prog_val, prog_str) = get_progress_repr(&state.request_state);
     
     let redraw_progress_bar = state.progress_bar.update(prog_val, prog_str.as_ref());
-    let redraw_button = state.button.update(&win_input_state);
     let redraw_url_bar = state.url_bar.update(&win_input_state, url_override.as_deref());
     let redraw_view = state.webview.update(&win_input_state, html_update);
 
     let prev_state_debug = format!("{:?}", state.request_state);
-    try_update_request_state(state);
+    try_update_request_state(state, is_button_fired);
     let new_state_debug = format!("{:?}", state.request_state);
 
     if new_state_debug != prev_state_debug {
         log::info!("Request state change: {} => {}", prev_state_debug, new_state_debug);
     }
 
-    let redraw = redraw_progress_bar || redraw_button || redraw_url_bar || redraw_view || state.first_frame;
+    //let redraw = redraw_progress_bar || redraw_button || redraw_url_bar || redraw_view || state.first_frame;
 
-    if !redraw { return; }
+    //if !redraw { return; }
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
-    framebuffer.fill(Color::WHITE);
 
     state.progress_bar.draw(&mut framebuffer);
     state.webview.draw(&mut framebuffer);
-    state.button.draw(&mut framebuffer);
+    //state.button.draw(&mut framebuffer);
     state.url_bar.draw(&mut framebuffer);
     state.first_frame = false;
 }
 
-fn try_update_request_state(state: &mut AppState) {
+fn try_update_request_state(state: &mut AppState, is_button_fired: bool) {
 
-    match update_request_state(state) {
+    match update_request_state(state, is_button_fired) {
         Ok(_) => (),
         Err(err) => {
             log::error!("{}", err);
@@ -241,7 +246,7 @@ fn make_error_html(error: anyhow::Error) -> String {
     )
 }
 
-fn update_request_state(state: &mut AppState) -> anyhow::Result<()>{
+fn update_request_state(state: &mut AppState, is_button_fired: bool) -> anyhow::Result<()>{
     
     match &mut state.request_state {
     
@@ -249,7 +254,7 @@ fn update_request_state(state: &mut AppState) -> anyhow::Result<()>{
 
             let mut url_data: Option<(String, String)> = None;
 
-            if state.button.is_fired() || state.url_bar.is_flushed() {
+            if is_button_fired || state.url_bar.is_flushed() {
                 let (domain, path) = parse_url(state.url_bar.text());
                 url_data = Some((domain.to_string(), path.to_string()));
             } else {

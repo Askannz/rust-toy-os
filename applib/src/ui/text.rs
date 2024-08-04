@@ -9,13 +9,6 @@ use crate::input::{Keycode, CHARMAP};
 use crate::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, FormattedRichLines, RichText, HACK_15};
 
 
-pub struct EditableText {
-    config: EditableTextConfig,
-    text: String,
-    is_shift_pressed: bool,
-    is_flushed: bool,
-}
-
 #[derive(Clone)]
 pub struct EditableTextConfig {
     pub rect: Rect,
@@ -36,88 +29,65 @@ impl Default for EditableTextConfig {
 }
 
 
+pub fn string_input(buffer: &mut String, caps: &mut bool, input_state: &InputState, allow_newline: bool) {
 
-impl EditableText {
+    let check_is_shift = |keycode| {
+        keycode == Keycode::KEY_LEFTSHIFT || 
+        keycode == Keycode::KEY_RIGHTSHIFT
+    };
+    input_state.events.iter().for_each(|&event| match event {
+        Some(InputEvent::KeyPress { keycode }) if check_is_shift(keycode) => *caps = true,
+        Some(InputEvent::KeyRelease { keycode }) if check_is_shift(keycode) => *caps = false,
+        _ => ()
+    });
 
-    pub fn new(config: &EditableTextConfig) -> Self {
-        Self { config: config.clone(), text: String::from(""), is_shift_pressed: false, is_flushed: false }
-    }
+    for event in input_state.events {
 
-    pub fn update(&mut self, input_state: &InputState, text_override: Option<&str>) -> bool {
+        match event {
 
-        let check_is_shift = |keycode| {
-            keycode == Keycode::KEY_LEFTSHIFT || 
-            keycode == Keycode::KEY_RIGHTSHIFT
-        };
-        input_state.events.iter().for_each(|&event| match event {
-            Some(InputEvent::KeyPress { keycode }) if check_is_shift(keycode) => self.is_shift_pressed = true,
-            Some(InputEvent::KeyRelease { keycode }) if check_is_shift(keycode) => self.is_shift_pressed = false,
-            _ => ()
-        });
-    
-    
-        self.is_flushed = false;
-        let mut redraw = false;
-    
-        for event in input_state.events {
-    
-            match event {
-    
-                // Enter key pressed (flushing input)
-                Some(InputEvent::KeyPress { keycode: Keycode::KEY_ENTER }) => {
-                    self.is_flushed = true;
-                },
-    
-                // Backspace
-                Some(InputEvent::KeyPress { keycode: Keycode::KEY_BACKSPACE }) => { 
-                    self.text.pop();
-                    redraw = true;
-                },
-    
-                // Character input
-                Some(InputEvent::KeyPress { keycode }) => {
-    
-                    let new_char = CHARMAP
-                        .get(&keycode)
-                        .map(|(low_c, up_c)| if self.is_shift_pressed { *up_c } else { *low_c })
-                        .flatten();
-    
-                    if let Some(new_char) = new_char {
-                        self.text.push(new_char);
-                        redraw = true;
-                    }
+            // Enter
+            Some(InputEvent::KeyPress { keycode: Keycode::KEY_ENTER }) if allow_newline => { buffer.push('\n'); },
+
+            // Backspace
+            Some(InputEvent::KeyPress { keycode: Keycode::KEY_BACKSPACE }) => { buffer.pop(); },
+
+            // Character input
+            Some(InputEvent::KeyPress { keycode }) => {
+
+                let new_char = CHARMAP
+                    .get(&keycode)
+                    .map(|(low_c, up_c)| if *caps { *up_c } else { *low_c })
+                    .flatten();
+
+                if let Some(new_char) = new_char {
+                    buffer.push(new_char);
                 }
-    
-                _ => ()
-            };
-        }
+            }
 
-        if let Some(text) = text_override {
-            self.text = text.to_owned();
-            redraw = true;
-        }
-
-        redraw
+            _ => ()
+        };
     }
 
-    pub fn is_flushed(&self) -> bool {
-        return self.is_flushed
+}
+
+
+pub fn editable_text(
+    config: &EditableTextConfig,
+    fb: &mut Framebuffer,
+    buffer: &mut String,
+    caps: &mut bool,
+    input_state: &InputState
+) {
+
+    string_input(buffer, caps, input_state, false);
+
+    let EditableTextConfig { font, color, bg_color, .. } = config;
+    let Rect { x0, y0, .. } = config.rect;
+
+    if let Some(bg_color) = bg_color {
+        draw_rect(fb, &config.rect, *bg_color);
     }
-
-    pub fn text(&self) -> &str {
-        &self.text
-    }
-
-    pub fn draw(&mut self, fb: &mut Framebuffer) {
-
-        let EditableTextConfig { font, color, bg_color, .. } = self.config;
-        let Rect { x0, y0, .. } = self.config.rect;
-
-        if let Some(bg_color) = bg_color {
-            draw_rect(fb, &self.config.rect, bg_color);
-        }
-        draw_str(fb, &self.text, x0, y0, font, color, None);
-    }
+    draw_str(fb, buffer, x0, y0, font, *color, None);
 }
 
 

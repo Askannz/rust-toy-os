@@ -16,7 +16,9 @@ use applib::{Color, Rect};
 
 use applib::ui::button::{Button, ButtonState};
 use applib::ui::progress_bar::{ProgressBar, ProgressBarConfig};
-use applib::ui::text::{EditableText, EditableTextConfig};
+use applib::ui::text::{EditableTextConfig, editable_text};
+use applib::input::{InputState, InputEvent};
+use applib::input::{Keycode, CHARMAP};
 
 mod tls;
 mod render;
@@ -33,8 +35,10 @@ const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState<'a> {
     fb_handle: FramebufferHandle,
-    url_bar: EditableText,
     progress_bar: ProgressBar,
+
+    url_text: String,
+    caps: bool,
 
     webview: render::Webview<'a>,
 
@@ -102,8 +106,8 @@ const SCHEME: &str = "https://";
 const DNS_SERVER_IP: [u8; 4] = [1, 1, 1, 1];
 const BUFFER_SIZE: usize = 100_000;
 
-const button_w: u32 = 100;
-const bar_h: u32 = 25;
+const BUTTON_W: u32 = 100;
+const BAR_H: u32 = 25;
 
 
 fn main() {}
@@ -119,18 +123,11 @@ pub fn init() -> () {
 
     let Rect { w: win_w, h: win_h, .. } = win_rect;
 
-    let rect_url_bar = Rect { x0: 0, y0: 0, w: win_w - button_w, h: bar_h };
-    let rect_progress_bar = Rect { x0: 0, y0: bar_h.into(), w: win_w, h: bar_h };
-    let rect_webview = Rect  { x0: 0, y0: (2 * bar_h).into(), w: win_w, h: win_h - 2 * bar_h};
+    let rect_progress_bar = Rect { x0: 0, y0: BAR_H.into(), w: win_w, h: BAR_H };
+    let rect_webview = Rect  { x0: 0, y0: (2 * BAR_H).into(), w: win_w, h: win_h - 2 * BAR_H};
 
     let state = AppState { 
         fb_handle,
-        url_bar: EditableText::new(&EditableTextConfig {
-            rect: rect_url_bar,
-            color: Color::WHITE,
-            bg_color: Some(Color::rgb(128, 128, 128)),
-            ..Default::default()
-        }),
         progress_bar: ProgressBar::new(&ProgressBarConfig {
             rect: rect_progress_bar,
             max_val: 8,
@@ -139,6 +136,9 @@ pub fn init() -> () {
             text_color: Color::WHITE,
             ..Default::default()
         }),
+
+        url_text: "https://news.ycombinator.com".to_owned(),
+        caps: false,
 
         webview: Webview::new(&rect_webview),
 
@@ -158,13 +158,13 @@ pub fn step() {
     let win_rect = guestlib::get_win_rect();
     let win_input_state = system_state.input.change_origin(&win_rect);
     
+    // TODO: this should only be needed once...
+    let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
+    framebuffer.fill(Color::WHITE);
+
     let is_button_fired = {
 
-        // TODO: this should only be needed once...
-        let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
-        framebuffer.fill(Color::WHITE);
-
-        let rect_button = Rect { x0: (win_rect.w - button_w).into(), y0: 0, w: button_w, h: bar_h };
+        let rect_button = Rect { x0: (win_rect.w - BUTTON_W).into(), y0: 0, w: BUTTON_W, h: BAR_H };
         let button_state = ButtonState {
             rect: rect_button,
             text: "GO".into(),
@@ -173,14 +173,21 @@ pub fn step() {
         Button::update(&mut framebuffer, &win_input_state, &button_state)
     };
 
-    let url_override = match state.first_frame {
-        true => Some("https://news.ycombinator.com".to_owned()),
-        //true => Some("https://en.wikipedia.org/wiki/Rust".to_owned()),
-        false => match &state.request_state {
-            RequestState::Dns { domain, path, .. } => Some(format!("{}{}{}", SCHEME, domain, path)),
-            _ => None,
-        }
-    };
+    let rect_url_bar = Rect { x0: 0, y0: 0, w: win_rect.w - BUTTON_W, h: BAR_H };
+
+    editable_text(
+        &EditableTextConfig {
+            rect: rect_url_bar,
+            color: Color::WHITE,
+            bg_color: Some(Color::rgb(128, 128, 128)),
+            ..Default::default()
+        },
+        &mut framebuffer,
+        &mut state.url_text,
+        &mut state.caps,
+        &win_input_state
+    );
+
 
     let html_update = match &state.request_state {
         RequestState::Render { html, .. } => Some(html.as_str()),
@@ -188,35 +195,41 @@ pub fn step() {
     };
 
     let (prog_val, prog_str) = get_progress_repr(&state.request_state);
+
+    let url_go = is_button_fired || check_enter_pressed(&win_input_state);
     
-    let redraw_progress_bar = state.progress_bar.update(prog_val, prog_str.as_ref());
-    let redraw_url_bar = state.url_bar.update(&win_input_state, url_override.as_deref());
-    let redraw_view = state.webview.update(&win_input_state, html_update);
+    state.progress_bar.update(prog_val, prog_str.as_ref());
+    state.webview.update(&win_input_state, html_update);
 
     let prev_state_debug = format!("{:?}", state.request_state);
-    try_update_request_state(state, is_button_fired);
+    try_update_request_state(state, url_go);
     let new_state_debug = format!("{:?}", state.request_state);
 
     if new_state_debug != prev_state_debug {
         log::info!("Request state change: {} => {}", prev_state_debug, new_state_debug);
     }
 
-    //let redraw = redraw_progress_bar || redraw_button || redraw_url_bar || redraw_view || state.first_frame;
-
-    //if !redraw { return; }
 
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 
     state.progress_bar.draw(&mut framebuffer);
     state.webview.draw(&mut framebuffer);
-    //state.button.draw(&mut framebuffer);
-    state.url_bar.draw(&mut framebuffer);
     state.first_frame = false;
 }
 
-fn try_update_request_state(state: &mut AppState, is_button_fired: bool) {
+fn check_enter_pressed(input_state: &InputState) -> bool {
+    input_state.events.iter().any(|event| {
+        if let Some(InputEvent::KeyPress { keycode: Keycode::KEY_ENTER }) = event {
+            true
+        } else {
+            false
+        }
+    })
+}
 
-    match update_request_state(state, is_button_fired) {
+fn try_update_request_state(state: &mut AppState, url_go: bool) {
+
+    match update_request_state(state, url_go) {
         Ok(_) => (),
         Err(err) => {
             log::error!("{}", err);
@@ -246,7 +259,7 @@ fn make_error_html(error: anyhow::Error) -> String {
     )
 }
 
-fn update_request_state(state: &mut AppState, is_button_fired: bool) -> anyhow::Result<()>{
+fn update_request_state(state: &mut AppState, url_go: bool) -> anyhow::Result<()>{
     
     match &mut state.request_state {
     
@@ -254,8 +267,8 @@ fn update_request_state(state: &mut AppState, is_button_fired: bool) -> anyhow::
 
             let mut url_data: Option<(String, String)> = None;
 
-            if is_button_fired || state.url_bar.is_flushed() {
-                let (domain, path) = parse_url(state.url_bar.text());
+            if url_go {
+                let (domain, path) = parse_url(&state.url_text);
                 url_data = Some((domain.to_string(), path.to_string()));
             } else {
                 if let Some(href) = state.webview.check_redirect() {

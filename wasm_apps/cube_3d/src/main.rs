@@ -11,6 +11,7 @@ struct AppState<'a> {
     render_fb: Framebuffer<'a>,
     render_rect: Rect,
     dragging_sbar: bool,
+    prev_pointer: Option<(i64, i64)>,
     scene: Scene,
 }
 
@@ -30,6 +31,7 @@ pub fn init() -> () {
         render_fb: Framebuffer::new_owned(W as u32, H as u32),
         render_rect: win_rect.zero_origin(),
         dragging_sbar: false,
+        prev_pointer: None,
         scene: load_scene()
     };
     unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")); }
@@ -47,11 +49,21 @@ pub fn step() {
 
     let input_state_local = system_state.input.change_origin(&win_rect);
     let pointer = &input_state_local.pointer;
-    let xf = (pointer.x as f32) / ((W - 1) as f32);
-    let yf = (pointer.y as f32) / ((H - 1) as f32);
 
-    state.render_fb.fill(Color::WHITE);
-    draw_scene(&mut state.render_fb, &state.scene, xf, yf);
+    let redraw = match state.prev_pointer {
+        Some((px, py)) if (pointer.x, pointer.y) == (px, py) => false,
+        _ => {
+            state.prev_pointer = Some((pointer.x, pointer.y));
+            true
+        },
+    };
+
+    if redraw {
+        let xf = (pointer.x as f32) / ((W - 1) as f32);
+        let yf = (pointer.y as f32) / ((H - 1) as f32);
+        state.render_fb.fill(Color::WHITE);
+        draw_scene(&mut state.render_fb, &state.scene, xf, yf);
+    }
 
     framebuffer.fill(Color::BLACK);
     scrollable_canvas(

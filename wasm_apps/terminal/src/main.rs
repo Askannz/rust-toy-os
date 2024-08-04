@@ -7,9 +7,9 @@ use alloc::vec::Vec;
 use guestlib::FramebufferHandle;
 use applib::{Color, Rect};
 use applib::input::InputEvent;
-use applib::input::{Keycode, CHARMAP};
+use applib::input::{Keycode, CHARMAP, InputState};
 use applib::drawing::text::{RichText, HACK_15, Font};
-use applib::ui::text::{ScrollableText, TextConfig};
+use applib::ui::text::{ScrollableText, TextConfig, string_input};
 
 mod python;
 
@@ -28,9 +28,7 @@ struct AppState {
 
     console_area: ScrollableText,
 
-    shift_pressed: bool,
-
-    first_frame: bool,
+    caps: bool,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -58,8 +56,7 @@ pub fn init() -> () {
             rect: rect_console,
             ..Default::default()
         }),
-        shift_pressed: false,
-        first_frame: true,
+        caps: false,
     };
     unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")) }
 }
@@ -76,116 +73,64 @@ pub fn step() {
 
     let input_state = &system_state.input;
 
-    let mut console_changed = false;
-    let mut input_changed = false;
+    string_input(&mut state.input_buffer, &mut state.caps, &input_state, false);
 
+    if check_enter_pressed(input_state) && !state.input_buffer.is_empty() {
+        let cmd = state.input_buffer.to_owned();
 
-    //
-    // Updating shift state
-
-    let check_is_shift = |keycode| {
-        keycode == Keycode::KEY_LEFTSHIFT || 
-        keycode == Keycode::KEY_RIGHTSHIFT
-    };
-    input_state.events.iter().for_each(|&event| match event {
-        Some(InputEvent::KeyPress { keycode }) if check_is_shift(keycode) => state.shift_pressed = true,
-        Some(InputEvent::KeyRelease { keycode }) if check_is_shift(keycode) => state.shift_pressed = false,
-        _ => ()
-    });
-
-
-    //
-    // Reading keypress events
-
-    for event in input_state.events {
-
-        match event {
-
-            // Enter key pressed (flushing input)
-            Some(InputEvent::KeyPress { keycode: Keycode::KEY_ENTER }) => {
-                if !state.input_buffer.is_empty() {
-
-                    let cmd = state.input_buffer.to_owned();
-
-                    let pyres = state.python.run_code(&cmd);
-                    
-                    state.console_buffer.push(EvalResult { cmd, pyres });
-                    state.input_buffer.clear();
-                    console_changed = true;
-                    input_changed = true;
-                }
-            },
-
-            // Backspace
-            Some(InputEvent::KeyPress { keycode: Keycode::KEY_BACKSPACE }) => { 
-                state.input_buffer.pop();
-                input_changed = true;
-            },
-
-            // Character input
-            Some(InputEvent::KeyPress { keycode }) => {
-
-                let new_char = CHARMAP
-                    .get(&keycode)
-                    .map(|(low_c, up_c)| if state.shift_pressed { *up_c } else { *low_c })
-                    .flatten();
-
-                if let Some(new_char) = new_char {
-                    state.input_buffer.push(new_char);
-                    input_changed = true;
-                }
-            }
-
-            _ => ()
-        };
+        let pyres = state.python.run_code(&cmd);
+        
+        state.console_buffer.push(EvalResult { cmd, pyres });
+        state.input_buffer.clear();
     }
 
     let font = state.font;
 
     let win_input_state = system_state.input.change_origin(&win_rect);
 
-    let console_rich_text = match console_changed || input_changed || state.first_frame {
-        true => {
+    let console_rich_text = {
 
-            let mut console_rich_text = RichText::new();
+        let mut console_rich_text = RichText::new();
 
-            for res in state.console_buffer.iter() {
+        for res in state.console_buffer.iter() {
 
-                console_rich_text.add_part(">>> ", Color::YELLOW, font, None);
-                console_rich_text.add_part(&res.cmd, Color::WHITE, font, None);
+            console_rich_text.add_part(">>> ", Color::YELLOW, font, None);
+            console_rich_text.add_part(&res.cmd, Color::WHITE, font, None);
 
-                let color = match &res.pyres {
-                    python::EvalResult::Failure(_) => Color::RED,
-                    _ => Color::WHITE
-                };
+            let color = match &res.pyres {
+                python::EvalResult::Failure(_) => Color::RED,
+                _ => Color::WHITE
+            };
 
-                let text = match &res.pyres {
-                    python::EvalResult::Failure(err) => format!("\n{}", err),
-                    python::EvalResult::Success(repr) => format!("\n{}", repr),
-                    python::EvalResult::None => "".to_owned()
-                };
+            let text = match &res.pyres {
+                python::EvalResult::Failure(err) => format!("\n{}", err),
+                python::EvalResult::Success(repr) => format!("\n{}", repr),
+                python::EvalResult::None => "".to_owned()
+            };
 
-                console_rich_text.add_part(&text, color, font, None);
-                console_rich_text.add_part("\n", Color::WHITE, font, None)
-            }
+            console_rich_text.add_part(&text, color, font, None);
+            console_rich_text.add_part("\n", Color::WHITE, font, None)
+        }
 
-            console_rich_text.add_part(">>> ", Color::WHITE, font, None);
-            console_rich_text.add_part(&state.input_buffer, Color::WHITE, font, None);
+        console_rich_text.add_part(">>> ", Color::WHITE, font, None);
+        console_rich_text.add_part(&state.input_buffer, Color::WHITE, font, None);
 
-            Some(console_rich_text)
-        },
-        false => None
+        Some(console_rich_text)
     };
 
-    let redraw_console = state.console_area.update(&win_input_state, console_rich_text);
-
-    let redraw = redraw_console || state.first_frame;
-
-    if !redraw { return; }
+    state.console_area.update(&win_input_state, console_rich_text);
 
     framebuffer.fill(Color::BLACK);
 
     state.console_area.draw(&mut framebuffer);
+}
 
-    state.first_frame = false;
+fn check_enter_pressed(input_state: &InputState) -> bool {
+    input_state.events.iter().any(|event| {
+        if let Some(InputEvent::KeyPress { keycode: Keycode::KEY_ENTER }) = event {
+            true
+        } else {
+            false
+        }
+    })
 }

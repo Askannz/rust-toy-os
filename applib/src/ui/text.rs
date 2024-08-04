@@ -91,57 +91,34 @@ pub fn editable_text(
 }
 
 
-pub struct ScrollableText {
-    config: TextConfig,
-    offset: usize,
-    lines: FormattedRichLines,
-}
+pub fn scrollable_text(config: &TextConfig, fb: &mut Framebuffer, input_state: &InputState, text: &RichText) {
 
-impl ScrollableText {
 
-    pub fn new(config: &TextConfig) -> Self {
-        Self { config: config.clone(), offset: 0, lines: Vec::new() }
-    }
+    let lines = format_rich_lines(&text, &config.rect);
+    let mut offset = get_autoscroll_offset(&config.rect, &lines);
 
-    pub fn update(&mut self, input_state: &InputState, text: Option<RichText>) -> bool {
+    if config.scrollable {
 
-        let mut redraw = false;
+        let ps = &input_state.pointer;
 
-        if let Some(text) = text {
-            self.lines = format_rich_lines(&text, &self.config.rect);
-            self.offset = get_autoscroll_offset(&self.config.rect, &self.lines);
-            redraw = true;
-        }
-
-        if self.config.scrollable {
-
-            let ps = &input_state.pointer;
-
-            if self.config.rect.check_contains_point(ps.x, ps.y) {
-                for event in input_state.events {
-                    if let Some(InputEvent::Scroll { delta }) = event {
-                        let offset = self.offset as i64 - delta;
-                        self.offset = i64::max(0, offset) as usize;
-                        redraw = true;
-                    }
+        if config.rect.check_contains_point(ps.x, ps.y) {
+            for event in input_state.events {
+                if let Some(InputEvent::Scroll { delta }) = event {
+                    let new_offset = offset as i64 - delta;
+                    offset = i64::max(0, new_offset) as usize;
                 }
             }
         }
-
-        redraw
     }
 
-    pub fn draw(&self, fb: &mut Framebuffer) {
+    let Rect { x0, y0, h, .. } = config.rect;
+    let h: i64 = h.into();
 
-        let Rect { x0, y0, h, .. } = self.config.rect;
-        let h: i64 = h.into();
-
-        let mut y = y0;
-        for (rich_text, line_h) in self.lines.iter().skip(self.offset) {
-            if y + line_h > y0 + h { break; }
-            draw_rich_slice(fb, &rich_text, x0, y);
-            y += line_h;
-        }
+    let mut y = y0;
+    for (rich_text, line_h) in lines.iter().skip(offset) {
+        if y + line_h > y0 + h { break; }
+        draw_rich_slice(fb, &rich_text, x0, y);
+        y += line_h;
     }
 }
 

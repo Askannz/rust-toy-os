@@ -354,12 +354,16 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                     0 => {  // X axis
                         let dx = (event.value as i32) as i64;
                         let pointer_state = &mut input_state.pointer;
-                        pointer_state.x = i64::max(0, i64::min(w as i64 - 1, pointer_state.x as i64 + dx));
+                        let new_x = i64::max(0, i64::min(w as i64 - 1, pointer_state.x as i64 + dx));
+                        pointer_state.delta_x = new_x - pointer_state.x;
+                        pointer_state.x = new_x;
                     }
                     1 => {  // Y axis
                         let dy = (event.value as i32) as i64;
                         let pointer_state = &mut input_state.pointer;
-                        pointer_state.y = i64::max(0, i64::min(h as i64 - 1, pointer_state.y as i64 + dy));
+                        let new_y = i64::max(0, i64::min(h as i64 - 1, pointer_state.y as i64 + dy));
+                        pointer_state.delta_y = new_y - pointer_state.y;
+                        pointer_state.y = new_y;
                     },
                     8 => {  // Scroll wheel
                         let delta = (event.value as i32) as i64;

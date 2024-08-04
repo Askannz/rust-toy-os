@@ -20,6 +20,8 @@ impl InputState {
             pointer: PointerState { 
                 x: (w / 2).into(),
                 y: (h / 2).into(),
+                delta_x: 0,
+                delta_y: 0,
                 left_clicked: false,
                 right_clicked: false,
             },
@@ -62,6 +64,8 @@ impl InputState {
 pub struct PointerState {
     pub x: i64,
     pub y: i64,
+    pub delta_x: i64,
+    pub delta_y: i64,
     pub left_clicked: bool,
     pub right_clicked: bool
 }

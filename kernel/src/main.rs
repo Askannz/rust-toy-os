@@ -254,7 +254,13 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
                     app.grab_pos = None
                 }
             } else {
-                let app_hover = deco_rect.check_contains_point(pointer_state.x, pointer_state.y);
+                let titlebar_rect = Rect {
+                    x0: deco_rect.x0,
+                    y0: deco_rect.y0,
+                    w: deco_rect.w,
+                    h: font_h,
+                };
+                let app_hover = titlebar_rect.check_contains_point(pointer_state.x, pointer_state.y);
                 if app_hover && pointer_state.left_clicked {
                     let dx = pointer_state.x - app.rect.x0;
                     let dy = pointer_state.y - app.rect.y0;

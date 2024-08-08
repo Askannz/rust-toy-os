@@ -9,7 +9,7 @@ use drawing::{draw_scene, Scene, load_scene};
 struct AppState<'a> {
     fb_handle: FramebufferHandle,
     render_fb: Framebuffer<'a>,
-    render_rect: Rect,
+    scroll_offsets: (i64, i64),
     dragging_sbar: bool,
     prev_pointer: Option<(i64, i64)>,
     scene: Scene,
@@ -29,7 +29,7 @@ pub fn init() -> () {
     let state = AppState {
         fb_handle,
         render_fb: Framebuffer::new_owned(W as u32, H as u32),
-        render_rect: win_rect.zero_origin(),
+        scroll_offsets: (0, 0),
         dragging_sbar: false,
         prev_pointer: None,
         scene: load_scene()
@@ -70,7 +70,7 @@ pub fn step() {
         &mut framebuffer,
         &win_rect.zero_origin(),
         &state.render_fb,
-        &mut state.render_rect,
+        &mut state.scroll_offsets,
         &input_state_local,
         &mut state.dragging_sbar
     );

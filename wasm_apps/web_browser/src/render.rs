@@ -35,6 +35,14 @@ struct LinkData {
 const SCROLL_SPEED: u32 = 20;
 const MAX_RENDER_HEIGHT: u32 = 3_000;
 
+
+
+pub fn render_html(dst_fb: &mut Framebuffer, html: &str) {
+
+
+
+}
+
 impl<'a> Webview<'a> {
 
     pub fn new(view_rect: &Rect) -> Self {

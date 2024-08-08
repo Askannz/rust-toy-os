@@ -17,28 +17,37 @@ pub fn scrollable_canvas(
     dst_fb: &mut Framebuffer,
     dst_rect: &Rect,
     src_fb: &Framebuffer,
-    src_rect: &mut Rect,
+    offsets: &mut (i64, i64),
     input_state: &InputState,
     dragging: &mut bool,
 ) {
 
+    let (scroll_x0, scroll_y0) = offsets;
+
     if *dragging {
-        src_rect.y0 += (src_fb.h as i64) * input_state.pointer.delta_y / (dst_rect.h as i64);
+        *scroll_y0 += (src_fb.h as i64) * input_state.pointer.delta_y / (dst_rect.h as i64);
     } else {
         for event in input_state.events {
             if let Some(InputEvent::Scroll { delta }) = event {
-                src_rect.y0 -= delta * (SCROLL_SPEED as i64);
+                *scroll_y0 -= delta * (SCROLL_SPEED as i64);
             }
         }
     }
 
     // TODO: what if source buffer is smaller than dest rect?
-    src_rect.x0 = i64::max(0, src_rect.x0);
-    src_rect.y0 = i64::max(0, src_rect.y0);
-    src_rect.x0 = i64::min((src_fb.w - src_rect.w - 1).into(), src_rect.x0);
-    src_rect.y0 = i64::min((src_fb.h - src_rect.h - 1).into(), src_rect.y0);
+    *scroll_x0 = i64::max(0, *scroll_x0);
+    *scroll_y0 = i64::max(0, *scroll_y0);
+    *scroll_x0 = i64::min((src_fb.w - dst_rect.w - 1).into(), *scroll_x0);
+    *scroll_y0 = i64::min((src_fb.h - dst_rect.h - 1).into(), *scroll_y0);
 
-    dst_fb.copy_from_fb(src_fb, src_rect, &dst_rect, false);
+    let offset_rect = Rect {
+        x0: *scroll_x0,
+        y0: *scroll_y0,
+        w: dst_rect.w,
+        h: dst_rect.h,
+    };
+
+    dst_fb.copy_from_fb(src_fb, &offset_rect, &dst_rect, false);
 
 
     //
@@ -46,16 +55,16 @@ pub fn scrollable_canvas(
 
     let sbar_outer_rect = Rect { 
         x0: (dst_rect.w - SBAR_OUTER_W).into(),
-        y0: 0,
+        y0: dst_rect.y0,
         w: SBAR_OUTER_W,
         h: dst_rect.h,
     };
 
     let sbar_inner_rect = Rect { 
-        x0: (dst_rect.w - SBAR_OUTER_W + (SBAR_OUTER_W - SBAR_INNER_W) / 2).into(),
-        y0: (dst_rect.h as i64) * src_rect.y0 / (src_fb.h as i64),
+        x0: (dst_rect.w - SBAR_OUTER_W + (SBAR_OUTER_W - SBAR_INNER_W) / 2) as i64 + dst_rect.x0,
+        y0: (dst_rect.h as i64) * (*scroll_y0) / (src_fb.h as i64) + dst_rect.y0,
         w: SBAR_INNER_W,
-        h: dst_rect.h * src_rect.h / src_fb.h,
+        h: dst_rect.h * dst_rect.h / src_fb.h,
     };
 
     let p_state = &input_state.pointer;

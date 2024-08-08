@@ -13,22 +13,22 @@ use anyhow::Context;
 use guestlib::{FramebufferHandle, WasmLogger};
 use applib::{Color, Rect};
 
-
+use applib::Framebuffer;
 use applib::ui::button::{Button, ButtonState};
 use applib::ui::progress_bar::{ProgressBar, ProgressBarConfig};
 use applib::ui::text::{EditableTextConfig, editable_text};
+use applib::ui::scrollable_canvas::scrollable_canvas;
 use applib::input::{InputState, InputEvent};
 use applib::input::{Keycode, CHARMAP};
 
 mod tls;
-mod render;
 mod dns;
 mod socket;
-mod html_parsing;
+mod html;
 
-use render::Webview;
 use tls::TlsClient;
 use socket::Socket;
+use html::render_html;
 
 static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
@@ -40,11 +40,12 @@ struct AppState<'a> {
     url_text: String,
     caps: bool,
 
-    webview: render::Webview<'a>,
-
     first_frame: bool,
 
     buffer: Vec<u8>,
+    webview_buffer: Framebuffer<'a>,
+    webview_scroll_offsets: (i64, i64),
+    webview_scroll_dragging: bool,
 
     request_state: RequestState,
 }
@@ -109,7 +110,6 @@ const BUFFER_SIZE: usize = 100_000;
 const BUTTON_W: u32 = 100;
 const BAR_H: u32 = 25;
 
-
 fn main() {}
 
 #[no_mangle]
@@ -124,7 +124,9 @@ pub fn init() -> () {
     let Rect { w: win_w, h: win_h, .. } = win_rect;
 
     let rect_progress_bar = Rect { x0: 0, y0: BAR_H.into(), w: win_w, h: BAR_H };
-    let rect_webview = Rect  { x0: 0, y0: (2 * BAR_H).into(), w: win_w, h: win_h - 2 * BAR_H};
+
+    // 4 * win_h is arbitrary
+    let webview_buffer = Framebuffer::new_owned(win_w, 4 * win_h);
 
     let state = AppState { 
         fb_handle,
@@ -140,10 +142,11 @@ pub fn init() -> () {
         url_text: "https://news.ycombinator.com".to_owned(),
         caps: false,
 
-        webview: Webview::new(&rect_webview),
-
         first_frame: true,
         buffer: vec![0u8; BUFFER_SIZE],
+        webview_buffer,
+        webview_scroll_offsets: (0, 0),
+        webview_scroll_dragging: false,
         request_state: RequestState::Idle { domain: None },
     };
     unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")); }
@@ -188,18 +191,20 @@ pub fn step() {
         &win_input_state
     );
 
-
-    let html_update = match &state.request_state {
-        RequestState::Render { html, .. } => Some(html.as_str()),
-        _ => None
-    };
+    scrollable_canvas(
+        &mut framebuffer,
+        &Rect { x0: 0, y0: (2 * BAR_H).into(), w: win_rect.w, h: win_rect.h - 2 * BAR_H },
+        &state.webview_buffer,
+        &mut state.webview_scroll_offsets,
+        &win_input_state,
+        &mut state.webview_scroll_dragging,
+    );
 
     let (prog_val, prog_str) = get_progress_repr(&state.request_state);
 
     let url_go = is_button_fired || check_enter_pressed(&win_input_state);
     
     state.progress_bar.update(prog_val, prog_str.as_ref());
-    state.webview.update(&win_input_state, html_update);
 
     let prev_state_debug = format!("{:?}", state.request_state);
     try_update_request_state(state, url_go);
@@ -213,7 +218,6 @@ pub fn step() {
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
 
     state.progress_bar.draw(&mut framebuffer);
-    state.webview.draw(&mut framebuffer);
     state.first_frame = false;
 }
 
@@ -271,14 +275,14 @@ fn update_request_state(state: &mut AppState, url_go: bool) -> anyhow::Result<()
                 let (domain, path) = parse_url(&state.url_text);
                 url_data = Some((domain.to_string(), path.to_string()));
             } else {
-                if let Some(href) = state.webview.check_redirect() {
-                    if let Some(current_domain) = current_domain {
-                        if !href.starts_with(SCHEME) {
-                            let path = format!("/{}", href);
-                            url_data = Some((current_domain.clone(), path));
-                        }
-                    }
-                }
+                // if let Some(href) = state.webview.check_redirect() {
+                //     if let Some(current_domain) = current_domain {
+                //         if !href.starts_with(SCHEME) {
+                //             let path = format!("/{}", href);
+                //             url_data = Some((current_domain.clone(), path));
+                //         }
+                //     }
+                // }
             }
 
             if let Some((domain, path)) = url_data {
@@ -402,7 +406,8 @@ fn update_request_state(state: &mut AppState, url_go: bool) -> anyhow::Result<()
 
         },
 
-        RequestState::Render {domain, .. } => { 
+        RequestState::Render { domain, html, } => {
+            render_html(&mut state.webview_buffer, html);
             state.request_state = RequestState::Idle { 
                 domain: Some(domain.clone())
             };

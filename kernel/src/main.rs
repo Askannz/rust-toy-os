@@ -17,7 +17,7 @@ use applib::{Color, Rect, Framebuffer, SystemState, decode_png};
 use applib::input::{InputState, InputEvent};
 use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
-use applib::ui::button::{button, ButtonConfig};
+use applib::uitk;
 
 extern crate alloc;
 
@@ -222,8 +222,8 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 
     for app in applications.iter_mut() {
 
-        let is_button_fired = button(
-            &ButtonConfig {
+        let is_button_fired = uitk::button(
+            &uitk::ButtonConfig {
                 rect: app.descriptor.launch_rect.clone(),
                 text: app.descriptor.name.to_string(),
                 icon: app.descriptor.icon,

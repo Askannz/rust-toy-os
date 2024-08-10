@@ -9,7 +9,7 @@ use applib::{Color, Rect};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP, InputState};
 use applib::drawing::text::{RichText, HACK_15, Font};
-use applib::ui::text::{scrollable_text, TextConfig, string_input};
+use applib::uitk;
 
 mod python;
 
@@ -58,7 +58,7 @@ pub fn step() {
 
     let input_state = &system_state.input;
 
-    string_input(&mut state.input_buffer, &mut state.caps, &input_state, false);
+    uitk::string_input(&mut state.input_buffer, &mut state.caps, &input_state, false);
 
     if check_enter_pressed(input_state) && !state.input_buffer.is_empty() {
         let cmd = state.input_buffer.to_owned();
@@ -98,8 +98,8 @@ pub fn step() {
 
     framebuffer.fill(Color::BLACK);
 
-    scrollable_text(
-        &TextConfig { 
+    uitk::scrollable_text(
+        &uitk::ScrollableTextConfig { 
             rect: rect_console,
             ..Default::default()
         },

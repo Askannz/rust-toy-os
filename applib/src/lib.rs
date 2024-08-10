@@ -6,7 +6,7 @@ use zune_png::PngDecoder;
 
 pub mod input;
 pub mod drawing;
-pub mod ui;
+pub mod uitk;
 
 use alloc::vec::Vec;
 use alloc::vec;

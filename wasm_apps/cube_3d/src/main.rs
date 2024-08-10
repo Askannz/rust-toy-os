@@ -1,6 +1,6 @@
 use core::cell::OnceCell;
 use applib::{Color, Framebuffer, Rect};
-use applib::ui::scrollable_canvas::scrollable_canvas;
+use applib::uitk;
 use guestlib::FramebufferHandle;
 
 mod drawing;
@@ -66,7 +66,7 @@ pub fn step() {
     }
 
     framebuffer.fill(Color::BLACK);
-    scrollable_canvas(
+    uitk::scrollable_canvas(
         &mut framebuffer,
         &win_rect.zero_origin(),
         &state.render_fb,

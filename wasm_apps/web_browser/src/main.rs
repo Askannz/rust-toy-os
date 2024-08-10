@@ -14,10 +14,7 @@ use guestlib::{FramebufferHandle, WasmLogger};
 use applib::{Color, Rect};
 
 use applib::Framebuffer;
-use applib::ui::button::{button, ButtonConfig};
-use applib::ui::progress_bar::{ProgressBarConfig, progress_bar};
-use applib::ui::text::{EditableTextConfig, editable_text};
-use applib::ui::scrollable_canvas::scrollable_canvas;
+use applib::uitk;
 use applib::input::{InputState, InputEvent};
 use applib::input::{Keycode, CHARMAP};
 
@@ -165,8 +162,8 @@ pub fn step() {
 
     let is_button_fired = {
         let rect_button = Rect { x0: (win_rect.w - BUTTON_W).into(), y0: 0, w: BUTTON_W, h: BAR_H };
-        button(
-            &ButtonConfig {
+        uitk::button(
+            &uitk::ButtonConfig {
                 rect: rect_button,
                 text: "GO".into(),
                 ..Default::default()
@@ -178,8 +175,8 @@ pub fn step() {
 
     let rect_url_bar = Rect { x0: 0, y0: 0, w: win_rect.w - BUTTON_W, h: BAR_H };
 
-    editable_text(
-        &EditableTextConfig {
+    uitk::editable_text(
+        &uitk::EditableTextConfig {
             rect: rect_url_bar,
             color: Color::WHITE,
             bg_color: Some(Color::rgb(128, 128, 128)),
@@ -191,7 +188,7 @@ pub fn step() {
         &win_input_state
     );
 
-    scrollable_canvas(
+    uitk::scrollable_canvas(
         &mut framebuffer,
         &state.webview_rect,
         &state.webview_buffer,
@@ -204,8 +201,8 @@ pub fn step() {
 
     let rect_progress_bar = Rect { x0: 0, y0: BAR_H.into(), w: win_rect.w, h: BAR_H };
 
-    progress_bar(
-        &ProgressBarConfig {
+    uitk::progress_bar(
+        &uitk::ProgressBarConfig {
             rect: rect_progress_bar,
             max_val: 8,
             bg_color: Color::rgb(128, 128, 128),

@@ -91,7 +91,7 @@ pub fn editable_text(
 }
 
 
-pub fn scrollable_text(config: &TextConfig, fb: &mut Framebuffer, input_state: &InputState, text: &RichText) {
+pub fn scrollable_text(config: &ScrollableTextConfig, fb: &mut Framebuffer, input_state: &InputState, text: &RichText) {
 
 
     let lines = format_rich_lines(&text, &config.rect);
@@ -139,14 +139,14 @@ fn get_autoscroll_offset(rect: &Rect, lines: &FormattedRichLines) -> usize {
 }
 
 #[derive(Clone)]
-pub struct TextConfig {
+pub struct ScrollableTextConfig {
     pub rect: Rect,
     pub scrollable: bool,
 }
 
-impl Default for TextConfig {
+impl Default for ScrollableTextConfig {
     fn default() -> Self {
-        TextConfig {
+        ScrollableTextConfig {
             rect: Rect { x0: 0, y0: 0, w: 100, h: 25 },
             scrollable: true,
         }

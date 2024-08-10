@@ -37,13 +37,21 @@ struct AppState<'a> {
     url_text: String,
     caps: bool,
 
+    ui_layout: UiLayout,
+
     buffer: Vec<u8>,
     webview_buffer: Framebuffer<'a>,
-    webview_rect: Rect,
     webview_scroll_offsets: (i64, i64),
     webview_scroll_dragging: bool,
 
     request_state: RequestState,
+}
+
+struct UiLayout{
+    url_bar_rect: Rect,
+    button_rect: Rect,
+    progress_bar_rect: Rect,
+    canvas_rect: Rect,
 }
 
 enum RequestState {
@@ -119,8 +127,6 @@ pub fn init() -> () {
 
     let Rect { w: win_w, h: win_h, .. } = win_rect;
 
-    let rect_progress_bar = Rect { x0: 0, y0: BAR_H.into(), w: win_w, h: BAR_H };
-
     // 4 * win_h is arbitrary
     let webview_buffer = Framebuffer::new_owned(win_w, 4 * win_h);
 
@@ -130,9 +136,15 @@ pub fn init() -> () {
         url_text: "https://news.ycombinator.com".to_owned(),
         caps: false,
 
+        ui_layout: UiLayout {
+            url_bar_rect: Rect { x0: 0, y0: 0, w: win_rect.w - BUTTON_W, h: BAR_H },
+            button_rect: Rect { x0: (win_rect.w - BUTTON_W).into(), y0: 0, w: BUTTON_W, h: BAR_H },
+            progress_bar_rect: Rect { x0: 0, y0: BAR_H.into(), w: win_rect.w, h: BAR_H },
+            canvas_rect: Rect { x0: 0, y0: (2 * BAR_H).into(), w: win_rect.w, h: win_rect.h - 2 * BAR_H },
+        },
+
         buffer: vec![0u8; BUFFER_SIZE],
         webview_buffer,
-        webview_rect: Rect { x0: 0, y0: (2 * BAR_H).into(), w: win_rect.w, h: win_rect.h - 2 * BAR_H },
         webview_scroll_offsets: (0, 0),
         webview_scroll_dragging: false,
         request_state: RequestState::Render { 
@@ -160,24 +172,19 @@ pub fn step() {
     let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
     framebuffer.fill(Color::WHITE);
 
-    let is_button_fired = {
-        let rect_button = Rect { x0: (win_rect.w - BUTTON_W).into(), y0: 0, w: BUTTON_W, h: BAR_H };
-        uitk::button(
-            &uitk::ButtonConfig {
-                rect: rect_button,
-                text: "GO".into(),
-                ..Default::default()
-            },
-            &mut framebuffer,
-            &win_input_state
-        )
-    };
-
-    let rect_url_bar = Rect { x0: 0, y0: 0, w: win_rect.w - BUTTON_W, h: BAR_H };
+    let is_button_fired = uitk::button(
+        &uitk::ButtonConfig {
+            rect: state.ui_layout.button_rect.clone(),
+            text: "GO".into(),
+            ..Default::default()
+        },
+        &mut framebuffer,
+        &win_input_state
+    );
 
     uitk::editable_text(
         &uitk::EditableTextConfig {
-            rect: rect_url_bar,
+            rect: state.ui_layout.url_bar_rect.clone(),
             color: Color::WHITE,
             bg_color: Some(Color::rgb(128, 128, 128)),
             ..Default::default()
@@ -190,7 +197,7 @@ pub fn step() {
 
     uitk::scrollable_canvas(
         &mut framebuffer,
-        &state.webview_rect,
+        &state.ui_layout.canvas_rect,
         &state.webview_buffer,
         &mut state.webview_scroll_offsets,
         &win_input_state,
@@ -199,11 +206,9 @@ pub fn step() {
 
     let (progress_val, progress_str) = get_progress_repr(&state.request_state);
 
-    let rect_progress_bar = Rect { x0: 0, y0: BAR_H.into(), w: win_rect.w, h: BAR_H };
-
     uitk::progress_bar(
         &uitk::ProgressBarConfig {
-            rect: rect_progress_bar,
+            rect: state.ui_layout.progress_bar_rect.clone(),
             max_val: 8,
             bg_color: Color::rgb(128, 128, 128),
             bar_color: Color::rgb(128, 128, 255),
@@ -279,7 +284,7 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             let link_hover = html_canvas(
                 &mut framebuffer,
                 &layout,
-                &state.webview_rect,
+                &state.ui_layout.canvas_rect,
                 state.webview_scroll_offsets,
                 input_state,
             );

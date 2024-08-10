@@ -41,6 +41,18 @@ pub struct FramebufferHandle {
     h: u32,
 }
 
+impl FramebufferHandle {
+    pub fn as_framebuffer<'a>(&'a mut self) -> Framebuffer<'a> {
+        let FramebufferHandle { framebuffer_ptr, w, h } = *self;
+
+        let fb_data = unsafe {
+            core::slice::from_raw_parts_mut(framebuffer_ptr, (w*h) as usize)
+        };
+    
+        Framebuffer::new(fb_data, w, h)
+    }
+}
+
 pub fn print_console(s: &str) {
     let buf = s.as_bytes();
     let addr = buf.as_ptr() as i32;
@@ -76,18 +88,6 @@ pub fn create_framebuffer(w: u32, h: u32) -> FramebufferHandle {
         h,
     }
 }
-
-pub fn get_framebuffer<'a>(handle: &'a mut FramebufferHandle) -> Framebuffer<'a> {
-
-    let FramebufferHandle { framebuffer_ptr, w, h } = *handle;
-
-    let fb_data = unsafe {
-        core::slice::from_raw_parts_mut(framebuffer_ptr, (w*h) as usize)
-    };
-
-    Framebuffer::new(fb_data, w, h)
-}
-
 
 pub fn tcp_connect(ip_addr: [u8; 4], port: u16) -> anyhow::Result<i32> {
 

@@ -38,7 +38,7 @@ pub fn step() {
 
     let system_state = guestlib::get_system_state();
 
-    let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
+    let mut framebuffer = state.fb_handle.as_framebuffer();
 
     framebuffer.fill(Color::BLACK);
     draw_chrono(&mut framebuffer, system_state.time);

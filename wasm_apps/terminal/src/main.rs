@@ -52,7 +52,7 @@ pub fn step() {
     let state = unsafe { APP_STATE.get_mut().expect("App not initialized") };
 
     let system_state = guestlib::get_system_state();
-    let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
+    let mut framebuffer = state.fb_handle.as_framebuffer();
 
     let win_rect = guestlib::get_win_rect();
 

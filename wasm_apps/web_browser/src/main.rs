@@ -167,10 +167,8 @@ pub fn step() {
     let system_state = guestlib::get_system_state();
     let win_rect = guestlib::get_win_rect();
     let win_input_state = system_state.input.change_origin(&win_rect);
-    
-    // TODO: this should only be needed once...
-    let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
-    framebuffer.fill(Color::WHITE);
+
+    let mut framebuffer = state.fb_handle.as_framebuffer();
 
     let is_button_fired = uitk::button(
         &uitk::ButtonConfig {
@@ -279,7 +277,7 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
     
         RequestState::Idle { domain: current_domain, layout } => {
 
-            let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
+            let mut framebuffer = state.fb_handle.as_framebuffer();
 
             let link_hover = html_canvas(
                 &mut framebuffer,

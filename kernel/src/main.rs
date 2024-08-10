@@ -17,7 +17,7 @@ use applib::{Color, Rect, Framebuffer, SystemState, decode_png};
 use applib::input::{InputState, InputEvent};
 use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
-use applib::ui::button::{Button, ButtonState};
+use applib::ui::button::{button, ButtonConfig};
 
 extern crate alloc;
 
@@ -222,14 +222,16 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
 
     for app in applications.iter_mut() {
 
-        let button_state = ButtonState {
-            rect: app.descriptor.launch_rect.clone(),
-            text: app.descriptor.name.to_string(),
-            icon: app.descriptor.icon,
-            ..Default::default()
-        };
-
-        let is_button_fired = Button::update(fb, input_state, &button_state);
+        let is_button_fired = button(
+            &ButtonConfig {
+                rect: app.descriptor.launch_rect.clone(),
+                text: app.descriptor.name.to_string(),
+                icon: app.descriptor.icon,
+                ..Default::default()
+            },
+            fb,
+            input_state
+        );
 
         if is_button_fired && !app.is_open {
             log::info!("{} is open", app.descriptor.name);

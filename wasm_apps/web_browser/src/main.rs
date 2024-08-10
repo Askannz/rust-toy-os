@@ -14,8 +14,8 @@ use guestlib::{FramebufferHandle, WasmLogger};
 use applib::{Color, Rect};
 
 use applib::Framebuffer;
-use applib::ui::button::{Button, ButtonState};
-use applib::ui::progress_bar::{ProgressBar, ProgressBarConfig};
+use applib::ui::button::{button, ButtonConfig};
+use applib::ui::progress_bar::{ProgressBarConfig, progress_bar};
 use applib::ui::text::{EditableTextConfig, editable_text};
 use applib::ui::scrollable_canvas::scrollable_canvas;
 use applib::input::{InputState, InputEvent};
@@ -36,12 +36,9 @@ const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState<'a> {
     fb_handle: FramebufferHandle,
-    progress_bar: ProgressBar,
 
     url_text: String,
     caps: bool,
-
-    first_frame: bool,
 
     buffer: Vec<u8>,
     webview_buffer: Framebuffer<'a>,
@@ -132,19 +129,10 @@ pub fn init() -> () {
 
     let state = AppState { 
         fb_handle,
-        progress_bar: ProgressBar::new(&ProgressBarConfig {
-            rect: rect_progress_bar,
-            max_val: 8,
-            bg_color: Color::rgb(128, 128, 128),
-            bar_color: Color::rgb(128, 128, 255),
-            text_color: Color::WHITE,
-            ..Default::default()
-        }),
 
         url_text: "https://news.ycombinator.com".to_owned(),
         caps: false,
 
-        first_frame: true,
         buffer: vec![0u8; BUFFER_SIZE],
         webview_buffer,
         webview_rect: Rect { x0: 0, y0: (2 * BAR_H).into(), w: win_rect.w, h: win_rect.h - 2 * BAR_H },
@@ -176,14 +164,16 @@ pub fn step() {
     framebuffer.fill(Color::WHITE);
 
     let is_button_fired = {
-
         let rect_button = Rect { x0: (win_rect.w - BUTTON_W).into(), y0: 0, w: BUTTON_W, h: BAR_H };
-        let button_state = ButtonState {
-            rect: rect_button,
-            text: "GO".into(),
-            ..Default::default()
-        };
-        Button::update(&mut framebuffer, &win_input_state, &button_state)
+        button(
+            &ButtonConfig {
+                rect: rect_button,
+                text: "GO".into(),
+                ..Default::default()
+            },
+            &mut framebuffer,
+            &win_input_state
+        )
     };
 
     let rect_url_bar = Rect { x0: 0, y0: 0, w: win_rect.w - BUTTON_W, h: BAR_H };
@@ -210,11 +200,25 @@ pub fn step() {
         &mut state.webview_scroll_dragging,
     );
 
-    let (prog_val, prog_str) = get_progress_repr(&state.request_state);
+    let (progress_val, progress_str) = get_progress_repr(&state.request_state);
+
+    let rect_progress_bar = Rect { x0: 0, y0: BAR_H.into(), w: win_rect.w, h: BAR_H };
+
+    progress_bar(
+        &ProgressBarConfig {
+            rect: rect_progress_bar,
+            max_val: 8,
+            bg_color: Color::rgb(128, 128, 128),
+            bar_color: Color::rgb(128, 128, 255),
+            text_color: Color::WHITE,
+            ..Default::default()
+        },
+        &mut framebuffer,
+        progress_val,
+        &progress_str
+    );
 
     let url_go = is_button_fired || check_enter_pressed(&win_input_state);
-    
-    state.progress_bar.update(prog_val, prog_str.as_ref());
 
     let prev_state_debug = format!("{:?}", state.request_state);
     try_update_request_state(state, url_go, &win_input_state);
@@ -223,12 +227,6 @@ pub fn step() {
     if new_state_debug != prev_state_debug {
         log::info!("Request state change: {} => {}", prev_state_debug, new_state_debug);
     }
-
-
-    let mut framebuffer = guestlib::get_framebuffer(&mut state.fb_handle);
-
-    state.progress_bar.draw(&mut framebuffer);
-    state.first_frame = false;
 }
 
 fn check_enter_pressed(input_state: &InputState) -> bool {

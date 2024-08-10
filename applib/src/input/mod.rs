@@ -24,6 +24,8 @@ impl InputState {
                 delta_y: 0,
                 left_clicked: false,
                 right_clicked: false,
+                left_click_trigger: false,
+                right_click_trigger: false,
             },
             events: [None; MAX_EVENTS],
             next_event_index: 0,
@@ -67,7 +69,9 @@ pub struct PointerState {
     pub delta_x: i64,
     pub delta_y: i64,
     pub left_clicked: bool,
-    pub right_clicked: bool
+    pub right_clicked: bool,
+    pub left_click_trigger: bool,
+    pub right_click_trigger: bool,
 }
 
 #[derive(Debug, Clone, Copy)]

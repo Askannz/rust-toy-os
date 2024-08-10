@@ -289,7 +289,7 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             if url_go {
                 let (domain, path) = parse_url(&state.url_text);
                 url_data = Some((domain.to_string(), path.to_string()));
-            } else if input_state.pointer.left_clicked {
+            } else if input_state.pointer.left_click_trigger {
                 if let Some(href) = link_hover {
                     if let Some(current_domain) = current_domain {
                         if !href.starts_with(SCHEME) {

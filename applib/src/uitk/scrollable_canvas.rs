@@ -6,8 +6,8 @@ use crate::drawing::primitives::draw_rect;
 
 
 const SCROLL_SPEED: u32 = 5;
-const SBAR_OUTER_W: u32 = 8;
-const SBAR_INNER_W: u32 = 4;
+const SBAR_OUTER_W: u32 = 16;
+const SBAR_INNER_W: u32 = 12;
 const SBAR_OUTER_COLOR: Color = Color::BLACK;
 const SBAR_INNER_IDLE_COLOR: Color = Color::RED;
 const SBAR_INNER_HOVER_COLOR: Color = Color::YELLOW;
@@ -84,13 +84,12 @@ pub fn scrollable_canvas(
     draw_rect(dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR);
     draw_rect(dst_fb, &sbar_inner_rect, sbar_color);
 
-    match p_state.left_clicked {
-        true => {
-            if sbar_hover {
-                *dragging = true;
-            }
-        },
-        false => *dragging = false,
+    if p_state.left_clicked {
+        if p_state.left_click_trigger && sbar_hover {
+            *dragging = true;
+        }
+    } else {
+        *dragging = false;
     }
 
     //

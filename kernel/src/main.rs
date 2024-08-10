@@ -263,7 +263,7 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
                     h: font_h,
                 };
                 let app_hover = titlebar_rect.check_contains_point(pointer_state.x, pointer_state.y);
-                if app_hover && pointer_state.left_clicked {
+                if app_hover && pointer_state.left_click_trigger {
                     let dx = pointer_state.x - app.rect.x0;
                     let dy = pointer_state.y - app.rect.y0;
                     app.grab_pos = Some((dx, dy));
@@ -326,6 +326,10 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
     let input_state = &mut system_state.input;
     
     input_state.clear_events();
+    input_state.pointer.left_click_trigger = false;
+    input_state.pointer.right_click_trigger = false;
+    input_state.pointer.delta_x = 0;
+    input_state.pointer.delta_y = 0;
 
     for virtio_inp in virtio_inputs.iter_mut() {
         for event in virtio_inp.poll() {
@@ -339,8 +343,24 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                 Some(EventType::EV_KEY) => match Keycode::n(event.code) {
 
                     // Mouse click
-                    Some(Keycode::BTN_MOUSE_LEFT) => input_state.pointer.left_clicked = event.value == 1,
-                    Some(Keycode::BTN_MOUSE_RIGHT) => input_state.pointer.right_clicked = event.value == 1,
+                    Some(Keycode::BTN_MOUSE_LEFT) => match event.value {
+                        1 => {
+                            if !input_state.pointer.left_clicked {
+                                input_state.pointer.left_click_trigger = true;
+                            }
+                            input_state.pointer.left_clicked = true;
+                        },
+                        _ => input_state.pointer.left_clicked = false,
+                    },
+                    Some(Keycode::BTN_MOUSE_RIGHT) => match event.value {
+                        1 => {
+                            if !input_state.pointer.right_clicked {
+                                input_state.pointer.right_click_trigger = true;
+                            }
+                            input_state.pointer.right_clicked = true;
+                        },
+                        _ => input_state.pointer.right_clicked = false,
+                    },
 
                     // Keyboard
                     Some(keycode) => match event.value {
@@ -357,14 +377,14 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                         let dx = (event.value as i32) as i64;
                         let pointer_state = &mut input_state.pointer;
                         let new_x = i64::max(0, i64::min(w as i64 - 1, pointer_state.x as i64 + dx));
-                        pointer_state.delta_x = new_x - pointer_state.x;
+                        pointer_state.delta_x += dx;
                         pointer_state.x = new_x;
                     }
                     1 => {  // Y axis
                         let dy = (event.value as i32) as i64;
                         let pointer_state = &mut input_state.pointer;
                         let new_y = i64::max(0, i64::min(h as i64 - 1, pointer_state.y as i64 + dy));
-                        pointer_state.delta_y = new_y - pointer_state.y;
+                        pointer_state.delta_y += dy;
                         pointer_state.y = new_y;
                     },
                     8 => {  // Scroll wheel

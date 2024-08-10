@@ -14,7 +14,7 @@ pub fn button(config: &ButtonConfig, fb: &mut Framebuffer, input_state: &InputSt
     let ps = &input_state.pointer;
 
     let interaction_state = match config.rect.check_contains_point(ps.x, ps.y) {
-        true => match ps.left_clicked {
+        true => match ps.left_click_trigger {
             true => InteractionState::Clicked,
             false => InteractionState::Hover,
         },

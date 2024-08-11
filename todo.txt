@@ -1,7 +1,15 @@
-* proto-web browser
+* wasm timing macro
+* Web browser: fix hitches on request
+* Web browser: incremental renderer
+* Caps on/off in InputState
 * make it pretty (UI color palette)
+* fix print in Python
+* use scollable_canvas in terminal
+* blinking cursor for text editing
+
+* resizable windows
 (* Tiling windows?)
-* cargo xbuild
+* proper build system
 * system settings window
 * app audit window
 * file editor + "fake" filesystem?

@@ -1,5 +1,3 @@
-* wasm timing macro
-* Web browser: fix hitches on request
 * Web browser: incremental renderer
 * Caps on/off in InputState
 * make it pretty (UI color palette)

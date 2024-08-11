@@ -88,7 +88,6 @@ pub fn step() {
         let text = match &res.pyres {
             python::EvalResult::Failure(err) => format!("\n{}", err),
             python::EvalResult::Success(repr) => format!("\n{}", repr),
-            python::EvalResult::None => "".to_owned()
         };
 
         console_rich_text.add_part(&text, color, font, None);

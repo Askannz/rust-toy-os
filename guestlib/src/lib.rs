@@ -158,6 +158,20 @@ pub fn get_consumed_fuel() -> u64 {
     u64::from_le_bytes(*s)
 }
 
+#[macro_export]
+macro_rules! measure_fuel {
+    ($key:expr, $block:expr) => {{
+
+        let u0 = guestlib::get_consumed_fuel();
+        let retval = { $block };
+        let u1 = guestlib::get_consumed_fuel();
+
+        let consumed = u1 - u0;
+        guestlib::save_timing($key, consumed);
+        retval
+    }}
+}
+
 pub fn save_timing(key: &str, consumed: u64) {
 
     let key_buf = key.as_bytes();

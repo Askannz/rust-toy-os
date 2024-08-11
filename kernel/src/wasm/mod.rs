@@ -24,6 +24,8 @@ pub struct WasmEngine {
     engine: Engine,
 }
 
+const STEP_FUEL: u64 = u64::MAX;
+
 impl WasmEngine {
 
     pub fn new() -> Self {
@@ -47,8 +49,8 @@ impl WasmEngine {
         let wasm_init = instance.get_typed_func::<(), ()>(&store, "init").unwrap();
         let wasm_step = instance.get_typed_func::<(), ()>(&store, "step").unwrap();
 
-        store.add_fuel(u64::MAX).unwrap();
 
+        store.set_fuel(u64::MAX).unwrap();
 
         //
         // App init
@@ -180,6 +182,8 @@ pub struct WasmApp {
 impl WasmApp {
     pub fn step(&mut self, system_state: &SystemState, clock: &SystemClock, system_fb: &mut Framebuffer, win_rect: &Rect) {
 
+        self.store.set_fuel(STEP_FUEL).unwrap();
+
         let mut ctx = self.store.as_context_mut();
         let data_mut = ctx.data_mut();
         
@@ -188,12 +192,12 @@ impl WasmApp {
         data_mut.timings.clear();
 
         let t0 = clock.time();
-        let fu0 = self.store.fuel_consumed().unwrap();
+        let fu0 = self.store.get_fuel().unwrap();
         self.wasm_step
             .call(&mut self.store, ())
             .expect("Failed to step WASM app");
         let t1 = clock.time();
-        let fu1 = self.store.fuel_consumed().unwrap();
+        let fu1 = self.store.get_fuel().unwrap();
 
         debug_stall(t0, t1, fu0, fu1, self.store.data());
 
@@ -223,7 +227,7 @@ fn debug_stall(t0: f64, t1: f64, fu0: u64, fu1: u64, store_data: &StoreData) {
 
     if t1 - t0 > STALL_THRESHOLD {
 
-        let total_consumed = fu1 - fu0;
+        let total_consumed = fu0 - fu1;
         let total_consumed_f = total_consumed as f64;
 
         let lines: Vec<String> = store_data.timings.iter().map(|(k, v)| {
@@ -583,7 +587,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
     });
 
     linker_impl!(m, "host_get_consumed_fuel", |mut caller: Caller<StoreData>, consumed_addr: i32| {
-        let consumed = caller.fuel_consumed().expect("Fuel metering disabled");
+        let remaining = caller.get_fuel().expect("Fuel metering disabled");
+        let consumed = STEP_FUEL - remaining;
         write_to_wasm_mem(&mut caller, consumed_addr, &consumed.to_le_bytes());
     });
 

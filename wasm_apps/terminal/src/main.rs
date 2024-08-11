@@ -1,3 +1,5 @@
+#![feature(vec_into_raw_parts)]
+
 extern crate alloc;
 
 use core::cell::OnceCell;

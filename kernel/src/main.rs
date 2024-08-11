@@ -82,7 +82,7 @@ lazy_static! {
             data: include_bytes!("../../embedded_data/terminal.wasm"),
             launch_rect: Rect { x0: 100, y0: 200, w: 200, h: 40 },
             name: "Terminal",
-            init_win_rect: Rect { x0: 400, y0: 300, w: 400, h: 200 },
+            init_win_rect: Rect { x0: 400, y0: 300, w: 600, h: 300 },
             icon: Some(&TERMINAL_ICON),
         },
         AppDescriptor {

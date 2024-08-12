@@ -152,6 +152,15 @@ impl<'a> Framebuffer<'a> {
         Framebuffer { data: ManagedSlice::Borrowed(data), w, h }
     }
 
+    pub fn resize(&mut self, w: u32, h: u32) {
+        match &mut self.data {
+            ManagedSlice::Owned(data_vec) => data_vec.resize((w * h) as usize, 0u32),
+            ManagedSlice::Borrowed(_) => panic!("Canot resize borrowed slice"),
+        }
+        self.w = w;
+        self.h = h;
+    }
+
     pub fn from_png(png_bytes: &[u8]) -> Self {
 
         let mut decoder =  PngDecoder::new(png_bytes);

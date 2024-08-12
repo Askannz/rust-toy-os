@@ -127,8 +127,7 @@ pub fn init() -> () {
 
     let Rect { w: win_w, h: win_h, .. } = win_rect;
 
-    // 4 * win_h is arbitrary
-    let webview_buffer = Framebuffer::new_owned(win_w, 4 * win_h);
+    let webview_buffer = Framebuffer::new_owned(win_w, win_h);
 
     let state = AppState { 
         fb_handle,
@@ -304,6 +303,7 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             }
 
             if let Some((domain, path)) = url_data {
+                state.url_text = format!("{}{}{}", SCHEME, domain, path);
                 let dns_socket = Socket::new(DNS_SERVER_IP, 53)?;
                 state.request_state = RequestState::Dns { 
                     domain,
@@ -427,6 +427,16 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
         RequestState::Render { domain, html, } => {
             let html_tree = parse_html(html)?;
             let layout = compute_layout(&html_tree)?;
+
+            log::debug!("Layout: {:?}", layout.rect);
+
+            let Rect { w: view_w, h: view_h, .. } = state.ui_layout.canvas_rect;
+
+            // Arbitrary limits to avoid running out of memory
+            let new_w = u32::min(layout.rect.w, 2 * view_w);
+            let new_h = u32::min(layout.rect.h, 8 * view_h);
+
+            state.webview_buffer.resize(new_w, new_h);
             render_html(&mut state.webview_buffer, &layout);
             state.request_state = RequestState::Idle { 
                 domain: domain.clone(),

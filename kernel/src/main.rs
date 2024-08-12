@@ -241,11 +241,12 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
         if app.is_open {
 
             let font_h = DEFAULT_FONT.char_h as u32;
+            let titlebar_h = 3 * DECO_PADDING as u32 + font_h;
             let deco_rect = Rect {
                 x0: app.rect.x0 - DECO_PADDING,
                 y0: app.rect.y0 - font_h as i64 - 2 * DECO_PADDING,
                 w: app.rect.w + 2 * DECO_PADDING as u32,
-                h: app.rect.h + 3 * DECO_PADDING as u32 + font_h,
+                h: app.rect.h + titlebar_h,
             };
 
             if let Some((dx, dy)) = app.grab_pos {
@@ -260,7 +261,7 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
                     x0: deco_rect.x0,
                     y0: deco_rect.y0,
                     w: deco_rect.w,
-                    h: font_h,
+                    h: titlebar_h,
                 };
                 let app_hover = titlebar_rect.check_contains_point(pointer_state.x, pointer_state.y);
                 if app_hover && pointer_state.left_click_trigger {

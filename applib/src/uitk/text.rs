@@ -7,7 +7,7 @@ use crate::{Color, Framebuffer, Rect};
 use crate::input::{InputState, InputEvent};
 use crate::input::{Keycode, CHARMAP};
 use crate::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText, HACK_15};
-
+use super::{TrackedContent, ContentId};
 
 #[derive(Clone)]
 pub struct EditableTextConfig {
@@ -29,7 +29,13 @@ impl Default for EditableTextConfig {
 }
 
 
-pub fn string_input(buffer: &mut String, caps: &mut bool, input_state: &InputState, allow_newline: bool) {
+pub fn string_input(buffer: &mut TrackedContent<String>, caps: &mut bool, input_state: &InputState, allow_newline: bool) {
+
+    enum TextUpdate {
+        Newline,
+        Backspace,
+        Char(char),
+    }
 
     let check_is_shift = |keycode| {
         keycode == Keycode::KEY_LEFTSHIFT || 
@@ -41,15 +47,17 @@ pub fn string_input(buffer: &mut String, caps: &mut bool, input_state: &InputSta
         _ => ()
     });
 
+    let mut updates = Vec::new();
+
     for event in input_state.events {
 
         match event {
 
             // Enter
-            Some(InputEvent::KeyPress { keycode: Keycode::KEY_ENTER }) if allow_newline => { buffer.push('\n'); },
+            Some(InputEvent::KeyPress { keycode: Keycode::KEY_ENTER }) if allow_newline => { /*buffer.push('\n')*/updates.push(TextUpdate::Newline); },
 
             // Backspace
-            Some(InputEvent::KeyPress { keycode: Keycode::KEY_BACKSPACE }) => { buffer.pop(); },
+            Some(InputEvent::KeyPress { keycode: Keycode::KEY_BACKSPACE }) => { /*buffer.pop()*/updates.push(TextUpdate::Backspace); },
 
             // Character input
             Some(InputEvent::KeyPress { keycode }) => {
@@ -60,12 +68,24 @@ pub fn string_input(buffer: &mut String, caps: &mut bool, input_state: &InputSta
                     .flatten();
 
                 if let Some(new_char) = new_char {
-                    buffer.push(new_char);
+                    /*buffer.push(new_char);*/
+                    updates.push(TextUpdate::Char(new_char))
                 }
             }
 
             _ => ()
         };
+    }
+
+    if !updates.is_empty() {
+        let buffer = buffer.mutate();
+        for update in updates {
+            match update {
+                TextUpdate::Newline => buffer.push('\n'),
+                TextUpdate::Backspace => { buffer.pop(); },
+                TextUpdate::Char(c) => buffer.push(c),
+            }
+        }
     }
 
 }
@@ -74,7 +94,7 @@ pub fn string_input(buffer: &mut String, caps: &mut bool, input_state: &InputSta
 pub fn editable_text(
     config: &EditableTextConfig,
     fb: &mut Framebuffer,
-    buffer: &mut String,
+    buffer: &mut TrackedContent<String>,
     caps: &mut bool,
     input_state: &InputState
 ) {
@@ -87,16 +107,19 @@ pub fn editable_text(
     if let Some(bg_color) = bg_color {
         draw_rect(fb, &config.rect, *bg_color);
     }
-    draw_str(fb, buffer, x0, y0, font, *color, None);
+    draw_str(fb, buffer.as_ref(), x0, y0, font, *color, None);
 }
 
 pub fn render_rich_text(text_fb: &mut Framebuffer, text: &RichText) {
 
+    let max_w = text_fb.w;
+
+    let formatted = format_rich_lines(text, max_w);
+    
+    text_fb.resize(max_w, formatted.h);
+    text_fb.fill(Color::BLACK);
+
     let rect = text_fb.shape_as_rect();
-
-    let formatted = format_rich_lines(text, &rect);
-
-    text_fb.resize(rect.w, formatted.h);
 
     let Rect { x0, y0, h, .. } = rect;
     let h: i64 = h.into();

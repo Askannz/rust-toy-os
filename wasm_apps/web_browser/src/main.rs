@@ -34,7 +34,7 @@ const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 struct AppState<'a> {
     fb_handle: FramebufferHandle,
 
-    url_text: String,
+    url_text: uitk::TrackedContent<String>,
     caps: bool,
 
     ui_layout: UiLayout,
@@ -129,10 +129,11 @@ pub fn init() -> () {
 
     let webview_buffer = Framebuffer::new_owned(win_w, win_h);
 
+    let url_text = String::from("https://news.ycombinator.com/");
+
     let state = AppState { 
         fb_handle,
-
-        url_text: "https://news.ycombinator.com".to_owned(),
+        url_text: uitk::TrackedContent::new(url_text),
         caps: false,
 
         ui_layout: UiLayout {
@@ -289,7 +290,7 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             let mut url_data: Option<(String, String)> = None;
 
             if url_go {
-                let (domain, path) = parse_url(&state.url_text);
+                let (domain, path) = parse_url(state.url_text.as_ref());
                 url_data = Some((domain.to_string(), path.to_string()));
             } else if input_state.pointer.left_click_trigger {
                 if let Some(href) = link_hover {
@@ -303,7 +304,8 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             }
 
             if let Some((domain, path)) = url_data {
-                state.url_text = format!("{}{}{}", SCHEME, domain, path);
+                let s_ref = state.url_text.mutate();
+                core::mem::replace(s_ref, format!("{}{}{}", SCHEME, domain, path));
                 let dns_socket = Socket::new(DNS_SERVER_IP, 53)?;
                 state.request_state = RequestState::Dns { 
                     domain,

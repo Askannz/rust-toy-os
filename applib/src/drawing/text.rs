@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+use alloc::string::String;
 use lazy_static::lazy_static;
 use crate::{Framebuffer, Color, Rect, blend_colors, decode_png};
 
@@ -125,6 +126,14 @@ impl RichText {
         t
     }
 
+    pub fn as_string(&self) -> String {
+        let mut s = String::new();
+        for rich_char in self.0.iter() {
+            s.push(rich_char.c);
+        }
+        s
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -150,14 +159,14 @@ pub struct FormattedRichText {
     pub h: u32,
 }
 
-pub fn format_rich_lines(text: &RichText, rect: &Rect) -> FormattedRichText {
+pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
 
     let rich_vec = &text.0;
 
     if rich_vec.is_empty() { return FormattedRichText { lines: Vec::new(), w: 0, h: 0 }; }
     let max_char_w = rich_vec.iter().map(|rich_char| rich_char.font.char_w).max().unwrap();
 
-    let max_per_line = rect.w as usize / max_char_w;
+    let max_per_line = max_w as usize / max_char_w;
 
     let mut formatted_lines = Vec::new();
     let (mut text_w, mut text_h) = (0, 0);

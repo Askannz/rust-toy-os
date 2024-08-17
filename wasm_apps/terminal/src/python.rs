@@ -13,6 +13,7 @@ pub struct Python {
     console_sink: Arc<Mutex<String>>,
 }
 
+#[derive(Debug)]
 pub enum EvalResult {
     Success(String),
     Failure(String),

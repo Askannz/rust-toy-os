@@ -6,7 +6,7 @@ use crate::drawing::primitives::draw_rect;
 use crate::{Color, Framebuffer, Rect};
 use crate::input::{InputState, InputEvent};
 use crate::input::{Keycode, CHARMAP};
-use crate::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, FormattedRichLines, RichText, HACK_15};
+use crate::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText, HACK_15};
 
 
 #[derive(Clone)]
@@ -90,53 +90,25 @@ pub fn editable_text(
     draw_str(fb, buffer, x0, y0, font, *color, None);
 }
 
+pub fn render_rich_text(text_fb: &mut Framebuffer, text: &RichText) {
 
-pub fn scrollable_text(config: &ScrollableTextConfig, fb: &mut Framebuffer, input_state: &InputState, text: &RichText) {
+    let rect = text_fb.shape_as_rect();
 
+    let formatted = format_rich_lines(text, &rect);
 
-    let lines = format_rich_lines(&text, &config.rect);
-    let mut offset = get_autoscroll_offset(&config.rect, &lines);
+    text_fb.resize(rect.w, formatted.h);
 
-    if config.scrollable {
-
-        let ps = &input_state.pointer;
-
-        if config.rect.check_contains_point(ps.x, ps.y) {
-            for event in input_state.events {
-                if let Some(InputEvent::Scroll { delta }) = event {
-                    let new_offset = offset as i64 - delta;
-                    offset = i64::max(0, new_offset) as usize;
-                }
-            }
-        }
-    }
-
-    let Rect { x0, y0, h, .. } = config.rect;
+    let Rect { x0, y0, h, .. } = rect;
     let h: i64 = h.into();
 
     let mut y = y0;
-    for (rich_text, line_h) in lines.iter().skip(offset) {
-        if y + line_h > y0 + h { break; }
-        draw_rich_slice(fb, &rich_text, x0, y);
-        y += line_h;
+    for line in formatted.lines.iter() {
+        if y + line.h as i64 > y0 + h { break; }
+        draw_rich_slice(text_fb, &line.chars, x0, y);
+        y += line.h as i64;
     }
 }
 
-fn get_autoscroll_offset(rect: &Rect, lines: &FormattedRichLines) -> usize {
-
-    let h: i64 = rect.h.into();
-
-    let mut y = h;
-    let mut offset = lines.len();
-
-    for (_, line_h) in lines.iter().rev() {
-        if y - line_h < 0 { break; }
-        offset -= 1;
-        y -= line_h;
-    }
-
-    offset
-}
 
 #[derive(Clone)]
 pub struct ScrollableTextConfig {

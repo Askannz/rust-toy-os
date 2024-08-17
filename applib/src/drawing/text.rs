@@ -138,19 +138,29 @@ pub struct RichChar {
     bg_color: Option<Color>,
 }
 
-pub type FormattedRichLines = Vec<(Vec<RichChar>, i64)>;
+pub struct FormattedRichLine {
+    pub chars: Vec<RichChar>,
+    pub w: u32,
+    pub h: u32,
+}
 
-pub fn format_rich_lines(text: &RichText, rect: &Rect) -> FormattedRichLines {
+pub struct FormattedRichText {
+    pub lines: Vec<FormattedRichLine>,
+    pub w: u32,
+    pub h: u32,
+}
 
-    let mut formatted_lines = Vec::new();
+pub fn format_rich_lines(text: &RichText, rect: &Rect) -> FormattedRichText {
 
     let rich_vec = &text.0;
 
-    if rich_vec.is_empty() { return formatted_lines; }
+    if rich_vec.is_empty() { return FormattedRichText { lines: Vec::new(), w: 0, h: 0 }; }
     let max_char_w = rich_vec.iter().map(|rich_char| rich_char.font.char_w).max().unwrap();
 
     let max_per_line = rect.w as usize / max_char_w;
 
+    let mut formatted_lines = Vec::new();
+    let (mut text_w, mut text_h) = (0, 0);
     let mut i0 = 0;
 
     for (i, rich_char) in rich_vec.iter().enumerate() {
@@ -165,18 +175,29 @@ pub fn format_rich_lines(text: &RichText, rect: &Rect) -> FormattedRichLines {
 
             let rich_slice = &rich_vec[i0..i1];
 
-            let max_char_h = rich_slice.iter()
+            let line_h = rich_slice.iter()
                 .map(|rich_char| rich_char.font.char_h)
                 .max()
-                .unwrap_or(0) as i64;
+                .unwrap_or(0) as u32;
 
-            formatted_lines.push((rich_slice.to_vec(), max_char_h));
+            let line_w = rich_slice.iter()
+                .map(|rich_char| rich_char.font.char_w)
+                .sum::<usize>() as u32;
+
+            formatted_lines.push(FormattedRichLine {
+                chars: rich_slice.to_vec(),
+                w: line_w,
+                h: line_h,
+            });
+
+            text_w = u32::max(text_w, line_w);
+            text_h += line_h;
 
             i0 = i + 1;
         }
     }
 
-    formatted_lines
+    FormattedRichText { lines: formatted_lines, w: text_w, h: text_h }
 }
 
 pub fn draw_rich_slice(fb: &mut Framebuffer, rich_slice: &[RichChar], x0: i64, y0: i64) {

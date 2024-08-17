@@ -7,7 +7,7 @@ use alloc::{format, borrow::ToOwned};
 use alloc::string::String;
 use alloc::vec::Vec;
 use guestlib::FramebufferHandle;
-use applib::{Color, Rect};
+use applib::{Color, Framebuffer, Rect};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP, InputState};
 use applib::drawing::text::{RichText, HACK_15, Font};
@@ -20,10 +20,15 @@ struct EvalResult {
     pyres: python::EvalResult,
 }
 
-struct AppState {
+struct AppState<'a> {
     fb_handle: FramebufferHandle,
     input_buffer: String,
     console_buffer: Vec<EvalResult>,
+
+    text_fb: Framebuffer<'a>,
+    scroll_offsets: (i64, i64),
+    dragging: bool,
+
     python: python::Python,
     caps: bool,
 }
@@ -38,10 +43,15 @@ pub fn init() -> () {
     let win_rect = guestlib::get_win_rect();
     let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
 
+    let Rect { w: win_w, h: win_h, .. } = win_rect;
+
     let state = AppState { 
         fb_handle,
         input_buffer: String::with_capacity(100),
         console_buffer: Vec::with_capacity(500),
+        text_fb: Framebuffer::new_owned(win_w, 4 * win_h),
+        scroll_offsets: (0, 0),
+        dragging: false,
         python: python::Python::new(),
         caps: false,
     };
@@ -57,16 +67,17 @@ pub fn step() {
     let mut framebuffer = state.fb_handle.as_framebuffer();
 
     let win_rect = guestlib::get_win_rect();
-
-    let input_state = &system_state.input;
+    let input_state = system_state.input.change_origin(&win_rect);
 
     uitk::string_input(&mut state.input_buffer, &mut state.caps, &input_state, false);
 
-    if check_enter_pressed(input_state) && !state.input_buffer.is_empty() {
+    let mut autoscroll = false;
+    if check_enter_pressed(&input_state) && !state.input_buffer.is_empty() {
         let cmd = state.input_buffer.to_owned();
         let pyres = state.python.run_code(&cmd);
         state.console_buffer.push(EvalResult { cmd, pyres });
         state.input_buffer.clear();
+        autoscroll = true;
     }
 
     let Rect { w: win_w, h: win_h, .. } = win_rect;
@@ -97,18 +108,23 @@ pub fn step() {
     console_rich_text.add_part(">>> ", Color::WHITE, font, None);
     console_rich_text.add_part(&state.input_buffer, Color::WHITE, font, None);
 
-    framebuffer.fill(Color::BLACK);
+    state.text_fb.fill(Color::BLACK);
 
-    uitk::scrollable_text(
-        &uitk::ScrollableTextConfig { 
-            rect: rect_console,
-            ..Default::default()
-        },
+    uitk::render_rich_text(&mut state.text_fb, &console_rich_text);
+
+
+    if autoscroll {
+        uitk::set_autoscroll(&rect_console, &state.text_fb, &mut state.scroll_offsets);
+    }
+
+    uitk::scrollable_canvas(
         &mut framebuffer,
-        input_state,
-        &console_rich_text,
+        &rect_console,
+        &state.text_fb,
+        &mut state.scroll_offsets,
+        &input_state,
+        &mut state.dragging,
     );
-
 }
 
 fn check_enter_pressed(input_state: &InputState) -> bool {

@@ -5,7 +5,7 @@ use crate::Color;
 use crate::drawing::primitives::draw_rect;
 
 
-const SCROLL_SPEED: u32 = 5;
+const SCROLL_SPEED: u32 = 10;
 const SBAR_OUTER_W: u32 = 16;
 const SBAR_INNER_W: u32 = 12;
 const SBAR_OUTER_COLOR: Color = Color::BLACK;
@@ -24,22 +24,24 @@ pub fn scrollable_canvas(
 
     let (scroll_x0, scroll_y0) = offsets;
 
-    if *dragging {
-        *scroll_y0 += (src_fb.h as i64) * input_state.pointer.delta_y / (dst_rect.h as i64);
+    let x_scroll_enabled = false;
+    let y_scroll_enabled = src_fb.h > dst_rect.h;
+
+    
+    if x_scroll_enabled {
+        *scroll_x0 = i64::max(0, *scroll_x0);
+        *scroll_x0 = i64::min((src_fb.w - dst_rect.w - 1).into(), *scroll_x0);
     } else {
-        for event in input_state.events {
-            if let Some(InputEvent::Scroll { delta }) = event {
-                *scroll_y0 -= delta * (SCROLL_SPEED as i64);
-            }
-        }
+        *scroll_x0 = 0;
     }
 
-    // TODO: what if source buffer is smaller than dest rect?
-    *scroll_x0 = i64::max(0, *scroll_x0);
-    *scroll_y0 = i64::max(0, *scroll_y0);
-    *scroll_x0 = i64::min((src_fb.w - dst_rect.w - 1).into(), *scroll_x0);
-    *scroll_y0 = i64::min((src_fb.h - dst_rect.h - 1).into(), *scroll_y0);
-
+    if y_scroll_enabled {
+        *scroll_y0 = i64::max(0, *scroll_y0);
+        *scroll_y0 = i64::min((src_fb.h - dst_rect.h - 1).into(), *scroll_y0);
+    } else {
+        *scroll_y0 = 0;
+    }
+    
     let offset_rect = Rect {
         x0: *scroll_x0,
         y0: *scroll_y0,
@@ -53,43 +55,56 @@ pub fn scrollable_canvas(
     //
     // Vertical scrollbar
 
-    let sbar_outer_rect = Rect { 
-        x0: (dst_rect.w - SBAR_OUTER_W).into(),
-        y0: dst_rect.y0,
-        w: SBAR_OUTER_W,
-        h: dst_rect.h,
-    };
+    if y_scroll_enabled {
 
-    let sbar_inner_rect = Rect { 
-        x0: (dst_rect.w - SBAR_OUTER_W + (SBAR_OUTER_W - SBAR_INNER_W) / 2) as i64 + dst_rect.x0,
-        y0: (dst_rect.h as i64) * (*scroll_y0) / (src_fb.h as i64) + dst_rect.y0,
-        w: SBAR_INNER_W,
-        h: dst_rect.h * dst_rect.h / src_fb.h,
-    };
-
-    let p_state = &input_state.pointer;
-
-    let sbar_hover = sbar_inner_rect.check_contains_point(p_state.x, p_state.y);
-
-    let sbar_color = {
         if *dragging {
-            SBAR_INNER_DRAGGING_COLOR
-        } else if sbar_hover {
-            SBAR_INNER_HOVER_COLOR
+            *scroll_y0 += (src_fb.h as i64) * input_state.pointer.delta_y / (dst_rect.h as i64);
         } else {
-            SBAR_INNER_IDLE_COLOR
+            for event in input_state.events {
+                if let Some(InputEvent::Scroll { delta }) = event {
+                    *scroll_y0 -= delta * (SCROLL_SPEED as i64);
+                }
+            }
         }
-    };
 
-    draw_rect(dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR);
-    draw_rect(dst_fb, &sbar_inner_rect, sbar_color);
+        let sbar_outer_rect = Rect { 
+            x0: (dst_rect.w - SBAR_OUTER_W).into(),
+            y0: dst_rect.y0,
+            w: SBAR_OUTER_W,
+            h: dst_rect.h,
+        };
 
-    if p_state.left_clicked {
-        if p_state.left_click_trigger && sbar_hover {
-            *dragging = true;
+        let sbar_inner_rect = Rect { 
+            x0: (dst_rect.w - SBAR_OUTER_W + (SBAR_OUTER_W - SBAR_INNER_W) / 2) as i64 + dst_rect.x0,
+            y0: (dst_rect.h as i64) * (*scroll_y0) / (src_fb.h as i64) + dst_rect.y0,
+            w: SBAR_INNER_W,
+            h: dst_rect.h * dst_rect.h / src_fb.h,
+        };
+
+        let p_state = &input_state.pointer;
+
+        let sbar_hover = sbar_inner_rect.check_contains_point(p_state.x, p_state.y);
+
+        let sbar_color = {
+            if *dragging {
+                SBAR_INNER_DRAGGING_COLOR
+            } else if sbar_hover {
+                SBAR_INNER_HOVER_COLOR
+            } else {
+                SBAR_INNER_IDLE_COLOR
+            }
+        };
+
+        draw_rect(dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR);
+        draw_rect(dst_fb, &sbar_inner_rect, sbar_color);
+
+        if p_state.left_clicked {
+            if p_state.left_click_trigger && sbar_hover {
+                *dragging = true;
+            }
+        } else {
+            *dragging = false;
         }
-    } else {
-        *dragging = false;
     }
 
     //
@@ -97,5 +112,14 @@ pub fn scrollable_canvas(
 
     // TODO
 
+}
+
+pub fn set_autoscroll(
+    dst_rect: &Rect,
+    src_fb: &Framebuffer,
+    offsets: &mut (i64, i64),
+) {
+    let (_scroll_x0, scroll_y0) = offsets;
+    *scroll_y0 = (src_fb.h - dst_rect.h - 1).into();
 }
 

@@ -29,7 +29,10 @@ impl Default for EditableTextConfig {
 }
 
 
-pub fn string_input(buffer: &mut TrackedContent<String>, caps: &mut bool, input_state: &InputState, allow_newline: bool) {
+pub fn string_input(buffer: &mut TrackedContent<String>, caps: &mut bool, input_state: &InputState, allow_newline: bool, cursor: &mut usize) {
+
+    let buf_len = buffer.as_ref().len();
+    *cursor = usize::min(buf_len, *cursor);
 
     enum TextUpdate {
         Newline,
@@ -54,10 +57,14 @@ pub fn string_input(buffer: &mut TrackedContent<String>, caps: &mut bool, input_
         match event {
 
             // Enter
-            Some(InputEvent::KeyPress { keycode: Keycode::KEY_ENTER }) if allow_newline => { /*buffer.push('\n')*/updates.push(TextUpdate::Newline); },
+            Some(InputEvent::KeyPress { keycode: Keycode::KEY_ENTER }) if allow_newline => { updates.push(TextUpdate::Newline); },
 
             // Backspace
-            Some(InputEvent::KeyPress { keycode: Keycode::KEY_BACKSPACE }) => { /*buffer.pop()*/updates.push(TextUpdate::Backspace); },
+            Some(InputEvent::KeyPress { keycode: Keycode::KEY_BACKSPACE }) => { updates.push(TextUpdate::Backspace); },
+
+            // Cursor movement
+            Some(InputEvent::KeyPress { keycode: Keycode::KEY_LEFT }) if *cursor > 0 => { *cursor -= 1; },
+            Some(InputEvent::KeyPress { keycode: Keycode::KEY_RIGHT }) if *cursor < buf_len => { *cursor += 1; },
 
             // Character input
             Some(InputEvent::KeyPress { keycode }) => {
@@ -68,7 +75,6 @@ pub fn string_input(buffer: &mut TrackedContent<String>, caps: &mut bool, input_
                     .flatten();
 
                 if let Some(new_char) = new_char {
-                    /*buffer.push(new_char);*/
                     updates.push(TextUpdate::Char(new_char))
                 }
             }
@@ -81,9 +87,20 @@ pub fn string_input(buffer: &mut TrackedContent<String>, caps: &mut bool, input_
         let buffer = buffer.mutate();
         for update in updates {
             match update {
-                TextUpdate::Newline => buffer.push('\n'),
-                TextUpdate::Backspace => { buffer.pop(); },
-                TextUpdate::Char(c) => buffer.push(c),
+                TextUpdate::Newline => {
+                    buffer.insert(*cursor, '\n');
+                    *cursor += 1;
+                },
+                TextUpdate::Backspace => {
+                    if *cursor > 0 {
+                        buffer.remove(*cursor - 1);
+                        *cursor -= 1;
+                    }
+                },
+                TextUpdate::Char(c) => {
+                    buffer.insert(*cursor, c);
+                    *cursor += 1;
+                },
             }
         }
     }
@@ -96,10 +113,15 @@ pub fn editable_text(
     fb: &mut Framebuffer,
     buffer: &mut TrackedContent<String>,
     caps: &mut bool,
-    input_state: &InputState
+    cursor: &mut usize,
+    input_state: &InputState,
+    time: f64,
 ) {
 
-    string_input(buffer, caps, input_state, false);
+    let original_cursor = *cursor;
+    let original_content_id = buffer.get_id();
+
+    string_input(buffer, caps, input_state, false, cursor);
 
     let EditableTextConfig { font, color, bg_color, .. } = config;
     let Rect { x0, y0, .. } = config.rect;
@@ -108,6 +130,17 @@ pub fn editable_text(
         draw_rect(fb, &config.rect, *bg_color);
     }
     draw_str(fb, buffer.as_ref(), x0, y0, font, *color, None);
+
+    let time_sec = (time as u64) / 1000;
+    if time_sec % 2 == 0 || buffer.get_id() != original_content_id || *cursor != original_cursor {
+        let cursor_rect = Rect {
+            x0: x0 + (*cursor * font.char_w) as i64,
+            y0: y0,
+            w: 2,
+            h: font.char_h as u32,
+        };
+        draw_rect(fb, &cursor_rect, *color);
+    }
 }
 
 pub fn render_rich_text(text_fb: &mut Framebuffer, text: &RichText) {

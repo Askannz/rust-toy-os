@@ -1,7 +1,6 @@
 * Web browser: incremental renderer
 * Caps on/off in InputState
 * make it pretty (UI color palette)
-* use scollable_canvas in terminal
 * blinking cursor for text editing
 
 * resizable windows

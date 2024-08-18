@@ -79,7 +79,8 @@ pub fn step() {
     let win_rect = guestlib::get_win_rect();
     let input_state = system_state.input.change_origin(&win_rect);
 
-    uitk::string_input(&mut state.input_buffer, &mut state.caps, &input_state, false);
+    let mut cursor = state.input_buffer.as_ref().len();
+    uitk::string_input(&mut state.input_buffer, &mut state.caps, &input_state, false, &mut cursor);
 
     let mut autoscroll = false;
     if check_enter_pressed(&input_state) && !state.input_buffer.as_ref().is_empty() {

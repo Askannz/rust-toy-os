@@ -35,6 +35,7 @@ struct AppState<'a> {
     fb_handle: FramebufferHandle,
 
     url_text: uitk::TrackedContent<String>,
+    url_cursor: usize,
     caps: bool,
 
     ui_layout: UiLayout,
@@ -130,10 +131,12 @@ pub fn init() -> () {
     let webview_buffer = Framebuffer::new_owned(win_w, win_h);
 
     let url_text = String::from("https://news.ycombinator.com/");
+    let url_len = url_text.len();
 
     let state = AppState { 
         fb_handle,
         url_text: uitk::TrackedContent::new(url_text),
+        url_cursor: url_len,
         caps: false,
 
         ui_layout: UiLayout {
@@ -190,7 +193,9 @@ pub fn step() {
         &mut framebuffer,
         &mut state.url_text,
         &mut state.caps,
-        &win_input_state
+        &mut state.url_cursor,
+        &win_input_state,
+        system_state.time,
     );
 
     uitk::scrollable_canvas(
@@ -290,7 +295,7 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             let mut url_data: Option<(String, String)> = None;
 
             if url_go {
-                let (domain, path) = parse_url(state.url_text.as_ref());
+                let (domain, path) = parse_url(state.url_text.as_ref())?;
                 url_data = Some((domain.to_string(), path.to_string()));
             } else if input_state.pointer.left_click_trigger {
                 if let Some(href) = link_hover {
@@ -513,10 +518,10 @@ fn parse_header(http_response: &str) ->  anyhow::Result<(HttpHeader, &str)>{
     Ok((header, body))
 }
 
-fn parse_url(url: &str) -> (&str, &str) {
+fn parse_url(url: &str) -> anyhow::Result<(&str, &str)> {
 
     if !url.starts_with(SCHEME) {
-        panic!("Invalid URL (no https://)");
+        return Err(anyhow::anyhow!("Invalid URL (no https://)"));
     }
 
     let (_scheme, s) = url.split_at(SCHEME.len());
@@ -526,5 +531,5 @@ fn parse_url(url: &str) -> (&str, &str) {
         None => (s, "/")
     };
 
-    (domain, path)
+    Ok((domain, path))
 }

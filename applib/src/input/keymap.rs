@@ -74,6 +74,11 @@ pub enum Keycode {
     KEY_LEFTSHIFT = 42,
     KEY_RIGHTSHIFT = 54,
     KEY_SPACE = 57,
+
+    KEY_LEFT = 105,
+    KEY_RIGHT = 106,
+    KEY_UP = 103,
+    KEY_DOWN = 108,
 }
 
 

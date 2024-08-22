@@ -2,9 +2,13 @@ use core::cell::OnceCell;
 use applib::{Color, Framebuffer, Rect};
 use applib::uitk;
 use guestlib::FramebufferHandle;
+use guestlib::{WasmLogger};
 
 mod drawing;
 use drawing::{draw_scene, Scene, load_scene};
+
+static LOGGER: WasmLogger = WasmLogger;
+const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState<'a> {
     fb_handle: FramebufferHandle,
@@ -24,6 +28,10 @@ fn main() {}
 
 #[no_mangle]
 pub fn init() -> () {
+
+    log::set_max_level(LOGGING_LEVEL);
+    log::set_logger(&LOGGER).unwrap();
+
     let win_rect = guestlib::get_win_rect();
     let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
     let state = AppState {

@@ -8,6 +8,7 @@ wee_alloc = "0.4.5"
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 applib = { path = "../../applib" }
 guestlib = { path = "../../guestlib" }
+log = { version = "0.4.20", default-features = false }
 
 # To avoid error about missing tests
 [[bin]]

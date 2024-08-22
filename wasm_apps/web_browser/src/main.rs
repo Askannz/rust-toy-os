@@ -441,7 +441,7 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
 
             // Arbitrary limits to avoid running out of memory
             let new_w = u32::min(layout.rect.w, 2 * view_w);
-            let new_h = u32::min(layout.rect.h, 8 * view_h);
+            let new_h = u32::min(layout.rect.h, 16 * view_h);
 
             state.webview_buffer.resize(new_w, new_h);
             render_html(&mut state.webview_buffer, &layout);

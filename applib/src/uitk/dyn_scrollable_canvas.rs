@@ -23,7 +23,6 @@ pub struct TileRenderContext<'a, 'b> {
     pub dst_fb: &'a mut Framebuffer<'b>,
     pub dst_rect: &'a Rect,
     pub src_rect: &'a Rect,
-    pub input_state: &'a InputState,
 }
 
 
@@ -68,7 +67,6 @@ pub fn dyn_scrollable_canvas<T: TileRenderer>(
         dst_fb,
         dst_rect,
         src_rect,
-        input_state,
     });
 
     //

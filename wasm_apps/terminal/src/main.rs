@@ -11,7 +11,7 @@ use guestlib::{WasmLogger};
 use applib::{Color, Framebuffer, Rect};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP, InputState};
-use applib::drawing::text::{RichText, HACK_15, Font};
+use applib::drawing::text::{format_rich_lines, Font, FormattedRichText, RichText, HACK_15};
 use applib::uitk::{self, TrackedContent};
 
 mod python;
@@ -98,7 +98,13 @@ pub fn step() {
 
     if redraw {
         let console_rich_text = render_console(state.input_buffer.as_ref(), state.console_buffer.as_ref());
-        uitk::render_rich_text(&mut state.text_fb, &console_rich_text);
+        let formatted = format_rich_lines(&console_rich_text, state.text_fb.w);
+
+        state.text_fb.resize(state.text_fb.w, formatted.h);
+        let dst_rect = state.text_fb.shape_as_rect();
+
+        state.text_fb.fill(Color::BLACK);
+        uitk::render_rich_text(&mut state.text_fb, &dst_rect, &formatted, (0, 0));
     }
 
     if autoscroll {
@@ -128,6 +134,23 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
             false
         }
     })
+}
+
+struct ConsoleRenderer {
+    dst_rect: Rect,
+    formatted: FormattedRichText,
+}
+
+impl uitk::TileRenderer for ConsoleRenderer {
+
+    fn shape(&self) -> (u32, u32) {
+       let FormattedRichText { w, h, .. } = self.formatted;
+       (w, h)
+    }
+
+    fn render(&self, context: &mut uitk::TileRenderContext) {
+        
+    }
 }
 
 fn render_console(input_buffer: &String, console_buffer: &Vec<EvalResult>) -> RichText {

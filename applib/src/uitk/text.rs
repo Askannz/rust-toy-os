@@ -6,7 +6,7 @@ use crate::drawing::primitives::draw_rect;
 use crate::{Color, Framebuffer, Rect};
 use crate::input::{InputState, InputEvent};
 use crate::input::{Keycode, CHARMAP};
-use crate::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText, HACK_15};
+use crate::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText, FormattedRichText, HACK_15};
 use super::{TrackedContent, ContentId};
 
 #[derive(Clone)]
@@ -143,24 +143,20 @@ pub fn editable_text(
     }
 }
 
-pub fn render_rich_text(text_fb: &mut Framebuffer, text: &RichText) {
+pub fn render_rich_text(dst_fb: &mut Framebuffer, dst_rect: &Rect, formatted: &FormattedRichText, offsets: (i64, i64)) {
 
-    let max_w = text_fb.w;
+    let Rect { x0: dst_x0, y0: dst_y0, h: dst_h, w: dst_w } = *dst_rect;
+    let (ox, oy) = offsets;
 
-    let formatted = format_rich_lines(text, max_w);
-    
-    text_fb.resize(max_w, formatted.h);
-    text_fb.fill(Color::BLACK);
+    let src_rect = Rect { x0: ox, y0: oy, w: dst_w, h:dst_h };
 
-    let rect = text_fb.shape_as_rect();
-
-    let Rect { x0, y0, h, .. } = rect;
-    let h: i64 = h.into();
-
-    let mut y = y0;
+    let mut y = 0;
     for line in formatted.lines.iter() {
-        if y + line.h as i64 > y0 + h { break; }
-        draw_rich_slice(text_fb, &line.chars, x0, y);
+
+        if y >= src_rect.y0 && y + (line.h as i64) <= src_rect.y0 + (src_rect.h as i64) {
+            draw_rich_slice(dst_fb, &line.chars, dst_x0, dst_y0 + y - oy);
+        }
+        
         y += line.h as i64;
     }
 }

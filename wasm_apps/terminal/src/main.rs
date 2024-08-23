@@ -11,8 +11,9 @@ use guestlib::{WasmLogger};
 use applib::{Color, Framebuffer, Rect};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP, InputState};
-use applib::drawing::text::{format_rich_lines, Font, FormattedRichText, RichText, HACK_15};
-use applib::uitk::{self, TrackedContent};
+use applib::drawing::text::{format_rich_lines, draw_rich_slice, Font, FormattedRichText, RichText, HACK_15};
+use applib::uitk::{self, TileRenderer, TrackedContent};
+use applib::drawing::primitives::draw_rect;
 
 mod python;
 
@@ -25,12 +26,11 @@ struct EvalResult {
 static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
-struct AppState<'a> {
+struct AppState {
     fb_handle: FramebufferHandle,
     input_buffer: TrackedContent<String>,
     console_buffer: TrackedContent<Vec<EvalResult>>,
 
-    text_fb: Framebuffer<'a>,
     scroll_offsets: (i64, i64),
     dragging: bool,
 
@@ -52,13 +52,10 @@ pub fn init() -> () {
     let win_rect = guestlib::get_win_rect();
     let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
 
-    let Rect { w: win_w, h: win_h, .. } = win_rect;
-
     let state = AppState { 
         fb_handle,
         input_buffer: TrackedContent::new(String::new()),
-        console_buffer: TrackedContent::new(Vec::with_capacity(500)),
-        text_fb: Framebuffer::new_owned(win_w, 4 * win_h),
+        console_buffer: TrackedContent::new(Vec::new()),
         scroll_offsets: (0, 0),
         dragging: false,
         python: python::Python::new(),
@@ -94,31 +91,26 @@ pub fn step() {
     let Rect { w: win_w, h: win_h, .. } = win_rect;
     let rect_console = Rect  { x0: 0, y0: 0, w: win_w, h: win_h };
 
-    let redraw = state.content_ids != Some([state.input_buffer.get_id(), state.console_buffer.get_id()]);
+    let console_rich_text = render_console(state.input_buffer.as_ref(), state.console_buffer.as_ref());
+    let formatted = format_rich_lines(&console_rich_text, win_w);
 
-    if redraw {
-        let console_rich_text = render_console(state.input_buffer.as_ref(), state.console_buffer.as_ref());
-        let formatted = format_rich_lines(&console_rich_text, state.text_fb.w);
+    let renderer = ConsoleRenderer { formatted };
 
-        state.text_fb.resize(state.text_fb.w, formatted.h);
-        let dst_rect = state.text_fb.shape_as_rect();
+    framebuffer.fill(Color::BLACK);
 
-        state.text_fb.fill(Color::BLACK);
-        uitk::render_rich_text(&mut state.text_fb, &dst_rect, &formatted, (0, 0));
-    }
-
-    if autoscroll {
-        uitk::set_autoscroll(&rect_console, &state.text_fb, &mut state.scroll_offsets);
-    }
-
-    uitk::scrollable_canvas(
+    uitk::dyn_scrollable_canvas(
         &mut framebuffer,
         &rect_console,
-        &state.text_fb,
+        &renderer,
         &mut state.scroll_offsets,
         &input_state,
         &mut state.dragging,
     );
+
+    if autoscroll {
+        let (_max_w, max_h) = renderer.shape();
+        uitk::set_autoscroll(&rect_console, max_h, &mut state.scroll_offsets);
+    }
 
     state.content_ids = Some([
         state.input_buffer.get_id(),
@@ -137,7 +129,6 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
 }
 
 struct ConsoleRenderer {
-    dst_rect: Rect,
     formatted: FormattedRichText,
 }
 
@@ -149,7 +140,24 @@ impl uitk::TileRenderer for ConsoleRenderer {
     }
 
     fn render(&self, context: &mut uitk::TileRenderContext) {
-        
+
+        let uitk::TileRenderContext { dst_fb, dst_rect, src_rect, .. } = context;
+
+        let Rect { x0: dst_x0, y0: dst_y0, h: dst_h, w: dst_w } = *dst_rect;
+        let Rect { x0: ox, y0: oy, .. } = *src_rect;
+    
+        let src_rect = Rect { x0: *ox, y0: *oy, w: *dst_w, h: *dst_h };
+    
+        let mut y = 0;
+        for line in self.formatted.lines.iter() {
+    
+            if y >= src_rect.y0 && y + (line.h as i64) <= src_rect.y0 + (src_rect.h as i64) {
+                draw_rich_slice(dst_fb, &line.chars, *dst_x0, dst_y0 + y - oy);
+            }
+            
+            y += line.h as i64;
+        }
+
     }
 }
 

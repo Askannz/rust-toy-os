@@ -49,10 +49,10 @@ pub fn scrollable_canvas(
 
 pub fn set_autoscroll(
     dst_rect: &Rect,
-    src_fb: &Framebuffer,
+    max_h: u32,
     offsets: &mut (i64, i64),
 ) {
     let (_scroll_x0, scroll_y0) = offsets;
-    *scroll_y0 = (src_fb.h - dst_rect.h - 1).into();
+    *scroll_y0 = (max_h - dst_rect.h - 1).into();
 }
 

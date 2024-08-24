@@ -31,7 +31,7 @@ use html::canvas::html_canvas;
 static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
-struct AppState<'a> {
+struct AppState {
     fb_handle: FramebufferHandle,
 
     url_text: uitk::TrackedContent<String>,
@@ -41,7 +41,6 @@ struct AppState<'a> {
     ui_layout: UiLayout,
 
     buffer: Vec<u8>,
-    webview_buffer: Framebuffer<'a>,
     webview_scroll_offsets: (i64, i64),
     webview_scroll_dragging: bool,
 
@@ -126,10 +125,6 @@ pub fn init() -> () {
     let win_rect = guestlib::get_win_rect();
     let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
 
-    let Rect { w: win_w, h: win_h, .. } = win_rect;
-
-    let webview_buffer = Framebuffer::new_owned(win_w, win_h);
-
     let url_text = String::from("https://news.ycombinator.com/");
     let url_len = url_text.len();
 
@@ -147,7 +142,6 @@ pub fn init() -> () {
         },
 
         buffer: vec![0u8; BUFFER_SIZE],
-        webview_buffer,
         webview_scroll_offsets: (0, 0),
         webview_scroll_dragging: false,
         request_state: RequestState::Render { 
@@ -173,6 +167,8 @@ pub fn step() {
 
     let mut framebuffer = state.fb_handle.as_framebuffer();
 
+    framebuffer.fill(Color::BLACK);
+
     let is_button_fired = uitk::button(
         &uitk::ButtonConfig {
             rect: state.ui_layout.button_rect.clone(),
@@ -196,15 +192,6 @@ pub fn step() {
         &mut state.url_cursor,
         &win_input_state,
         system_state.time,
-    );
-
-    uitk::scrollable_canvas(
-        &mut framebuffer,
-        &state.ui_layout.canvas_rect,
-        &state.webview_buffer,
-        &mut state.webview_scroll_offsets,
-        &win_input_state,
-        &mut state.webview_scroll_dragging,
     );
 
     let (progress_val, progress_str) = get_progress_repr(&state.request_state);
@@ -284,6 +271,15 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
 
             let mut framebuffer = state.fb_handle.as_framebuffer();
 
+            uitk::dyn_scrollable_canvas(
+                &mut framebuffer,
+                &state.ui_layout.canvas_rect,
+                &HtmlRenderer { layout },
+                &mut state.webview_scroll_offsets,
+                input_state,
+                &mut state.webview_scroll_dragging,
+            );
+
             let link_hover = html_canvas(
                 &mut framebuffer,
                 &layout,
@@ -310,7 +306,7 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
 
             if let Some((domain, path)) = url_data {
                 let s_ref = state.url_text.mutate();
-                core::mem::replace(s_ref, format!("{}{}{}", SCHEME, domain, path));
+                let _ = core::mem::replace(s_ref, format!("{}{}{}", SCHEME, domain, path));
                 let dns_socket = Socket::new(DNS_SERVER_IP, 53)?;
                 state.request_state = RequestState::Dns { 
                     domain,
@@ -435,16 +431,8 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             let html_tree = parse_html(html)?;
             let layout = compute_layout(&html_tree)?;
 
-            log::debug!("Layout: {:?}", layout.rect);
+            //log::debug!("Layout: {:?}", layout.rect);
 
-            let Rect { w: view_w, h: view_h, .. } = state.ui_layout.canvas_rect;
-
-            // Arbitrary limits to avoid running out of memory
-            let new_w = u32::min(layout.rect.w, 2 * view_w);
-            let new_h = u32::min(layout.rect.h, 16 * view_h);
-
-            state.webview_buffer.resize(new_w, new_h);
-            render_html(&mut state.webview_buffer, &layout);
             state.request_state = RequestState::Idle { 
                 domain: domain.clone(),
                 layout,
@@ -532,4 +520,25 @@ fn parse_url(url: &str) -> anyhow::Result<(&str, &str)> {
     };
 
     Ok((domain, path))
+}
+
+
+struct HtmlRenderer<'a> {
+    layout: &'a LayoutNode,
+}
+
+impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
+
+    fn shape(&self) -> (u32, u32) {
+       let Rect { w, h, .. } = self.layout.rect;
+       (w, h)
+    }
+
+    fn render(&self, context: &mut uitk::TileRenderContext) {
+
+        let uitk::TileRenderContext { dst_fb, dst_rect, src_rect, .. } = context;
+
+        render_html(dst_fb, dst_rect, &self.layout, src_rect);
+
+    }
 }

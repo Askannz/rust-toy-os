@@ -4,7 +4,7 @@ use crate::Rect;
 use crate::Color;
 use crate::drawing::primitives::draw_rect;
 
-use super::{TileRenderer, TileRenderContext, dyn_scrollable_canvas};
+use super::{TileRenderer, TileRenderContext, dyn_scrollable_canvas, TileCache};
 
 struct BufferCopyRenderer<'a> {
     src_fb: &'a Framebuffer<'a>,
@@ -38,6 +38,7 @@ pub fn scrollable_canvas(
     let renderer = BufferCopyRenderer { src_fb };
 
     dyn_scrollable_canvas(
+        &mut TileCache::new(),
         dst_fb,
         dst_rect,
         &renderer,

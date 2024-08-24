@@ -33,10 +33,10 @@ impl WasmEngine {
         WasmEngine { engine }
     }
 
-    pub fn instantiate_app(&self, tcp_stack: Rc<RefCell<TcpStack>>, wasm_code: &[u8], app_name: &str, init_rect: &Rect) -> WasmApp {
+    pub fn instantiate_app(&self, tcp_stack: Rc<RefCell<TcpStack>>, clock: Rc<SystemClock>, wasm_code: &[u8], app_name: &str, init_rect: &Rect) -> WasmApp {
 
         let module = Module::new(&self.engine, wasm_code).unwrap();
-        let store_data = StoreData::new(tcp_stack, app_name, init_rect);
+        let store_data = StoreData::new(tcp_stack, clock, app_name, init_rect);
         let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
         let mut linker = <Linker<StoreData>>::new(&self.engine);
 
@@ -149,6 +149,7 @@ struct StoreData {
 
     rng: SmallRng,
     tcp_stack: Rc<RefCell<TcpStack>>,
+    clock: Rc<SystemClock>,
     sockets_store: SocketsStore,
 
     timings: BTreeMap<String, u64>,
@@ -157,7 +158,7 @@ struct StoreData {
 }
 
 impl StoreData {
-    fn new(tcp_stack: Rc<RefCell<TcpStack>>, app_name: &str, init_rect: &Rect) -> Self {
+    fn new(tcp_stack: Rc<RefCell<TcpStack>>, clock: Rc<SystemClock>, app_name: &str, init_rect: &Rect) -> Self {
         StoreData { 
             app_name: app_name.to_owned(),
             system_state: None,
@@ -165,6 +166,7 @@ impl StoreData {
             win_rect: init_rect.clone(),
             rng: SmallRng::seed_from_u64(0),
             tcp_stack,
+            clock,
             sockets_store: SocketsStore::new(),
             timings: BTreeMap::new(),
 
@@ -180,12 +182,13 @@ pub struct WasmApp {
 }
 
 impl WasmApp {
-    pub fn step(&mut self, system_state: &SystemState, clock: &SystemClock, system_fb: &mut Framebuffer, win_rect: &Rect) {
+    pub fn step(&mut self, system_state: &SystemState, system_fb: &mut Framebuffer, win_rect: &Rect) {
 
         self.store.set_fuel(STEP_FUEL).unwrap();
 
         let mut ctx = self.store.as_context_mut();
         let data_mut = ctx.data_mut();
+        let clock = data_mut.clock.clone();
         
         data_mut.system_state = Some(system_state.clone());
         data_mut.win_rect = win_rect.clone();
@@ -331,11 +334,9 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
 
         log::debug!("Function clock_time_get() called (dest buffer {:#x} clock_id {:#x} precision {})", buf, clock_id, precision);
 
-        let system_state = caller.data()
-            .system_state
-            .as_ref().expect("System state not available");
+        let clock = &caller.data().clock;
 
-        let t = (system_state.time * 1e9) as u64;
+        let t = (clock.time() * 1e9) as u64;  // Not sure about the 1e9
 
         let mem = get_linear_memory(&caller);
         let mem_data = mem.data_mut(&mut caller);
@@ -586,6 +587,19 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         tcp_stack.close(socket_handle);
     });
 
+    linker_impl!(m, "host_get_time", |mut caller: Caller<StoreData>, buf: i32| {
+
+        let buf = buf as usize;
+
+        let t = &caller.data().clock.time();
+
+        let mem = get_linear_memory(&caller);
+        let mem_data = mem.data_mut(&mut caller);
+
+        let data = t.to_le_bytes();
+        mem_data[buf..buf+8].copy_from_slice(&data);
+    });
+
     linker_impl!(m, "host_get_consumed_fuel", |mut caller: Caller<StoreData>, consumed_addr: i32| {
         let remaining = caller.get_fuel().expect("Fuel metering disabled");
         let consumed = STEP_FUEL - remaining;
@@ -613,7 +627,6 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
     
         log::debug!("QEMU DUMP: pmemsave 0x{:x} {} pmem_dump.bin", phys_addr, len);
     });
-
 }
 
 #[repr(i32)]

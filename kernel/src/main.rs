@@ -131,7 +131,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("All VirtIO devices created");
 
     let runtime_services = unsafe { system_table.runtime_services() };
-    let clock = SystemClock::new(runtime_services);
+    let clock = Rc::new(SystemClock::new(runtime_services));
 
     log::info!("System clock initialized");
 
@@ -154,7 +154,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
         descriptor: app_desc.clone(),
-        wasm_app: wasm_engine.instantiate_app(tcp_stack.clone(), app_desc.data, app_desc.name, &app_desc.init_win_rect),
+        wasm_app: wasm_engine.instantiate_app(tcp_stack.clone(), clock.clone(), app_desc.data, app_desc.name, &app_desc.init_win_rect),
         is_open: false,
         rect: app_desc.init_win_rect.clone(),
         grab_pos: None,
@@ -167,7 +167,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut system_state = SystemState { 
         input: InputState::new(w, h),
-        time: clock.time(),
     };
 
     log::info!("Entering main loop");
@@ -179,7 +178,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         tcp_stack.borrow_mut().poll_interface(&clock);
 
-        system_state.time = clock.time();
         update_input_state(&mut system_state, (w, h), &mut virtio_inputs);
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
@@ -290,7 +288,7 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
             draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, COLOR_TEXT, None);
 
             let t0 = clock.time();
-            app.wasm_app.step(system_state, &clock, fb, &app.rect);
+            app.wasm_app.step(system_state, fb, &app.rect);
             let t1 = clock.time();
             const SMOOTHING: f64 = 0.9;
             app.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * app.time_used;

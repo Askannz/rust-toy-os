@@ -1,3 +1,5 @@
+use core::hash::{Hash, Hasher};
+
 use anyhow::anyhow;
 
 use applib::{Color, Rect, Framebuffer};

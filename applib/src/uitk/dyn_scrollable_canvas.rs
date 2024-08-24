@@ -1,3 +1,7 @@
+use alloc::collections::BTreeMap;
+
+use crate::content::ContentId;
+
 use crate::input::{InputEvent, InputState};
 use crate::Framebuffer;
 use crate::Rect;
@@ -13,20 +17,33 @@ const SBAR_INNER_IDLE_COLOR: Color = Color::RED;
 const SBAR_INNER_HOVER_COLOR: Color = Color::YELLOW;
 const SBAR_INNER_DRAGGING_COLOR: Color = Color::AQUA;
 
+
+pub struct TileCache<'a> {
+    pub tiles: BTreeMap<ContentId, Framebuffer<'a>>
+}
+
+impl<'a> TileCache<'a> {
+    pub fn new() -> Self {
+        Self { tiles: BTreeMap::new() }
+    }
+}
+
 pub trait TileRenderer {
 
     fn shape(&self) -> (u32, u32);
     fn render(&self, context: &mut TileRenderContext);
 }
 
-pub struct TileRenderContext<'a, 'b> {
+pub struct TileRenderContext<'a, 'b, 'c> {
     pub dst_fb: &'a mut Framebuffer<'b>,
     pub dst_rect: &'a Rect,
     pub src_rect: &'a Rect,
+    pub tile_cache: &'a mut TileCache<'c>,
 }
 
 
 pub fn dyn_scrollable_canvas<T: TileRenderer>(
+    tile_cache: &mut TileCache,
     dst_fb: &mut Framebuffer,
     dst_rect: &Rect,
     renderer: &T,
@@ -67,6 +84,7 @@ pub fn dyn_scrollable_canvas<T: TileRenderer>(
         dst_fb,
         dst_rect,
         src_rect,
+        tile_cache,
     });
 
     //

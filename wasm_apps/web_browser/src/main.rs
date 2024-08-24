@@ -10,13 +10,14 @@ use core::cell::OnceCell;
 use alloc::format;
 use alloc::collections::BTreeMap;
 use anyhow::Context;
-use guestlib::{FramebufferHandle, WasmLogger};
+use guestlib::{FramebufferHandle, WasmLogger, TimeUuidProvider};
 use applib::{Color, Rect};
 
 use applib::Framebuffer;
 use applib::uitk;
 use applib::input::{InputState, InputEvent};
 use applib::input::{Keycode, CHARMAP};
+use applib::content::TrackedContent;
 
 mod tls;
 mod dns;
@@ -31,15 +32,16 @@ use html::canvas::html_canvas;
 static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
-struct AppState {
+struct AppState<'a> {
     fb_handle: FramebufferHandle,
 
-    url_text: uitk::TrackedContent<String>,
+    url_text: TrackedContent<TimeUuidProvider, String>,
     url_cursor: usize,
 
     ui_layout: UiLayout,
 
     buffer: Vec<u8>,
+    tile_cache: uitk::TileCache<'a>,
     webview_scroll_offsets: (i64, i64),
     webview_scroll_dragging: bool,
 
@@ -54,7 +56,7 @@ struct UiLayout{
 }
 
 enum RequestState {
-    Idle { domain: Option<String>, layout: LayoutNode },
+    Idle { domain: Option<String>, layout: TrackedContent<TimeUuidProvider, LayoutNode> },
     Dns { domain: String, path: String, dns_socket: Socket, dns_state: DnsState },
     Https { domain: String, path: String, tls_client: TlsClient, https_state: HttpsState },
     Render { domain: Option<String>, html: String },
@@ -129,7 +131,8 @@ pub fn init() -> () {
 
     let state = AppState { 
         fb_handle,
-        url_text: uitk::TrackedContent::new(url_text),
+        tile_cache: uitk::TileCache::new(),
+        url_text: TrackedContent::new(url_text),
         url_cursor: url_len,
 
         ui_layout: UiLayout {
@@ -188,7 +191,7 @@ pub fn step() {
         &mut state.url_text,
         &mut state.url_cursor,
         &win_input_state,
-        system_state.time,
+        guestlib::get_time(),
     );
 
     let (progress_val, progress_str) = get_progress_repr(&state.request_state);
@@ -269,6 +272,7 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             let mut framebuffer = state.fb_handle.as_framebuffer();
 
             let link_hover = html_canvas(
+                &mut state.tile_cache,
                 &mut framebuffer,
                 &layout,
                 &state.ui_layout.canvas_rect,
@@ -421,10 +425,10 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             let layout = compute_layout(&html_tree)?;
 
             //log::debug!("Layout: {:?}", layout.rect);
-
+            state.tile_cache.tiles.clear();
             state.request_state = RequestState::Idle { 
                 domain: domain.clone(),
-                layout,
+                layout: TrackedContent::new(layout),
             };
         },
     };

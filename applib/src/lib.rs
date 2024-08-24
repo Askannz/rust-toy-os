@@ -7,6 +7,8 @@ use zune_png::PngDecoder;
 pub mod input;
 pub mod drawing;
 pub mod uitk;
+pub mod hash;
+pub mod content;
 
 use alloc::vec::Vec;
 use alloc::vec;
@@ -17,10 +19,9 @@ use input::InputState;
 #[repr(C)]
 pub struct SystemState {
     pub input: InputState,
-    pub time: f64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash)]
 #[repr(transparent)]
 pub struct Color(pub u32);
 
@@ -70,7 +71,7 @@ impl Color {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Hash)]
 pub struct Rect { pub x0: i64, pub y0: i64, pub w: u32, pub h: u32 }
 
 impl Rect {
@@ -91,18 +92,39 @@ impl Rect {
             xb0 >= xa0 && xb1 <= xa1 &&
             yb0 >= ya0 && yb1 <= ya1
     }
+    // pub fn intersection(&self, other: &Rect) -> Option<Rect> {
+
+    //     let [xa0, ya0, xa1, ya1] = self.as_xyxy();
+    //     let [xb0, yb0, xb1, yb1] = other.as_xyxy();
+
+    //     let x0 = i64::max(xa0, xb0);
+    //     let y0 = i64::max(ya0, yb0);
+
+    //     let x1 = i64::min(xa1, xb1);
+    //     let y1 = i64::min(ya1, yb1);
+
+    //     if x0 <= x1 && y0 <= y1 {
+    //         Some(Rect { x0, y0, w: (x1-x0+1) as u32, h: (y1-y0+1) as u32 })
+    //     } else {
+    //         None
+    //     }
+    // }
+
     pub fn intersection(&self, other: &Rect) -> Option<Rect> {
 
         let [xa0, ya0, xa1, ya1] = self.as_xyxy();
         let [xb0, yb0, xb1, yb1] = other.as_xyxy();
 
-        let x0 = i64::max(xa0, xb0);
-        let y0 = i64::max(ya0, yb0);
+        if (xb0 <= xa1 || xa0 <= xb1) && (yb0 <= ya1 || ya0 <= yb1) {
 
-        let x1 = i64::min(xa1, xb1);
-        let y1 = i64::min(ya1, yb1);
+            let mut x_vals = [xa0, xa1, xb0, xb1];
+            x_vals.sort();
+            let [_, x0, x1, _] = x_vals;
+    
+            let mut y_vals = [ya0, ya1, yb0, yb1];
+            y_vals.sort();
+            let [_, y0, y1, _] = y_vals;
 
-        if x0 <= x1 && y0 <= y1 {
             Some(Rect { x0, y0, w: (x1-x0+1) as u32, h: (y1-y0+1) as u32 })
         } else {
             None
@@ -127,6 +149,15 @@ impl Rect {
         let Rect { x0, y0, w, h } = *self;
         let (w, h) = (w as i64, h as i64);
         [x0, y0, x0+w-1, y0+h-1]
+    }
+
+    pub fn from_xyxy(xyxy: [i64; 4]) -> Self {
+        let [x0, y0, x1, y1] = xyxy;
+        assert!(x0 < x1);
+        assert!(y0 < y1);
+        let w = (x1 - x0 + 1) as u32;
+        let h = (y1 - y0 + 1) as u32;
+        Self { x0, y0, w, h }
     }
 
     pub fn zero_origin(&self) -> Self {
@@ -254,15 +285,25 @@ impl<'a> Framebuffer<'a> {
             let xa1 = rect_a.x0 + w - 1;
             let ya = rect_a.y0 + y;
 
-            let ia1 = src.get_offset(xa0, ya).unwrap();
-            let ia2 = src.get_offset(xa1, ya).unwrap();
+            let ia1 = src.get_offset(xa0, ya);
+            let ia2 = src.get_offset(xa1, ya);
+
+            let (ia1, ia2) = match (ia1, ia2) {
+                (Some(ia1), Some(ia2)) => (ia1, ia2),
+                _ => continue,
+            };
 
             let xb0 = rect_b.x0;
             let xb1 = rect_b.x0 + w - 1;
             let yb = rect_b.y0 + y;
 
-            let ib1 = self.get_offset(xb0, yb).unwrap();
-            let ib2 = self.get_offset(xb1, yb).unwrap();
+            let ib1 = self.get_offset(xb0, yb);
+            let ib2 = self.get_offset(xb1, yb);
+
+            let (ib1, ib2) = match (ib1, ib2) {
+                (Some(ib1), Some(ib2)) => (ib1, ib2),
+                _ => continue,
+            };
 
             if blend {
                 self.data[ib1..=ib2].iter_mut()

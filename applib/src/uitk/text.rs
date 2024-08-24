@@ -7,7 +7,7 @@ use crate::{Color, Framebuffer, Rect};
 use crate::input::{InputState, InputEvent};
 use crate::input::{Keycode, CHARMAP};
 use crate::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText, FormattedRichText, HACK_15};
-use super::{TrackedContent, ContentId};
+use crate::content::{TrackedContent, ContentId, UuidProvider};
 
 #[derive(Clone)]
 pub struct EditableTextConfig {
@@ -29,7 +29,7 @@ impl Default for EditableTextConfig {
 }
 
 
-pub fn string_input(buffer: &mut TrackedContent<String>, input_state: &InputState, allow_newline: bool, cursor: &mut usize) {
+pub fn string_input<P: UuidProvider>(buffer: &mut TrackedContent<P, String>, input_state: &InputState, allow_newline: bool, cursor: &mut usize) {
 
     let buf_len = buffer.as_ref().len();
     *cursor = usize::min(buf_len, *cursor);
@@ -98,10 +98,10 @@ pub fn string_input(buffer: &mut TrackedContent<String>, input_state: &InputStat
 }
 
 
-pub fn editable_text(
+pub fn editable_text<P: UuidProvider>(
     config: &EditableTextConfig,
     fb: &mut Framebuffer,
-    buffer: &mut TrackedContent<String>,
+    buffer: &mut TrackedContent<P, String>,
     cursor: &mut usize,
     input_state: &InputState,
     time: f64,

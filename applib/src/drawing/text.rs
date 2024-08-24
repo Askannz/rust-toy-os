@@ -26,6 +26,7 @@ impl FontSpec {
     }
 }
 
+#[derive(Hash)]
 pub struct Font {
     bitmap: Vec<u8>,
     pub nb_chars: usize,

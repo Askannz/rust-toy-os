@@ -6,8 +6,10 @@ use core::fmt::Debug;
 use core::mem::size_of;
 use alloc::vec;
 use alloc::format;
+use applib::content::ContentId;
 use log::{Log, Metadata, Record};
 use applib::{SystemState, Framebuffer, Rect};
+use applib::content::UuidProvider;
 
 #[global_allocator]
 static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
@@ -26,6 +28,7 @@ extern "C" {
     fn host_tcp_write(addr: i32, len: i32, handle_id: i32) -> i32;
     fn host_tcp_read(addr: i32, len: i32, handle_id: i32) -> i32;
     fn host_tcp_close(handle_id: i32);
+    fn host_get_time(buf: i32);
 
     fn host_get_consumed_fuel(addr: i32);
     fn host_save_timing(key_addr: i32, key_len: i32, consumed_addr: i32);
@@ -147,6 +150,17 @@ pub fn tcp_close(handle_id: i32) {
     unsafe { host_tcp_close(handle_id) }
 }
 
+pub fn get_time() -> f64 {
+    let ptr = vec![0u8; 8].leak().as_mut_ptr();
+
+    unsafe { host_get_time(ptr as i32); }
+    
+    let s: &[u8; 8] = unsafe { core::slice::from_raw_parts(ptr, 8).try_into().unwrap() };
+
+    f64::from_le_bytes(*s)
+}
+
+
 pub fn get_consumed_fuel() -> u64 {
 
     let ptr = vec![0u8; 8].leak().as_mut_ptr();
@@ -222,6 +236,16 @@ impl Log for WasmLogger {
     }
 
     fn flush(&self) {}
+}
+
+pub struct TimeUuidProvider;
+
+impl UuidProvider for TimeUuidProvider {
+    fn make_id() -> ContentId {
+        let t = get_time();
+        let content_id = unsafe { core::mem::transmute(t) };
+        ContentId(content_id)
+    }
 }
 
 // #[macro_export]

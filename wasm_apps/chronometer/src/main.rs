@@ -36,13 +36,13 @@ pub fn step() {
 
     let state = unsafe { APP_STATE.get_mut().expect("App not initialized") };
 
-    let system_state = guestlib::get_system_state();
+    let t = guestlib::get_time();
 
     let mut framebuffer = state.fb_handle.as_framebuffer();
 
     framebuffer.fill(Color::BLACK);
-    draw_chrono(&mut framebuffer, system_state.time);
+    draw_chrono(&mut framebuffer, t);
 
-    let s = format!("{:.1}", system_state.time);
+    let s = format!("{:.1}", t);
     draw_str(&mut framebuffer, &s, 0, 0, &DEFAULT_FONT, Color::YELLOW, None);
 }

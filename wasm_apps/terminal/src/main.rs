@@ -7,12 +7,13 @@ use alloc::{format, borrow::ToOwned};
 use alloc::string::String;
 use alloc::vec::Vec;
 use guestlib::FramebufferHandle;
-use guestlib::{WasmLogger};
+use guestlib::{WasmLogger, TimeUuidProvider};
 use applib::{Color, Framebuffer, Rect};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP, InputState};
 use applib::drawing::text::{format_rich_lines, draw_rich_slice, Font, FormattedRichText, RichText, HACK_15};
-use applib::uitk::{self, TileRenderer, TrackedContent};
+use applib::uitk::{self, TileRenderer};
+use applib::content::{TrackedContent, ContentId};
 use applib::drawing::primitives::draw_rect;
 
 mod python;
@@ -26,16 +27,17 @@ struct EvalResult {
 static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
-struct AppState {
+struct AppState<'a> {
     fb_handle: FramebufferHandle,
-    input_buffer: TrackedContent<String>,
-    console_buffer: TrackedContent<Vec<EvalResult>>,
+    input_buffer: TrackedContent<TimeUuidProvider, String>,
+    console_buffer: TrackedContent<TimeUuidProvider, Vec<EvalResult>>,
 
+    tile_cache: uitk::TileCache<'a>,
     scroll_offsets: (i64, i64),
     dragging: bool,
 
     python: python::Python,
-    content_ids: Option<[uitk::ContentId; 2]>,
+    content_ids: Option<[ContentId; 2]>,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -55,6 +57,7 @@ pub fn init() -> () {
         fb_handle,
         input_buffer: TrackedContent::new(String::new()),
         console_buffer: TrackedContent::new(Vec::new()),
+        tile_cache: uitk::TileCache::new(),
         scroll_offsets: (0, 0),
         dragging: false,
         python: python::Python::new(),
@@ -97,6 +100,7 @@ pub fn step() {
     framebuffer.fill(Color::BLACK);
 
     uitk::dyn_scrollable_canvas(
+        &mut state.tile_cache,
         &mut framebuffer,
         &rect_console,
         &renderer,

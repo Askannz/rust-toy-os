@@ -268,20 +268,12 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
 
             let mut framebuffer = state.fb_handle.as_framebuffer();
 
-            uitk::dyn_scrollable_canvas(
-                &mut framebuffer,
-                &state.ui_layout.canvas_rect,
-                &HtmlRenderer { layout },
-                &mut state.webview_scroll_offsets,
-                input_state,
-                &mut state.webview_scroll_dragging,
-            );
-
             let link_hover = html_canvas(
                 &mut framebuffer,
                 &layout,
                 &state.ui_layout.canvas_rect,
-                state.webview_scroll_offsets,
+                &mut state.webview_scroll_offsets,
+                &mut state.webview_scroll_dragging,
                 input_state,
             );
 
@@ -520,22 +512,3 @@ fn parse_url(url: &str) -> anyhow::Result<(&str, &str)> {
 }
 
 
-struct HtmlRenderer<'a> {
-    layout: &'a LayoutNode,
-}
-
-impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
-
-    fn shape(&self) -> (u32, u32) {
-       let Rect { w, h, .. } = self.layout.rect;
-       (w, h)
-    }
-
-    fn render(&self, context: &mut uitk::TileRenderContext) {
-
-        let uitk::TileRenderContext { dst_fb, dst_rect, src_rect, .. } = context;
-
-        render_html(dst_fb, dst_rect, &self.layout, src_rect);
-
-    }
-}

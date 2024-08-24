@@ -36,7 +36,6 @@ struct AppState {
 
     url_text: uitk::TrackedContent<String>,
     url_cursor: usize,
-    caps: bool,
 
     ui_layout: UiLayout,
 
@@ -132,7 +131,6 @@ pub fn init() -> () {
         fb_handle,
         url_text: uitk::TrackedContent::new(url_text),
         url_cursor: url_len,
-        caps: false,
 
         ui_layout: UiLayout {
             url_bar_rect: Rect { x0: 0, y0: 0, w: win_rect.w - BUTTON_W, h: BAR_H },
@@ -188,7 +186,6 @@ pub fn step() {
         },
         &mut framebuffer,
         &mut state.url_text,
-        &mut state.caps,
         &mut state.url_cursor,
         &win_input_state,
         system_state.time,

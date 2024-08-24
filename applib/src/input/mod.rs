@@ -9,6 +9,7 @@ pub const MAX_EVENTS: usize = 10;
 #[repr(C)]
 pub struct InputState {
     pub pointer: PointerState,
+    pub shift: bool,
     pub events: [Option<InputEvent>; MAX_EVENTS],
     next_event_index: usize,
 }
@@ -27,6 +28,7 @@ impl InputState {
                 left_click_trigger: false,
                 right_click_trigger: false,
             },
+            shift: false,
             events: [None; MAX_EVENTS],
             next_event_index: 0,
         }
@@ -38,6 +40,9 @@ impl InputState {
     }
 
     pub fn add_event(&mut self, event: InputEvent) {
+
+        self.update_shift_key_state(&event);
+
         if self.next_event_index < self.events.len() {
             self.events[self.next_event_index] = Some(event);
             self.next_event_index += 1;
@@ -58,6 +63,20 @@ impl InputState {
 
         new
     }
+
+    fn update_shift_key_state(&mut self, event: &InputEvent) {
+
+        let check_is_shift = |&keycode| {
+            keycode == Keycode::KEY_LEFTSHIFT || 
+            keycode == Keycode::KEY_RIGHTSHIFT
+        };
+
+        match event {
+            InputEvent::KeyPress { keycode } if check_is_shift(keycode) => self.shift = true,
+            InputEvent::KeyRelease { keycode } if check_is_shift(keycode) => self.shift = false,
+            _ => ()
+        }
+    } 
 }
 
 #[derive(Debug, Clone)]

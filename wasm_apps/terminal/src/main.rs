@@ -35,7 +35,6 @@ struct AppState {
     dragging: bool,
 
     python: python::Python,
-    caps: bool,
     content_ids: Option<[uitk::ContentId; 2]>,
 }
 
@@ -59,7 +58,6 @@ pub fn init() -> () {
         scroll_offsets: (0, 0),
         dragging: false,
         python: python::Python::new(),
-        caps: false,
         content_ids: None,
     };
     unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")) }
@@ -77,7 +75,7 @@ pub fn step() {
     let input_state = system_state.input.change_origin(&win_rect);
 
     let mut cursor = state.input_buffer.as_ref().len();
-    uitk::string_input(&mut state.input_buffer, &mut state.caps, &input_state, false, &mut cursor);
+    uitk::string_input(&mut state.input_buffer, &input_state, false, &mut cursor);
 
     let mut autoscroll = false;
     if check_enter_pressed(&input_state) && !state.input_buffer.as_ref().is_empty() {

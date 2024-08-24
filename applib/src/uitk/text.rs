@@ -29,7 +29,7 @@ impl Default for EditableTextConfig {
 }
 
 
-pub fn string_input(buffer: &mut TrackedContent<String>, caps: &mut bool, input_state: &InputState, allow_newline: bool, cursor: &mut usize) {
+pub fn string_input(buffer: &mut TrackedContent<String>, input_state: &InputState, allow_newline: bool, cursor: &mut usize) {
 
     let buf_len = buffer.as_ref().len();
     *cursor = usize::min(buf_len, *cursor);
@@ -39,16 +39,6 @@ pub fn string_input(buffer: &mut TrackedContent<String>, caps: &mut bool, input_
         Backspace,
         Char(char),
     }
-
-    let check_is_shift = |keycode| {
-        keycode == Keycode::KEY_LEFTSHIFT || 
-        keycode == Keycode::KEY_RIGHTSHIFT
-    };
-    input_state.events.iter().for_each(|&event| match event {
-        Some(InputEvent::KeyPress { keycode }) if check_is_shift(keycode) => *caps = true,
-        Some(InputEvent::KeyRelease { keycode }) if check_is_shift(keycode) => *caps = false,
-        _ => ()
-    });
 
     let mut updates = Vec::new();
 
@@ -71,7 +61,7 @@ pub fn string_input(buffer: &mut TrackedContent<String>, caps: &mut bool, input_
 
                 let new_char = CHARMAP
                     .get(&keycode)
-                    .map(|(low_c, up_c)| if *caps { *up_c } else { *low_c })
+                    .map(|(low_c, up_c)| if input_state.shift { *up_c } else { *low_c })
                     .flatten();
 
                 if let Some(new_char) = new_char {
@@ -112,7 +102,6 @@ pub fn editable_text(
     config: &EditableTextConfig,
     fb: &mut Framebuffer,
     buffer: &mut TrackedContent<String>,
-    caps: &mut bool,
     cursor: &mut usize,
     input_state: &InputState,
     time: f64,
@@ -121,7 +110,7 @@ pub fn editable_text(
     let original_cursor = *cursor;
     let original_content_id = buffer.get_id();
 
-    string_input(buffer, caps, input_state, false, cursor);
+    string_input(buffer, input_state, false, cursor);
 
     let EditableTextConfig { font, color, bg_color, .. } = config;
     let Rect { x0, y0, .. } = config.rect;

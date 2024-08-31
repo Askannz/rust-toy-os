@@ -36,12 +36,12 @@ pub fn button(config: &ButtonConfig, fb: &mut Framebuffer, input_state: &InputSt
 
     let mut text_offset_x = 0;
     if let Some(icon) = config.icon {
-        let (icon_w, icon_h) = (icon.w as u32, icon.h as u32);
+        let (icon_w, icon_h) = icon.shape();
         let icon_x0 = x0 + x_padding;
         let icon_y0 = y0 + i64::max(0, (h - i64::from(icon_h)) / 2);
         let src_rect = icon.shape_as_rect();
         let dst_rect = Rect { x0: icon_x0, y0: icon_y0, w: icon_w, h: icon_h };
-        text_offset_x = icon.w as i64 + x_padding;
+        text_offset_x = icon_w as i64 + x_padding;
         fb.copy_from_fb(&icon, &src_rect, &dst_rect, true);
     }
 

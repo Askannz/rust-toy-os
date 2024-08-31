@@ -166,30 +166,24 @@ impl Rect {
 }
 
 pub struct Framebuffer<'a> {
-    pub data: ManagedSlice<'a, u32>,
-    pub w: u32,
-    pub h: u32,
+    data: ManagedSlice<'a, u32>,
+    data_w: u32,
+    data_h: u32,
+    rect: Rect,
 }
 
 impl<'a> Framebuffer<'a> {
 
     pub fn new_owned(w: u32, h: u32) -> Self {
         let data = vec![0u32; (w * h) as usize];
-        Framebuffer { data: ManagedSlice::Owned(data), w, h }
+        let rect = Rect { x0: 0, y0: 0, w, h };
+        Framebuffer { data: ManagedSlice::Owned(data), data_w: w , data_h: h, rect }
     }
 
     pub fn new(data: &'a mut [u32], w: u32, h: u32) -> Self {
         assert_eq!(data.len(), (w * h) as usize);
-        Framebuffer { data: ManagedSlice::Borrowed(data), w, h }
-    }
-
-    pub fn resize(&mut self, w: u32, h: u32) {
-        match &mut self.data {
-            ManagedSlice::Owned(data_vec) => data_vec.resize((w * h) as usize, 0u32),
-            ManagedSlice::Borrowed(_) => panic!("Canot resize borrowed slice"),
-        }
-        self.w = w;
-        self.h = h;
+        let rect = Rect { x0: 0, y0: 0, w, h };
+        Framebuffer { data: ManagedSlice::Borrowed(data), data_w: w , data_h: h, rect }
     }
 
     pub fn from_png(png_bytes: &[u8]) -> Self {
@@ -209,33 +203,40 @@ impl<'a> Framebuffer<'a> {
                 h * w
             )
         };
+
+        let (w, h) = (w as u32, h as u32);
+
+        let rect = Rect { x0: 0, y0: 0, w, h };
     
         Framebuffer {
             data: ManagedSlice::Owned(data_u32),
-            w: w as u32,
-            h: h as u32
+            data_w: w,
+            data_h: h,
+            rect,
         }
     }
-}
 
-impl<'a> Framebuffer<'a> {
-
-    pub fn shape_as_rect(&self) -> Rect {
-        Rect { x0: 0, y0: 0, w: self.w, h: self.h }
+    pub fn shape(&self) -> (u32, u32) {
+        (self.rect.w, self.rect.h)
     }
 
-    fn check_valid_point(&self, x: i64, y: i64) -> bool {
-        let (w, h): (i64, i64) = (self.w.into(), self.h.into());
-        return 0 <= x && x < w && 0 <= y && y < h;
+    pub fn shape_as_rect(&self) -> Rect {
+        self.rect.zero_origin()
+    }
+
+    fn to_data_coords(&self, x: i64, y: i64) -> (i64, i64) {
+        let Rect { x0, y0, .. } = self.rect;
+        (x+x0, y+y0)
     }
 
     fn get_offset(&self, x: i64, y: i64) -> Option<usize> {
-        if self.check_valid_point(x, y) {
-            Some((y as u32 * self.w + x as u32) as usize)
-        } else {
-            None
+
+        let (x, y) = self.to_data_coords(x, y);
+
+        match self.rect.check_contains_point(x, y) {
+            true => Some((y as u32 * self.data_w + x as u32) as usize),
+            false => None,
         }
-        
     }
 
     pub fn get_pixel(&self, x: i64, y: i64) -> Option<Color> {
@@ -248,7 +249,7 @@ impl<'a> Framebuffer<'a> {
 
     pub fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color) {
 
-        let (w, h): (i64, i64) = (self.w.into(), self.h.into());
+        let (w, h): (i64, i64) = (self.rect.w.into(), self.rect.h.into());
         let line_w: i64 = line_w.into();
 
         if y < 0 || y >= h || line_w == 0 { return }

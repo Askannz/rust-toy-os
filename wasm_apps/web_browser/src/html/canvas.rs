@@ -143,7 +143,7 @@ fn draw_tile_border(tile_fb: &mut Framebuffer) {
     const THICKNESS: u32 = 2;
     const COLOR: Color = Color::RED;
 
-    let (w, h) = (tile_fb.w, tile_fb.h);
+    let (w, h) = tile_fb.shape();
 
     let r_top = Rect { x0: 0, y0: 0, w, h: THICKNESS };
     let r_left = Rect { x0: 0, y0: 0, w: THICKNESS, h };

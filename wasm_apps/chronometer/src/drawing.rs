@@ -14,8 +14,10 @@ pub fn draw_chrono(fb: &mut Framebuffer, time: f64) {
 
     let angle = (time % DIVIDER) / DIVIDER  * 2.0 * PI;
 
-    let x0 = fb.w as f64 / 2.0;
-    let y0 = fb.h as f64 / 2.0;
+    let (fb_w, fb_h) = fb.shape();
+
+    let x0 = fb_w as f64 / 2.0;
+    let y0 = fb_h as f64 / 2.0;
 
     let p0x = (x0 + HAND_LEN * angle.cos()).round();
     let p0y = (y0 + HAND_LEN * angle.sin()).round();

@@ -54,7 +54,8 @@ fn fill_half_triangle(
 
 pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
 
-    let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb.w as u32, h: fb.h as u32});
+    let (fb_w, fb_h) = fb.shape();
+    let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb_w, h: fb_h});
 
     if let Some(Rect { x0, y0, w, h }) = rect {
         let h: i64 = h.into();
@@ -66,7 +67,8 @@ pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
 
 pub fn blend_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
 
-    let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb.w as u32, h: fb.h as u32});
+    let (fb_w, fb_h) = fb.shape();
+    let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb_w, h: fb_h});
 
     if let Some(Rect { x0, y0, w, h }) = rect {
         let (w, h): (i64, i64) = (w.into(), h.into());

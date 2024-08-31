@@ -13,7 +13,7 @@ struct BufferCopyRenderer<'a> {
 impl<'a> TileRenderer for BufferCopyRenderer<'a> {
 
     fn shape(&self) -> (u32, u32) {
-        (self.src_fb.w, self.src_fb.h)
+        self.src_fb.shape()
     }
 
     fn render(&self, context: &mut TileRenderContext) {

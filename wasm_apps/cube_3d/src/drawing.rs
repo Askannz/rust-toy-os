@@ -84,8 +84,10 @@ fn rotate(poly: &mut Quad, axis: Axis, angle: f32) {
 
 fn rasterize(fb: &mut Framebuffer, geometry: &[Quad; NB_QUADS]) {
 
-    let w = fb.w as f32;
-    let h = fb.h as f32;
+    let (fb_w, fb_h) = fb.shape();
+
+    let w = fb_w as f32;
+    let h = fb_h as f32;
 
     geometry_to_screen_space(w, h, geometry)
         .iter()

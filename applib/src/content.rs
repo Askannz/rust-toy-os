@@ -1,7 +1,14 @@
 use core::hash::Hash;
+use super::hash::compute_hash;
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub struct ContentId(pub u64);
+
+impl ContentId {
+    pub fn from_hash<T: Hash>(val: T) -> Self {
+        Self(compute_hash(val))
+    }
+}
 
 #[derive(Debug)]
 pub struct TrackedContent<P: UuidProvider, T> {

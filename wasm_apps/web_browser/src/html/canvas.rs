@@ -100,33 +100,24 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
 
         for tile_region in regions.iter() {
 
-            let tile_content_id = ContentId(compute_hash((
+            let tile_content_id = ContentId::from_hash((
                 &tile_region.tile_rect,
                 self.layout.get_id(),
-            )));
+            ));
 
             let tile_fb = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
                 let mut tile_fb = Framebuffer::new_owned(tile_region.tile_rect.w, tile_region.tile_rect.h);
-                let tile_shape_rect = tile_fb.shape_as_rect();
-                render_html(&mut tile_fb, &tile_shape_rect, self.layout.as_ref(), &tile_region.tile_rect);
-                //tile_fb.fill(Color::from_u32(tile_content_id.0 as u32));
+                render_html(&mut tile_fb, self.layout.as_ref(), &tile_region.tile_rect);
                 draw_tile_border(&mut tile_fb);
                 tile_fb
             });
 
-            let Rect { x0: tile_x0, y0: tile_y0, w: tile_w, h: tile_h } = tile_region.tile_rect;
+            let Rect { x0: tile_x0, y0: tile_y0, .. } = tile_region.tile_rect;
             let Rect { x0: reg_x0, y0: reg_y0, w: reg_w, h: reg_h } = tile_region.region_rect;
 
             let tile_src_rect = Rect {
                 x0: reg_x0 - tile_x0,
                 y0: reg_y0 - tile_y0,
-                w: reg_w,
-                h: reg_h,
-            };
-
-            let tile_dst_rect = Rect {
-                x0: reg_x0 - src_rect.x0,
-                y0: reg_y0 - src_rect.y0,
                 w: reg_w,
                 h: reg_h,
             };
@@ -145,7 +136,7 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
 
 fn draw_tile_border<F: FbViewMut>(tile_fb: &mut F) {
 
-    const THICKNESS: u32 = 2;
+    const THICKNESS: u32 = 1;
     const COLOR: Color = Color::RED;
 
     let (w, h) = tile_fb.shape();

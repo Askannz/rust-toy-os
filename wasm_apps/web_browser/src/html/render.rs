@@ -4,16 +4,15 @@ use applib::drawing::text::draw_str;
 
 use super::layout::{LayoutNode, NodeData};
 
-pub fn render_html<F: FbViewMut>(dst_fb: &mut F, dst_rect: &Rect, layout: &LayoutNode, src_rect: &Rect) {
+pub fn render_html<F: FbViewMut>(dst_fb: &mut F, layout: &LayoutNode, src_rect: &Rect) {
 
     let first_node = layout;
-    draw_node(dst_fb, dst_rect, first_node, src_rect)
+    draw_node(dst_fb, first_node, src_rect)
 }
 
 
-fn draw_node<F: FbViewMut>(dst_fb: &mut F, dst_rect: &Rect, node: &LayoutNode, src_rect: &Rect) {
+fn draw_node<F: FbViewMut>(dst_fb: &mut F, node: &LayoutNode, src_rect: &Rect) {
 
-    let Rect { x0: dst_x0, y0: dst_y0, .. } = *dst_rect;
     let Rect { x0: ox, y0: oy, .. } = *src_rect;
 
     let node_rect = &node.rect;
@@ -24,8 +23,8 @@ fn draw_node<F: FbViewMut>(dst_fb: &mut F, dst_rect: &Rect, node: &LayoutNode, s
     };
 
     let abs_rect = Rect {
-        x0: inter_rect.x0 - ox + dst_x0,
-        y0: inter_rect.y0 - oy + dst_y0,
+        x0: inter_rect.x0 - ox,
+        y0: inter_rect.y0 - oy,
         w: inter_rect.w,
         h: inter_rect.h,
     };
@@ -46,7 +45,7 @@ fn draw_node<F: FbViewMut>(dst_fb: &mut F, dst_rect: &Rect, node: &LayoutNode, s
             }
 
             for child in children.iter() {
-                draw_node(dst_fb, dst_rect, child, src_rect);
+                draw_node(dst_fb, child, src_rect);
             }
         }
     }

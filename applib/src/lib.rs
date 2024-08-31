@@ -2,6 +2,8 @@
 
 extern crate alloc;
 
+use core::borrow::BorrowMut;
+
 use zune_png::PngDecoder;
 
 pub mod input;
@@ -92,23 +94,6 @@ impl Rect {
             xb0 >= xa0 && xb1 <= xa1 &&
             yb0 >= ya0 && yb1 <= ya1
     }
-    // pub fn intersection(&self, other: &Rect) -> Option<Rect> {
-
-    //     let [xa0, ya0, xa1, ya1] = self.as_xyxy();
-    //     let [xb0, yb0, xb1, yb1] = other.as_xyxy();
-
-    //     let x0 = i64::max(xa0, xb0);
-    //     let y0 = i64::max(ya0, yb0);
-
-    //     let x1 = i64::min(xa1, xb1);
-    //     let y1 = i64::min(ya1, yb1);
-
-    //     if x0 <= x1 && y0 <= y1 {
-    //         Some(Rect { x0, y0, w: (x1-x0+1) as u32, h: (y1-y0+1) as u32 })
-    //     } else {
-    //         None
-    //     }
-    // }
 
     pub fn intersection(&self, other: &Rect) -> Option<Rect> {
 
@@ -222,6 +207,20 @@ impl<'a> Framebuffer<'a> {
 
     pub fn shape_as_rect(&self) -> Rect {
         self.rect.zero_origin()
+    }
+
+    pub fn subregion<'b>(&'b mut self, rect: &Rect) -> Framebuffer<'b> {
+
+        let Rect { x0, y0, w, h } = *rect;
+        let (x0, y0) = self.to_data_coords(x0, y0);
+
+        Framebuffer {
+            data: ManagedSlice::Borrowed(self.data.borrow_mut()),
+            data_w: self.data_w,
+            data_h: self.data_h,
+            rect: Rect { x0, y0, w, h }
+        }
+
     }
 
     fn to_data_coords(&self, x: i64, y: i64) -> (i64, i64) {

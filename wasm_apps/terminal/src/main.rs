@@ -134,27 +134,27 @@ struct ConsoleRenderer {
     formatted: FormattedRichText,
 }
 
-impl<F: FbViewMut> uitk::TileRenderer<F> for ConsoleRenderer {
+impl uitk::TileRenderer for ConsoleRenderer {
 
     fn shape(&self) -> (u32, u32) {
        let FormattedRichText { w, h, .. } = self.formatted;
        (w, h)
     }
 
-    fn render(&self, context: &mut uitk::TileRenderContext<F>) {
+    fn render(&self, context: &mut uitk::TileRenderContext) {
 
-        let uitk::TileRenderContext { dst_fb, dst_rect, src_rect, .. } = context;
+        let uitk::TileRenderContext { dst_fb, src_rect, .. } = context;
 
-        let Rect { x0: dst_x0, y0: dst_y0, h: dst_h, w: dst_w } = *dst_rect;
         let Rect { x0: ox, y0: oy, .. } = *src_rect;
-    
-        let src_rect = Rect { x0: *ox, y0: *oy, w: *dst_w, h: *dst_h };
+        let Rect {w: dst_w, h: dst_h, .. } = dst_fb.shape_as_rect();
+
+        let src_rect = Rect { x0: *ox, y0: *oy, w: dst_w, h: dst_h };
     
         let mut y = 0;
         for line in self.formatted.lines.iter() {
     
             if y >= src_rect.y0 && y + (line.h as i64) <= src_rect.y0 + (src_rect.h as i64) {
-                draw_rich_slice(*dst_fb, &line.chars, *dst_x0, dst_y0 + y - oy);
+                draw_rich_slice(*dst_fb, &line.chars, 0, y - oy);
             }
             
             y += line.h as i64;

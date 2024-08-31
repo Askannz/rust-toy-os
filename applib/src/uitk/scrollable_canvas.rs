@@ -10,17 +10,16 @@ struct BufferCopyRenderer<'a, F: FbView> {
     src_fb: &'a F,
 }
 
-impl<'a, F1: FbView, F2: FbViewMut> TileRenderer<F2> for BufferCopyRenderer<'a, F1> {
+impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
 
     fn shape(&self) -> (u32, u32) {
         self.src_fb.shape()
     }
 
-    fn render(&self, context: &mut TileRenderContext<F2>) {
+    fn render(&self, context: &mut TileRenderContext) {
         context.dst_fb.copy_from_fb(
-            self.src_fb,
-            context.src_rect,
-            context.dst_rect,
+            &self.src_fb.subregion(&context.src_rect),
+            (0, 0),
             false
         );
     }

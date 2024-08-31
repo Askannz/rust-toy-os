@@ -219,7 +219,7 @@ impl WasmApp {
                 Framebuffer::new(fb_data, w, h)
             };
 
-            system_fb.copy_from_fb(&wasm_fb, &wasm_fb.shape_as_rect(), &win_rect, false);
+            system_fb.copy_from_fb(&wasm_fb, (win_rect.x0, win_rect.y0), false);
         }
     }
 }

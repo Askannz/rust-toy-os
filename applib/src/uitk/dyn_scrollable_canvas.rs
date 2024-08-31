@@ -3,7 +3,7 @@ use alloc::collections::BTreeMap;
 use crate::content::ContentId;
 
 use crate::input::{InputEvent, InputState};
-use crate::{Framebuffer, OwnedPixels, FbViewMut};
+use crate::{Framebuffer, OwnedPixels, FbViewMut, BorrowedMutPixels};
 use crate::Rect;
 use crate::Color;
 use crate::drawing::primitives::draw_rect;
@@ -28,21 +28,20 @@ impl TileCache {
     }
 }
 
-pub trait TileRenderer<F: FbViewMut> {
+pub trait TileRenderer {
 
     fn shape(&self) -> (u32, u32);
-    fn render(&self, context: &mut TileRenderContext<F>);
+    fn render(&self, context: &mut TileRenderContext);
 }
 
-pub struct TileRenderContext<'a, F: FbViewMut> {
-    pub dst_fb: &'a mut F,
-    pub dst_rect: &'a Rect,
+pub struct TileRenderContext<'a> {
+    pub dst_fb: &'a mut Framebuffer<BorrowedMutPixels<'a>>,
     pub src_rect: &'a Rect,
     pub tile_cache: &'a mut TileCache,
 }
 
 
-pub fn dyn_scrollable_canvas<F: FbViewMut, T: TileRenderer<F>>(
+pub fn dyn_scrollable_canvas<F: FbViewMut, T: TileRenderer>(
     tile_cache: &mut TileCache,
     dst_fb: &mut F,
     dst_rect: &Rect,
@@ -81,8 +80,7 @@ pub fn dyn_scrollable_canvas<F: FbViewMut, T: TileRenderer<F>>(
     };
 
     renderer.render(&mut TileRenderContext {
-        dst_fb,
-        dst_rect,
+        dst_fb: &mut dst_fb.subregion_mut(dst_rect),
         src_rect,
         tile_cache,
     });

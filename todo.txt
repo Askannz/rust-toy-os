@@ -1,5 +1,4 @@
 * Web browser: incremental renderer
-* Caps on/off in InputState
 * make it pretty (UI color palette)
 * convenience macros for wasm apps
 

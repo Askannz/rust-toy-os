@@ -221,10 +221,11 @@ pub trait FbView {
 }
 
 pub trait FbViewMut: FbView {
+    fn subregion_mut(&mut self, rect: &Rect) -> Framebuffer<BorrowedMutPixels>;
     fn set_pixel(&mut self, x: i64, y: i64, color: Color);
     fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color);
     fn fill(&mut self, color: Color);
-    fn copy_from_fb<F1: FbView>(&mut self, src: &F1, src_rect: &Rect, dst_rect: &Rect, blend: bool);
+    fn copy_from_fb<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool);
 
     fn get_data_mut(&mut self) -> &mut [u32];
     fn get_line_mut<'b>(&'b mut self, x: i64, line_w: u32, y: i64) -> FbLine<'b>;
@@ -342,6 +343,19 @@ impl<T: FbData> FbView for Framebuffer<T> {
 
 impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
 
+    fn subregion_mut(&mut self, rect: &Rect) -> Framebuffer<BorrowedMutPixels> {
+
+        let Rect { x0, y0, w, h } = *rect;
+        let (x0, y0) = self.to_data_coords(x0, y0);
+
+        Framebuffer {
+            data: BorrowedMutPixels(self.data.as_mut_slice()),
+            data_w: self.data_w,
+            data_h: self.data_h,
+            rect: Rect { x0, y0, w, h }
+        }
+    }
+
     fn set_pixel(&mut self, x: i64, y: i64, color: Color) {
         let offset = self.get_offset_region_coords(x, y);
         let data = self.data.as_mut_slice();
@@ -393,7 +407,16 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
         self.data.as_mut_slice()
     }
 
-    fn copy_from_fb<F1: FbView>(&mut self, src: &F1, src_rect: &Rect, dst_rect: &Rect, blend: bool) {
+    fn copy_from_fb<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool) {
+
+        let src_rect = src.shape_as_rect();
+        let dst_rect = {
+            let mut r = self.shape_as_rect();
+            let (x, y) = dst;
+            r.x0 = x;
+            r.y0 = y;
+            r
+        };
 
         let (rect_a, rect_b) =  {
 

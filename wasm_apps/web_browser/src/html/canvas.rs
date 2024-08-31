@@ -79,16 +79,16 @@ struct HtmlRenderer<'a> {
     layout: &'a TrackedContent<TimeUuidProvider, LayoutNode>,
 }
 
-impl<'a, F: FbViewMut> uitk::TileRenderer<F> for HtmlRenderer<'a> {
+impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
 
     fn shape(&self) -> (u32, u32) {
        let Rect { w, h, .. } = self.layout.as_ref().rect;
        (w, h)
     }
 
-    fn render(&self, context: &mut uitk::TileRenderContext<F>) {
+    fn render(&self, context: &mut uitk::TileRenderContext) {
 
-        let uitk::TileRenderContext { dst_fb, dst_rect, src_rect, tile_cache, .. } = context;
+        let uitk::TileRenderContext { dst_fb, src_rect, tile_cache, .. } = context;
 
         let tile_w = src_rect.w;
         let tile_h = src_rect.h;
@@ -114,7 +114,6 @@ impl<'a, F: FbViewMut> uitk::TileRenderer<F> for HtmlRenderer<'a> {
                 tile_fb
             });
 
-            let Rect { x0: dst_x0, y0: dst_y0, .. } = dst_rect;
             let Rect { x0: tile_x0, y0: tile_y0, w: tile_w, h: tile_h } = tile_region.tile_rect;
             let Rect { x0: reg_x0, y0: reg_y0, w: reg_w, h: reg_h } = tile_region.region_rect;
 
@@ -126,13 +125,19 @@ impl<'a, F: FbViewMut> uitk::TileRenderer<F> for HtmlRenderer<'a> {
             };
 
             let tile_dst_rect = Rect {
-                x0: dst_x0 + reg_x0 - src_rect.x0,
-                y0: dst_y0 + reg_y0 - src_rect.y0,
+                x0: reg_x0 - src_rect.x0,
+                y0: reg_y0 - src_rect.y0,
                 w: reg_w,
                 h: reg_h,
             };
 
-            dst_fb.copy_from_fb(tile_fb, &tile_src_rect, &tile_dst_rect, false);
+            let (dst_x0, dst_y0) = (reg_x0 - src_rect.x0, reg_y0 - src_rect.y0,);
+
+            dst_fb.copy_from_fb(
+                &tile_fb.subregion(&tile_src_rect),
+                (dst_x0, dst_y0),
+                false
+            );
 
         }
     }

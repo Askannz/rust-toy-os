@@ -39,10 +39,8 @@ pub fn button<F: FbViewMut>(config: &ButtonConfig, fb: &mut F, input_state: &Inp
         let (icon_w, icon_h) = icon.shape();
         let icon_x0 = x0 + x_padding;
         let icon_y0 = y0 + i64::max(0, (h - i64::from(icon_h)) / 2);
-        let src_rect = icon.shape_as_rect();
-        let dst_rect = Rect { x0: icon_x0, y0: icon_y0, w: icon_w, h: icon_h };
         text_offset_x = icon_w as i64 + x_padding;
-        fb.copy_from_fb(icon, &src_rect, &dst_rect, true);
+        fb.copy_from_fb(icon, (icon_x0, icon_y0), true);
     }
 
     let &Font { char_h, .. } = config.font;

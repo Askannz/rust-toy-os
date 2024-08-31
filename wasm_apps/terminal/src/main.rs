@@ -146,20 +146,24 @@ impl uitk::TileRenderer for ConsoleRenderer {
         let uitk::TileRenderContext { dst_fb, src_rect, .. } = context;
 
         let Rect { x0: ox, y0: oy, .. } = *src_rect;
-        let Rect {w: dst_w, h: dst_h, .. } = dst_fb.shape_as_rect();
 
-        let src_rect = Rect { x0: *ox, y0: *oy, w: dst_w, h: dst_h };
-    
+        // TODO
+        if *ox != 0 {
+            unimplemented!()
+        }
+
         let mut y = 0;
         for line in self.formatted.lines.iter() {
+
+            // Bounding box of line in source
+            let line_rect = Rect { x0: 0, y0: y, w: line.w, h: line.h };
     
-            if y >= src_rect.y0 && y + (line.h as i64) <= src_rect.y0 + (src_rect.h as i64) {
+            if src_rect.intersection(&line_rect).is_some() {
                 draw_rich_slice(*dst_fb, &line.chars, 0, y - oy);
             }
             
             y += line.h as i64;
         }
-
     }
 }
 

@@ -8,7 +8,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use guestlib::FramebufferHandle;
 use guestlib::{WasmLogger, TimeUuidProvider};
-use applib::{Color, Framebuffer, Rect};
+use applib::{Color, Framebuffer, Rect, FbView, FbViewMut, BorrowedMutPixels};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP, InputState};
 use applib::drawing::text::{format_rich_lines, draw_rich_slice, Font, FormattedRichText, RichText, HACK_15};
@@ -27,12 +27,12 @@ struct EvalResult {
 static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
-struct AppState<'a> {
+struct AppState {
     fb_handle: FramebufferHandle,
     input_buffer: TrackedContent<TimeUuidProvider, String>,
     console_buffer: TrackedContent<TimeUuidProvider, Vec<EvalResult>>,
 
-    tile_cache: uitk::TileCache<'a>,
+    tile_cache: uitk::TileCache,
     scroll_offsets: (i64, i64),
     dragging: bool,
 
@@ -110,7 +110,7 @@ pub fn step() {
     );
 
     if autoscroll {
-        let (_max_w, max_h) = renderer.shape();
+        let max_h = renderer.formatted.h;
         uitk::set_autoscroll(&rect_console, max_h, &mut state.scroll_offsets);
     }
 
@@ -134,14 +134,14 @@ struct ConsoleRenderer {
     formatted: FormattedRichText,
 }
 
-impl uitk::TileRenderer for ConsoleRenderer {
+impl<F: FbViewMut> uitk::TileRenderer<F> for ConsoleRenderer {
 
     fn shape(&self) -> (u32, u32) {
        let FormattedRichText { w, h, .. } = self.formatted;
        (w, h)
     }
 
-    fn render(&self, context: &mut uitk::TileRenderContext) {
+    fn render(&self, context: &mut uitk::TileRenderContext<F>) {
 
         let uitk::TileRenderContext { dst_fb, dst_rect, src_rect, .. } = context;
 
@@ -154,7 +154,7 @@ impl uitk::TileRenderer for ConsoleRenderer {
         for line in self.formatted.lines.iter() {
     
             if y >= src_rect.y0 && y + (line.h as i64) <= src_rect.y0 + (src_rect.h as i64) {
-                draw_rich_slice(dst_fb, &line.chars, *dst_x0, dst_y0 + y - oy);
+                draw_rich_slice(*dst_fb, &line.chars, *dst_x0, dst_y0 + y - oy);
             }
             
             y += line.h as i64;

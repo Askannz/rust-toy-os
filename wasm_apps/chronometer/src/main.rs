@@ -3,7 +3,7 @@ extern crate alloc;
 use core::cell::OnceCell;
 use alloc::format;
 use guestlib::FramebufferHandle;
-use applib::Color;
+use applib::{Color, FbViewMut};
 use applib::drawing::text::{draw_str, DEFAULT_FONT};
 
 mod drawing;

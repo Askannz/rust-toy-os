@@ -1,22 +1,22 @@
 use crate::input::{InputEvent, InputState};
-use crate::Framebuffer;
+use crate::{FbView, FbViewMut, Framebuffer};
 use crate::Rect;
 use crate::Color;
 use crate::drawing::primitives::draw_rect;
 
 use super::{TileRenderer, TileRenderContext, dyn_scrollable_canvas, TileCache};
 
-struct BufferCopyRenderer<'a> {
-    src_fb: &'a Framebuffer<'a>,
+struct BufferCopyRenderer<'a, F: FbView> {
+    src_fb: &'a F,
 }
 
-impl<'a> TileRenderer for BufferCopyRenderer<'a> {
+impl<'a, F1: FbView, F2: FbViewMut> TileRenderer<F2> for BufferCopyRenderer<'a, F1> {
 
     fn shape(&self) -> (u32, u32) {
         self.src_fb.shape()
     }
 
-    fn render(&self, context: &mut TileRenderContext) {
+    fn render(&self, context: &mut TileRenderContext<F2>) {
         context.dst_fb.copy_from_fb(
             self.src_fb,
             context.src_rect,
@@ -26,10 +26,10 @@ impl<'a> TileRenderer for BufferCopyRenderer<'a> {
     }
 }
 
-pub fn scrollable_canvas(
-    dst_fb: &mut Framebuffer,
+pub fn scrollable_canvas<F1: FbView, F2: FbViewMut>(
+    dst_fb: &mut F2,
     dst_rect: &Rect,
-    src_fb: &Framebuffer,
+    src_fb: &F1,
     offsets: &mut (i64, i64),
     input_state: &InputState,
     dragging: &mut bool,

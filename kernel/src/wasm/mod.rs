@@ -15,7 +15,7 @@ use smoltcp::wire::{Ipv4Address};
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext, Memory};
 
 
-use applib::{SystemState, Framebuffer, Rect};
+use applib::{FbViewMut, Framebuffer, Rect, SystemState, FbView};
 
 use crate::network::TcpStack;
 use crate::time::SystemClock;
@@ -182,7 +182,7 @@ pub struct WasmApp {
 }
 
 impl WasmApp {
-    pub fn step(&mut self, system_state: &SystemState, system_fb: &mut Framebuffer, win_rect: &Rect) {
+    pub fn step<F: FbViewMut>(&mut self, system_state: &SystemState, system_fb: &mut F, win_rect: &Rect) {
 
         self.store.set_fuel(STEP_FUEL).unwrap();
 

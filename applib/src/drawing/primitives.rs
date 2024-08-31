@@ -1,9 +1,9 @@
-use crate::{Framebuffer, Color, Rect, blend_colors};
+use crate::{Framebuffer, Color, Rect, blend_colors, FbViewMut};
 
 #[derive(Debug, Clone)]
 pub struct ScreenPoint { pub x: i64, pub y: i64 }
 
-pub fn draw_triangle(fb: &mut Framebuffer, tri: &[ScreenPoint; 3], color: Color) {
+pub fn draw_triangle<F:FbViewMut>(fb: &mut F, tri: &[ScreenPoint; 3], color: Color) {
 
     let i = {
         if tri[0].y <= i64::min(tri[1].y, tri[2].y) { 0 }
@@ -26,8 +26,8 @@ pub fn draw_triangle(fb: &mut Framebuffer, tri: &[ScreenPoint; 3], color: Color)
 }
 
 #[inline]
-fn fill_half_triangle(
-    fb: &mut Framebuffer,
+fn fill_half_triangle<F:FbViewMut>(
+    fb: &mut F,
     left: (&ScreenPoint, &ScreenPoint), right: (&ScreenPoint, &ScreenPoint),
     range: (i64, i64),
     color: Color
@@ -52,7 +52,7 @@ fn fill_half_triangle(
     }
 }
 
-pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
+pub fn draw_rect<F:FbViewMut>(fb: &mut F, rect: &Rect, color: Color) {
 
     let (fb_w, fb_h) = fb.shape();
     let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb_w, h: fb_h});
@@ -65,7 +65,7 @@ pub fn draw_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
     }
 }
 
-pub fn blend_rect(fb: &mut Framebuffer, rect: &Rect, color: Color) {
+pub fn blend_rect<F:FbViewMut>(fb: &mut F, rect: &Rect, color: Color) {
 
     let (fb_w, fb_h) = fb.shape();
     let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb_w, h: fb_h});

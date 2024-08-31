@@ -1,17 +1,17 @@
-use applib::{Color, Rect, Framebuffer};
+use applib::{Color, Rect, Framebuffer, FbViewMut};
 use applib::drawing::primitives::{draw_rect, blend_rect};
 use applib::drawing::text::draw_str;
 
 use super::layout::{LayoutNode, NodeData};
 
-pub fn render_html(dst_fb: &mut Framebuffer, dst_rect: &Rect, layout: &LayoutNode, src_rect: &Rect) {
+pub fn render_html<F: FbViewMut>(dst_fb: &mut F, dst_rect: &Rect, layout: &LayoutNode, src_rect: &Rect) {
 
     let first_node = layout;
     draw_node(dst_fb, dst_rect, first_node, src_rect)
 }
 
 
-fn draw_node(dst_fb: &mut Framebuffer, dst_rect: &Rect, node: &LayoutNode, src_rect: &Rect) {
+fn draw_node<F: FbViewMut>(dst_fb: &mut F, dst_rect: &Rect, node: &LayoutNode, src_rect: &Rect) {
 
     let Rect { x0: dst_x0, y0: dst_y0, .. } = *dst_rect;
     let Rect { x0: ox, y0: oy, .. } = *src_rect;

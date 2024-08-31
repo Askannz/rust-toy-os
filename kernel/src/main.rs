@@ -13,7 +13,7 @@ use lazy_static::lazy_static;
 use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
 use uefi::table::boot::MemoryType;
 
-use applib::{Color, Rect, Framebuffer, SystemState, decode_png};
+use applib::{Color, Rect, Framebuffer, SystemState, decode_png, OwnedPixels, FbViewMut};
 use applib::input::{InputState, InputEvent};
 use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
@@ -45,7 +45,7 @@ struct AppDescriptor {
     launch_rect: Rect,
     name: &'static str,
     init_win_rect: Rect,
-    icon: Option<&'static Framebuffer<'static>>
+    icon: Option<&'static Framebuffer<OwnedPixels>>
 }
 
 struct App {
@@ -59,9 +59,9 @@ struct App {
 
 lazy_static! {
     static ref WALLPAPER: Vec<u8> = decode_png(include_bytes!("../../wallpaper.png"));
-    static ref CUBE_ICON: Framebuffer<'static> = Framebuffer::from_png(include_bytes!("../icons/cube.png"));
-    static ref CHRONO_ICON: Framebuffer<'static> = Framebuffer::from_png(include_bytes!("../icons/chronometer.png"));
-    static ref TERMINAL_ICON: Framebuffer<'static> = Framebuffer::from_png(include_bytes!("../icons/terminal.png"));
+    static ref CUBE_ICON: Framebuffer<OwnedPixels> = Framebuffer::from_png(include_bytes!("../icons/cube.png"));
+    static ref CHRONO_ICON: Framebuffer<OwnedPixels> = Framebuffer::from_png(include_bytes!("../icons/chronometer.png"));
+    static ref TERMINAL_ICON: Framebuffer<OwnedPixels> = Framebuffer::from_png(include_bytes!("../icons/terminal.png"));
 
     static ref APPLICATIONS: [AppDescriptor; 4] = [
         AppDescriptor {
@@ -203,7 +203,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
 }
 
-fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemState, applications: &mut Vec<App>) {
+fn update_apps<F: FbViewMut>(fb: &mut F, clock: &SystemClock, system_state: &SystemState, applications: &mut Vec<App>) {
 
     const ALPHA_SHADOW: u8 = 100;
 
@@ -296,7 +296,7 @@ fn update_apps(fb: &mut Framebuffer, clock: &SystemClock, system_state: &SystemS
     }
 }
 
-fn draw_cursor(fb: &mut Framebuffer, system_state: &SystemState) {
+fn draw_cursor<F: FbViewMut>(fb: &mut F, system_state: &SystemState) {
 
     const SIZE: u32 = 5;
     const BORDER: u32 = 1;
@@ -416,7 +416,7 @@ impl FpsManager {
         self.frame_start_t = clock.time();
     }
 
-    fn end_frame(&mut self, clock: &SystemClock, fb: &mut Framebuffer) {
+    fn end_frame<F: FbViewMut>(&mut self, clock: &SystemClock, fb: &mut F) {
 
         const SMOOTHING: f64 = 0.8;
 

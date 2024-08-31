@@ -1,5 +1,5 @@
 use core::cell::OnceCell;
-use applib::{Color, Framebuffer, Rect};
+use applib::{Color, Framebuffer, Rect, OwnedPixels, FbViewMut};
 use applib::uitk;
 use guestlib::FramebufferHandle;
 use guestlib::{WasmLogger};
@@ -10,9 +10,9 @@ use drawing::{draw_scene, Scene, load_scene};
 static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
-struct AppState<'a> {
+struct AppState {
     fb_handle: FramebufferHandle,
-    render_fb: Framebuffer<'a>,
+    render_fb: Framebuffer<OwnedPixels>,
     scroll_offsets: (i64, i64),
     dragging_sbar: bool,
     prev_pointer: Option<(i64, i64)>,

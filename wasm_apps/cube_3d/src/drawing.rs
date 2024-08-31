@@ -1,7 +1,7 @@
 extern crate alloc;
 
 use num_traits::Float;
-use applib::{Color, Framebuffer};
+use applib::{Color, Framebuffer, FbView, FbViewMut};
 use applib::drawing::primitives::{draw_triangle, ScreenPoint};
 
 const COLORS: [Color; 6] = [
@@ -42,7 +42,7 @@ pub fn load_scene() -> Scene {
     Scene(geometry)
 }
 
-pub fn draw_scene(fb: &mut Framebuffer, scene: &Scene, xf: f32, yf: f32) {
+pub fn draw_scene<F: FbViewMut>(fb: &mut F, scene: &Scene, xf: f32, yf: f32) {
 
     let mut geometry = scene.0.clone();
 
@@ -82,7 +82,7 @@ fn rotate(poly: &mut Quad, axis: Axis, angle: f32) {
     poly.iter_mut().for_each(|p| *p = matmul(&mat, p));
 }
 
-fn rasterize(fb: &mut Framebuffer, geometry: &[Quad; NB_QUADS]) {
+fn rasterize<F: FbViewMut>(fb: &mut F, geometry: &[Quad; NB_QUADS]) {
 
     let (fb_w, fb_h) = fb.shape();
 
@@ -98,7 +98,7 @@ fn rasterize(fb: &mut Framebuffer, geometry: &[Quad; NB_QUADS]) {
         });
 }
 
-fn rasterize_quad(fb: &mut Framebuffer, quad: &IntQuad, color: Color) {
+fn rasterize_quad<F: FbViewMut>(fb: &mut F, quad: &IntQuad, color: Color) {
 
     if get_direction(quad) < 0 { return; }
 

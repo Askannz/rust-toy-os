@@ -8,7 +8,7 @@ use alloc::vec;
 use alloc::format;
 use applib::content::ContentId;
 use log::{Log, Metadata, Record};
-use applib::{SystemState, Framebuffer, Rect};
+use applib::{SystemState, Framebuffer, Rect, BorrowedMutPixels};
 use applib::content::UuidProvider;
 
 #[global_allocator]
@@ -45,14 +45,14 @@ pub struct FramebufferHandle {
 }
 
 impl FramebufferHandle {
-    pub fn as_framebuffer<'a>(&'a mut self) -> Framebuffer<'a> {
+    pub fn as_framebuffer(&mut self) -> Framebuffer<BorrowedMutPixels> {
         let FramebufferHandle { framebuffer_ptr, w, h } = *self;
 
         let fb_data = unsafe {
             core::slice::from_raw_parts_mut(framebuffer_ptr, (w*h) as usize)
         };
-    
-        Framebuffer::new(fb_data, w, h)
+
+        Framebuffer::<BorrowedMutPixels>::new(fb_data, w, h)
     }
 }
 

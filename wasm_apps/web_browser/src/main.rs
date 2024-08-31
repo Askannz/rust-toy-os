@@ -13,7 +13,7 @@ use anyhow::Context;
 use guestlib::{FramebufferHandle, WasmLogger, TimeUuidProvider};
 use applib::{Color, Rect};
 
-use applib::Framebuffer;
+use applib::{Framebuffer, FbViewMut};
 use applib::uitk;
 use applib::input::{InputState, InputEvent};
 use applib::input::{Keycode, CHARMAP};
@@ -32,7 +32,7 @@ use html::canvas::html_canvas;
 static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
-struct AppState<'a> {
+struct AppState {
     fb_handle: FramebufferHandle,
 
     url_text: TrackedContent<TimeUuidProvider, String>,
@@ -41,7 +41,7 @@ struct AppState<'a> {
     ui_layout: UiLayout,
 
     buffer: Vec<u8>,
-    tile_cache: uitk::TileCache<'a>,
+    tile_cache: uitk::TileCache,
     webview_scroll_offsets: (i64, i64),
     webview_scroll_dragging: bool,
 

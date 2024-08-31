@@ -150,25 +150,101 @@ impl Rect {
     }
 }
 
-pub struct Framebuffer<'a> {
-    data: ManagedSlice<'a, u32>,
+pub trait FbData {
+    fn as_slice(&self) -> &[u32];
+}
+
+pub trait FbDataMut: FbData {
+    fn as_mut_slice(&mut self) -> &mut [u32];
+}
+
+pub struct OwnedPixels(Vec<u32>);
+pub struct BorrowedPixels<'a>(&'a [u32]);
+pub struct BorrowedMutPixels<'a>(&'a mut [u32]);
+
+impl FbData for OwnedPixels {
+    fn as_slice(&self) -> &[u32] {
+        self.0.as_slice()
+    }
+}
+impl<'a> FbData for BorrowedPixels<'a> {
+    fn as_slice(&self) -> &[u32] {
+        self.0
+    }
+}
+impl<'a> FbData for BorrowedMutPixels<'a> {
+    fn as_slice(&self) -> &[u32] {
+        self.0
+    }
+}
+
+impl FbDataMut for OwnedPixels {
+    fn as_mut_slice(&mut self) -> &mut [u32] {
+        self.0.as_mut_slice()
+    }
+}
+impl<'a> FbDataMut for BorrowedMutPixels<'a> {
+    fn as_mut_slice(&mut self) -> &mut [u32] {
+        self.0
+    }
+}
+
+pub struct Framebuffer<T> {
+    data: T,
     data_w: u32,
     data_h: u32,
     rect: Rect,
 }
 
-impl<'a> Framebuffer<'a> {
+pub struct FbLine<'a> {
+    data: &'a mut [u32],
+    x_skipped: u32,
+    x_total: u32,
+}
+
+impl<'a> FbLine<'a> {
+    fn fill(&mut self, color: Color) {
+        self.data.fill(color.0)
+    } 
+}
+
+pub trait FbView {
+    fn shape(&self) -> (u32, u32);
+    fn shape_as_rect(&self) -> Rect;
+    fn subregion(&self, rect: &Rect) -> Framebuffer<BorrowedPixels>;
+    fn get_pixel(&self, x: i64, y: i64) -> Option<Color>;
+
+    fn to_data_coords(&self, x: i64, y: i64) -> (i64, i64);
+    fn get_data(&self) -> &[u32];
+    fn get_offset_data_coords(&self, x: i64, y: i64) -> Option<usize>;
+    fn get_offset_region_coords(&self, x: i64, y: i64) -> Option<usize>;
+}
+
+pub trait FbViewMut: FbView {
+    fn set_pixel(&mut self, x: i64, y: i64, color: Color);
+    fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color);
+    fn fill(&mut self, color: Color);
+    fn copy_from_fb<F1: FbView>(&mut self, src: &F1, src_rect: &Rect, dst_rect: &Rect, blend: bool);
+
+    fn get_data_mut(&mut self) -> &mut [u32];
+    fn get_line_mut<'b>(&'b mut self, x: i64, line_w: u32, y: i64) -> FbLine<'b>;
+}
+
+
+impl<'a> Framebuffer<BorrowedMutPixels<'a>> {
+    pub fn new<'b>(data: &'b mut [u32], w: u32, h: u32) -> Framebuffer<BorrowedMutPixels<'b>> {
+        assert_eq!(data.len(), (w * h) as usize);
+        let rect = Rect { x0: 0, y0: 0, w, h };
+        Framebuffer { data: BorrowedMutPixels(data), data_w: w , data_h: h, rect }
+    }
+}
+
+impl Framebuffer<OwnedPixels> {
 
     pub fn new_owned(w: u32, h: u32) -> Self {
         let data = vec![0u32; (w * h) as usize];
         let rect = Rect { x0: 0, y0: 0, w, h };
-        Framebuffer { data: ManagedSlice::Owned(data), data_w: w , data_h: h, rect }
-    }
-
-    pub fn new(data: &'a mut [u32], w: u32, h: u32) -> Self {
-        assert_eq!(data.len(), (w * h) as usize);
-        let rect = Rect { x0: 0, y0: 0, w, h };
-        Framebuffer { data: ManagedSlice::Borrowed(data), data_w: w , data_h: h, rect }
+        Framebuffer { data: OwnedPixels(data), data_w: w , data_h: h, rect }
     }
 
     pub fn from_png(png_bytes: &[u8]) -> Self {
@@ -176,9 +252,9 @@ impl<'a> Framebuffer<'a> {
         let mut decoder =  PngDecoder::new(png_bytes);
         let decoded = decoder.decode().expect("Invalid PNG bitmap");
         let (w, h) = decoder.get_dimensions().unwrap();
-
+    
         let data_u8 = decoded.u8().unwrap();
-
+    
         let data_u32 = unsafe {
             assert_eq!(data_u8.len(), h * w * 4); // Requires an alpha channel
             let mut data_u8 = core::mem::ManuallyDrop::new(data_u8);
@@ -188,34 +264,39 @@ impl<'a> Framebuffer<'a> {
                 h * w
             )
         };
-
+    
         let (w, h) = (w as u32, h as u32);
-
+    
         let rect = Rect { x0: 0, y0: 0, w, h };
     
         Framebuffer {
-            data: ManagedSlice::Owned(data_u32),
+            data: OwnedPixels(data_u32),
             data_w: w,
             data_h: h,
             rect,
         }
     }
+}
 
-    pub fn shape(&self) -> (u32, u32) {
+
+
+impl<T: FbData> FbView for Framebuffer<T> {
+
+    fn shape(&self) -> (u32, u32) {
         (self.rect.w, self.rect.h)
     }
 
-    pub fn shape_as_rect(&self) -> Rect {
+    fn shape_as_rect(&self) -> Rect {
         self.rect.zero_origin()
     }
 
-    pub fn subregion<'b>(&'b mut self, rect: &Rect) -> Framebuffer<'b> {
+    fn subregion(&self, rect: &Rect) -> Framebuffer<BorrowedPixels> {
 
         let Rect { x0, y0, w, h } = *rect;
         let (x0, y0) = self.to_data_coords(x0, y0);
 
         Framebuffer {
-            data: ManagedSlice::Borrowed(self.data.borrow_mut()),
+            data: BorrowedPixels(self.data.as_slice()),
             data_w: self.data_w,
             data_h: self.data_h,
             rect: Rect { x0, y0, w, h }
@@ -223,45 +304,96 @@ impl<'a> Framebuffer<'a> {
 
     }
 
+    fn get_offset_region_coords(&self, x: i64, y: i64) -> Option<usize> {
+        let (x, y) = self.to_data_coords(x, y);
+        self.get_offset_data_coords(x, y)
+    }
+
+    fn get_pixel(&self, x: i64, y: i64) -> Option<Color> {
+        let data = self.data.as_slice();
+        self.get_offset_region_coords(x, y).map(|i| Color(data[i]))
+    }
+
+    fn get_data(&self) -> &[u32] {
+        self.data.as_slice()
+    }
+
     fn to_data_coords(&self, x: i64, y: i64) -> (i64, i64) {
         let Rect { x0, y0, .. } = self.rect;
         (x+x0, y+y0)
     }
 
-    fn get_offset(&self, x: i64, y: i64) -> Option<usize> {
+    fn get_offset_data_coords(&self, x: i64, y: i64) -> Option<usize> {
+
+        if x < 0 || y < 0 {
+            return None
+        }
+
+        let x = x as u32;
+        let y = y as u32;
+
+        if self.data_w <= x || self.data_h <= y {
+            return None
+        }
+
+        Some((y * self.data_w + x) as usize)
+    }
+}
+
+impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
+
+    fn set_pixel(&mut self, x: i64, y: i64, color: Color) {
+        let offset = self.get_offset_region_coords(x, y);
+        let data = self.data.as_mut_slice();
+        offset.map(|i| data[i] = color.0);
+    }
+
+    fn get_line_mut<'b>(&'b mut self, x: i64, line_w: u32, y: i64) -> FbLine<'b> {
 
         let (x, y) = self.to_data_coords(x, y);
 
-        match self.rect.check_contains_point(x, y) {
-            true => Some((y as u32 * self.data_w + x as u32) as usize),
-            false => None,
+        if line_w == 0 || y < 0 || y >= self.data_h as i64 { 
+            return FbLine {
+                data: &mut [],
+                x_skipped: 0,
+                x_total: 0,
+            }
+        }
+
+        let (x1, x2) = (x, x + line_w as i64 -  1);
+
+        let x1 = i64::max(0, x1);
+        let x2 = i64::min(self.data_w as i64, x2);
+
+        let i1 = self.get_offset_data_coords(x1, y).unwrap();
+        let i2 = self.get_offset_data_coords(x2, y).unwrap();
+        let data = self.data.as_mut_slice();
+        let line_slice = &mut data[i1..i2+1];
+
+        FbLine {
+            data: line_slice,
+            x_skipped: (x1 - x) as u32,
+            x_total: line_w,
+        }
+
+    }
+
+    fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color) {
+        self.get_line_mut(x, line_w, y).fill(color);
+    }
+
+    fn fill(&mut self, color: Color) {
+        let (w, h) = self.shape();
+        for y in 0..h {
+            self.fill_line(0, w, y.into(), color)
         }
     }
 
-    pub fn get_pixel(&self, x: i64, y: i64) -> Option<Color> {
-        self.get_offset(x, y).map(|i| Color(self.data[i]))
+    fn get_data_mut(&mut self) -> &mut [u32] {
+        self.data.as_mut_slice()
     }
 
-    pub fn set_pixel(&mut self, x: i64, y: i64, color: Color) {
-        self.get_offset(x, y).map(|i| self.data[i] = color.0);
-    }
-
-    pub fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color) {
-
-        let (w, h): (i64, i64) = (self.rect.w.into(), self.rect.h.into());
-        let line_w: i64 = line_w.into();
-
-        if y < 0 || y >= h || line_w == 0 { return }
-
-        let x1 = i64::max(x, 0);
-        let x2 = i64::min(x+line_w-1, w-1);
-
-        let i1 = self.get_offset(x1, y).unwrap();
-        let i2 = self.get_offset(x2, y).unwrap();
-        self.data[i1..=i2].fill(color.0);
-    }
-
-    pub fn copy_from_fb(&mut self, src: &Framebuffer, src_rect: &Rect, dst_rect: &Rect, blend: bool) {
+    fn copy_from_fb<F1: FbView>(&mut self, src: &F1, src_rect: &Rect, dst_rect: &Rect, blend: bool) {
 
         let (rect_a, rect_b) =  {
 
@@ -285,8 +417,8 @@ impl<'a> Framebuffer<'a> {
             let xa1 = rect_a.x0 + w - 1;
             let ya = rect_a.y0 + y;
 
-            let ia1 = src.get_offset(xa0, ya);
-            let ia2 = src.get_offset(xa1, ya);
+            let ia1 = src.get_offset_region_coords(xa0, ya);
+            let ia2 = src.get_offset_region_coords(xa1, ya);
 
             let (ia1, ia2) = match (ia1, ia2) {
                 (Some(ia1), Some(ia2)) => (ia1, ia2),
@@ -297,29 +429,28 @@ impl<'a> Framebuffer<'a> {
             let xb1 = rect_b.x0 + w - 1;
             let yb = rect_b.y0 + y;
 
-            let ib1 = self.get_offset(xb0, yb);
-            let ib2 = self.get_offset(xb1, yb);
+            let ib1 = self.get_offset_region_coords(xb0, yb);
+            let ib2 = self.get_offset_region_coords(xb1, yb);
 
             let (ib1, ib2) = match (ib1, ib2) {
                 (Some(ib1), Some(ib2)) => (ib1, ib2),
                 _ => continue,
             };
 
+            let src_data = src.get_data();
+            let dst_data = self.data.as_mut_slice();
+
             if blend {
-                self.data[ib1..=ib2].iter_mut()
+                dst_data[ib1..=ib2].iter_mut()
                     .enumerate()
                     .for_each(|(i, v_dst)| {
-                        let v_src = Color(src.data[ia1+i]);
+                        let v_src = Color(src_data[ia1+i]);
                         *v_dst = blend_colors(v_src, Color(*v_dst)).0;
                     });
             } else {
-                self.data[ib1..=ib2].copy_from_slice(&src.data[ia1..=ia2]);
+                dst_data[ib1..=ib2].copy_from_slice(&src_data[ia1..=ia2]);
             }
         }
-    }
-
-    pub fn fill(&mut self, color: Color) {
-        self.data.fill(color.0);
     }
 }
 

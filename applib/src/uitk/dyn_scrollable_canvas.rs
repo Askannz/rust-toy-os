@@ -3,7 +3,7 @@ use alloc::collections::BTreeMap;
 use crate::content::ContentId;
 
 use crate::input::{InputEvent, InputState};
-use crate::Framebuffer;
+use crate::{Framebuffer, OwnedPixels, FbViewMut};
 use crate::Rect;
 use crate::Color;
 use crate::drawing::primitives::draw_rect;
@@ -18,33 +18,33 @@ const SBAR_INNER_HOVER_COLOR: Color = Color::YELLOW;
 const SBAR_INNER_DRAGGING_COLOR: Color = Color::AQUA;
 
 
-pub struct TileCache<'a> {
-    pub tiles: BTreeMap<ContentId, Framebuffer<'a>>
+pub struct TileCache {
+    pub tiles: BTreeMap<ContentId, Framebuffer<OwnedPixels>>
 }
 
-impl<'a> TileCache<'a> {
+impl TileCache {
     pub fn new() -> Self {
         Self { tiles: BTreeMap::new() }
     }
 }
 
-pub trait TileRenderer {
+pub trait TileRenderer<F: FbViewMut> {
 
     fn shape(&self) -> (u32, u32);
-    fn render(&self, context: &mut TileRenderContext);
+    fn render(&self, context: &mut TileRenderContext<F>);
 }
 
-pub struct TileRenderContext<'a, 'b, 'c> {
-    pub dst_fb: &'a mut Framebuffer<'b>,
+pub struct TileRenderContext<'a, F: FbViewMut> {
+    pub dst_fb: &'a mut F,
     pub dst_rect: &'a Rect,
     pub src_rect: &'a Rect,
-    pub tile_cache: &'a mut TileCache<'c>,
+    pub tile_cache: &'a mut TileCache,
 }
 
 
-pub fn dyn_scrollable_canvas<T: TileRenderer>(
+pub fn dyn_scrollable_canvas<F: FbViewMut, T: TileRenderer<F>>(
     tile_cache: &mut TileCache,
-    dst_fb: &mut Framebuffer,
+    dst_fb: &mut F,
     dst_rect: &Rect,
     renderer: &T,
     offsets: &mut (i64, i64),

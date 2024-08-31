@@ -1,12 +1,12 @@
 use alloc::string::String;
-use crate::{Rect, Color, Framebuffer};
+use crate::{Rect, Color, Framebuffer, FbViewMut};
 use crate::drawing::text::{Font, draw_str, DEFAULT_FONT};
 use crate::drawing::primitives::draw_rect;
 
 
-pub fn progress_bar(
+pub fn progress_bar<F: FbViewMut>(
     config: &ProgressBarConfig,
-    fb: &mut Framebuffer,
+    fb: &mut F,
     progress: u64,
     text: &str,
 ) {

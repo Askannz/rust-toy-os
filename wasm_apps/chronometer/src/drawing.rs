@@ -1,5 +1,5 @@
 use num_traits::Float;
-use applib::{Color, Framebuffer};
+use applib::{Color, Framebuffer, FbViewMut};
 use applib::drawing::primitives::{ScreenPoint, draw_triangle};
 
 
@@ -10,7 +10,7 @@ const HAND_LEN: f64 = 80.0;
 
 const DIVIDER: f64 = 60_000.0;
 
-pub fn draw_chrono(fb: &mut Framebuffer, time: f64) {
+pub fn draw_chrono<F: FbViewMut>(fb: &mut F, time: f64) {
 
     let angle = (time % DIVIDER) / DIVIDER  * 2.0 * PI;
 

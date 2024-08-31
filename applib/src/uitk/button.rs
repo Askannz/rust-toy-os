@@ -1,12 +1,12 @@
 use alloc::borrow::ToOwned;
 use alloc::string::String;
-use crate::{Rect, Color, Framebuffer};
+use crate::{Rect, Color, Framebuffer, FbViewMut, FbView, OwnedPixels};
 use crate::input::InputState;
 use crate::drawing::text::{Font, draw_str, DEFAULT_FONT};
 use crate::drawing::primitives::draw_rect;
 
 
-pub fn button(config: &ButtonConfig, fb: &mut Framebuffer, input_state: &InputState) -> bool {
+pub fn button<F: FbViewMut>(config: &ButtonConfig, fb: &mut F, input_state: &InputState) -> bool {
 
     #[derive(PartialEq)]
     enum InteractionState { Idle, Hover, Clicked }
@@ -42,7 +42,7 @@ pub fn button(config: &ButtonConfig, fb: &mut Framebuffer, input_state: &InputSt
         let src_rect = icon.shape_as_rect();
         let dst_rect = Rect { x0: icon_x0, y0: icon_y0, w: icon_w, h: icon_h };
         text_offset_x = icon_w as i64 + x_padding;
-        fb.copy_from_fb(&icon, &src_rect, &dst_rect, true);
+        fb.copy_from_fb(icon, &src_rect, &dst_rect, true);
     }
 
     let &Font { char_h, .. } = config.font;
@@ -65,7 +65,7 @@ pub struct ButtonConfig {
     pub idle_color: Color,
     pub hover_color: Color,
     pub clicked_color: Color,
-    pub icon: Option<&'static Framebuffer<'static>>,
+    pub icon: Option<&'static Framebuffer<OwnedPixels>>,
     pub x_padding: u32,
 }
 

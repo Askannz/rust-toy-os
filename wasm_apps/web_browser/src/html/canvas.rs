@@ -1,6 +1,6 @@
 use applib::input::{InputEvent, InputState, PointerState};
 use applib::drawing::primitives::{draw_rect, blend_rect};
-use applib::Framebuffer;
+use applib::{Framebuffer, FbViewMut, FbView};
 use applib::Rect;
 use applib::Color;
 use applib::uitk::{self, TileRenderer};
@@ -11,9 +11,9 @@ use log::log;
 use super::layout::{LayoutNode, NodeData};
 use super::render::render_html;
 
-pub fn html_canvas<'a>(
+pub fn html_canvas<'a, F: FbViewMut>(
     tile_cache: &mut uitk::TileCache,
-    fb: &mut Framebuffer,
+    fb: &mut F,
     layout: &'a TrackedContent<TimeUuidProvider, LayoutNode>,
     dst_rect: &Rect,
     offsets: &mut (i64, i64),
@@ -79,14 +79,14 @@ struct HtmlRenderer<'a> {
     layout: &'a TrackedContent<TimeUuidProvider, LayoutNode>,
 }
 
-impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
+impl<'a, F: FbViewMut> uitk::TileRenderer<F> for HtmlRenderer<'a> {
 
     fn shape(&self) -> (u32, u32) {
        let Rect { w, h, .. } = self.layout.as_ref().rect;
        (w, h)
     }
 
-    fn render(&self, context: &mut uitk::TileRenderContext) {
+    fn render(&self, context: &mut uitk::TileRenderContext<F>) {
 
         let uitk::TileRenderContext { dst_fb, dst_rect, src_rect, tile_cache, .. } = context;
 
@@ -132,13 +132,13 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
                 h: reg_h,
             };
 
-            dst_fb.copy_from_fb(&tile_fb, &tile_src_rect, &tile_dst_rect, false);
+            dst_fb.copy_from_fb(tile_fb, &tile_src_rect, &tile_dst_rect, false);
 
         }
     }
 }
 
-fn draw_tile_border(tile_fb: &mut Framebuffer) {
+fn draw_tile_border<F: FbViewMut>(tile_fb: &mut F) {
 
     const THICKNESS: u32 = 2;
     const COLOR: Color = Color::RED;
@@ -161,7 +161,7 @@ impl<'a> HtmlRenderer<'a> {
 
     fn get_tiles(&self, tile_shape: (u32, u32)) -> Vec<Rect> {
 
-        let (cw, ch) = self.shape();
+        let Rect { w: cw, h: ch, .. } = self.layout.as_ref().rect;
         let (tile_w, tile_h) = tile_shape;
 
         let cw: i64 = cw.into();

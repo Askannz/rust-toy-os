@@ -3,7 +3,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::drawing::primitives::draw_rect;
-use crate::{Color, Framebuffer, Rect};
+use crate::{Color, Framebuffer, Rect, FbView, FbViewMut};
 use crate::input::{InputState, InputEvent};
 use crate::input::{Keycode, CHARMAP};
 use crate::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText, FormattedRichText, HACK_15};
@@ -98,9 +98,9 @@ pub fn string_input<P: UuidProvider>(buffer: &mut TrackedContent<P, String>, inp
 }
 
 
-pub fn editable_text<P: UuidProvider>(
+pub fn editable_text<P: UuidProvider, F: FbViewMut>(
     config: &EditableTextConfig,
-    fb: &mut Framebuffer,
+    fb: &mut F,
     buffer: &mut TrackedContent<P, String>,
     cursor: &mut usize,
     input_state: &InputState,
@@ -132,7 +132,7 @@ pub fn editable_text<P: UuidProvider>(
     }
 }
 
-pub fn render_rich_text(dst_fb: &mut Framebuffer, dst_rect: &Rect, formatted: &FormattedRichText, offsets: (i64, i64)) {
+pub fn render_rich_text<F: FbViewMut>(dst_fb: &mut F, dst_rect: &Rect, formatted: &FormattedRichText, offsets: (i64, i64)) {
 
     let Rect { x0: dst_x0, y0: dst_y0, h: dst_h, w: dst_w } = *dst_rect;
     let (ox, oy) = offsets;

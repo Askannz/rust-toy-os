@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use alloc::string::String;
 use lazy_static::lazy_static;
-use crate::{Framebuffer, Color, Rect, blend_colors, decode_png};
+use crate::{Framebuffer, Color, Rect, blend_colors, decode_png, FbView, FbViewMut};
 
 struct FontSpec {
     bitmap_png: &'static [u8],
@@ -54,7 +54,7 @@ lazy_static! {
     }.load();
 }
 
-pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>) {
+pub fn draw_str<F: FbViewMut>(fb: &mut F, s: &str, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>) {
     let mut x = x0;
     for c in s.chars() {
         draw_char(fb, c, x, y0, font, color, bg_color, true);
@@ -62,7 +62,7 @@ pub fn draw_str(fb: &mut Framebuffer, s: &str, x0: i64, y0: i64, font: &Font, co
     }
 }
 
-pub fn draw_char(fb: &mut Framebuffer, c: char, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>, blend: bool) {
+pub fn draw_char<F: FbViewMut>(fb: &mut F, c: char, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>, blend: bool) {
 
     let mut c = c as u8;
 
@@ -210,7 +210,7 @@ pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
     FormattedRichText { lines: formatted_lines, w: text_w, h: text_h }
 }
 
-pub fn draw_rich_slice(fb: &mut Framebuffer, rich_slice: &[RichChar], x0: i64, y0: i64) {
+pub fn draw_rich_slice<F: FbViewMut>(fb: &mut F, rich_slice: &[RichChar], x0: i64, y0: i64) {
 
     if rich_slice.is_empty() { return; }
 

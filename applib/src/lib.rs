@@ -100,8 +100,9 @@ impl Rect {
         let [xa0, ya0, xa1, ya1] = self.as_xyxy();
         let [xb0, yb0, xb1, yb1] = other.as_xyxy();
 
-        if (xb0 <= xa1 || xa0 <= xb1) && (yb0 <= ya1 || ya0 <= yb1) {
-
+        if xa1 < xb0 || xb1 < xa0 || ya1 < yb0 || yb1 < ya0 {
+            None
+        } else {
             let mut x_vals = [xa0, xa1, xb0, xb1];
             x_vals.sort();
             let [_, x0, x1, _] = x_vals;
@@ -111,8 +112,6 @@ impl Rect {
             let [_, y0, y1, _] = y_vals;
 
             Some(Rect { x0, y0, w: (x1-x0+1) as u32, h: (y1-y0+1) as u32 })
-        } else {
-            None
         }
     }
 

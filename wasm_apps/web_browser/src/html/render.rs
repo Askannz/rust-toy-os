@@ -31,11 +31,14 @@ fn draw_node<F: FbViewMut>(dst_fb: &mut F, node: &LayoutNode, src_rect: &Rect) {
 
     match &node.data {
         NodeData::Text { text, color, font, .. } => {
-            // HACK to hide text lines partially off-screen
-            // (can't do partial draws yet)
-            if inter_rect.w == node_rect.w && inter_rect.h == node_rect.h {
-                draw_str(dst_fb, text, abs_rect.x0, abs_rect.y0, font, *color, None);
-            }
+
+            // This will draw the whole line, including chars outside of
+            // the current tile.
+            // TODO: optimize this
+
+            let draw_x0 = node_rect.x0 - ox;
+            let draw_y0 = node_rect.y0 - oy;
+            draw_str(dst_fb, text, draw_x0, draw_y0, font, *color, None);
         },
         NodeData::Image => (),
         NodeData::Container { children, bg_color, .. } => {

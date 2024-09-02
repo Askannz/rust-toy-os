@@ -94,6 +94,7 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
         let tile_h = src_rect.h;
 
         let tiles_rects = self.get_tiles((tile_w, tile_h));
+
         let regions = select_tile_regions(&tiles_rects, src_rect);
 
         //log::debug!("{} tiles in cache", tile_cache.tiles.len());
@@ -108,7 +109,7 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
             let tile_fb = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
                 let mut tile_fb = Framebuffer::new_owned(tile_region.tile_rect.w, tile_region.tile_rect.h);
                 render_html(&mut tile_fb, self.layout.as_ref(), &tile_region.tile_rect);
-                draw_tile_border(&mut tile_fb);
+                //draw_tile_border(&mut tile_fb);
                 tile_fb
             });
 
@@ -130,6 +131,26 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
                 false
             );
 
+        }
+    }
+}
+
+fn render_gradient<F: FbViewMut>(tile_fb: &mut F, canvas_shape: (u32, u32), tile_pos: (i64, i64)) {
+    let (canvas_w, canvas_h) = canvas_shape;
+    let (tile_x0, tile_y0) = tile_pos;
+    let (tile_w, tile_h) = tile_fb.shape();
+
+    for dx in 0..tile_w as i64 {
+        for dy in 0..tile_h as i64 {
+
+            let x = tile_x0 + dx;
+            let y = tile_y0 + dy;
+
+            let r = (255 * x / canvas_w as i64) as u8;
+            let g = (255 * y / canvas_h as i64) as u8;
+            let b = 0;
+
+            tile_fb.set_pixel(dx, dy, Color::rgb(r, g, b));
         }
     }
 }

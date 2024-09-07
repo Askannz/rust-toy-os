@@ -3,7 +3,12 @@ extern crate alloc;
 
 use alloc::format;
 use alloc::vec;
+use alloc::vec::Vec;
+use applib::FbView;
+use applib::FbViewMut;
+use applib::OwnedPixels;
 use applib::{BorrowedMutPixels, Framebuffer, Rect, SystemState};
+use core::borrow::BorrowMut;
 use core::fmt::Debug;
 use core::mem::size_of;
 use log::{Log, Metadata, Record};
@@ -34,23 +39,43 @@ extern "C" {
 }
 
 #[derive(Debug)]
-pub struct FramebufferHandle {
-    framebuffer_ptr: *mut u32,
+struct FramebufferHandle {
+    ptr: *mut u32,
     w: u32,
     h: u32,
 }
 
 impl FramebufferHandle {
-    pub fn as_framebuffer(&mut self) -> Framebuffer<BorrowedMutPixels> {
+
+    fn new(w: u32, h: u32) -> Self {
+        let ptr = vec![0u32; (w * h) as usize].leak().as_mut_ptr();
+        Self {
+            ptr,
+            w,
+            h,
+        }
+    }
+
+    fn as_framebuffer(&mut self) -> Framebuffer<BorrowedMutPixels> {
         let FramebufferHandle {
-            framebuffer_ptr,
+            ptr,
             w,
             h,
         } = *self;
 
-        let fb_data = unsafe { core::slice::from_raw_parts_mut(framebuffer_ptr, (w * h) as usize) };
+        let fb_data = unsafe { core::slice::from_raw_parts_mut(ptr, (w * h) as usize) };
 
         Framebuffer::<BorrowedMutPixels>::new(fb_data, w, h)
+    }
+
+    fn register(&self) {
+        unsafe { host_set_framebuffer(self.ptr as i32, self.w as i32, self.h as i32) };
+    }
+
+    fn destroy(self) {
+        let n = (self.w * self.h) as usize;
+        let data = unsafe { Vec::from_raw_parts(self.ptr, n, n) };
+        core::mem::drop(data)
     }
 }
 
@@ -79,15 +104,45 @@ pub fn get_win_rect() -> Rect {
     }
 }
 
-pub fn create_framebuffer(w: u32, h: u32) -> FramebufferHandle {
-    let ptr = vec![0u32; (w * h) as usize].leak().as_mut_ptr();
-    unsafe { host_set_framebuffer(ptr as i32, w as i32, h as i32) };
-    FramebufferHandle {
-        framebuffer_ptr: ptr,
-        w,
-        h,
+pub struct PixelData {
+    fb_handle: FramebufferHandle
+}
+
+impl PixelData {
+
+    pub fn new() -> Self {
+        let Rect { w, h, .. } = get_win_rect();
+        let fb_handle = FramebufferHandle::new(w, h);
+        fb_handle.register();
+        PixelData { fb_handle }
+    }
+
+    pub fn get_framebuffer(&mut self) -> Framebuffer<BorrowedMutPixels> {
+
+        let Rect { w, h, .. } = get_win_rect();
+
+        let fb_w = self.fb_handle.w;
+        let fb_h = self.fb_handle.h;
+
+        if (fb_w, fb_h) != (w, h) {
+            let new_fb_handle = FramebufferHandle::new(w, h);
+            new_fb_handle.register();
+            let old_fb_handle = core::mem::replace(&mut self.fb_handle, new_fb_handle);
+            old_fb_handle.destroy();
+        }
+
+        self.fb_handle.as_framebuffer()
     }
 }
+
+fn register_framebuffer_data(data: Vec<u32>, w: u32, h: u32) -> *mut u32 {
+    assert_eq!(data.len(), (w * h) as usize);
+    let ptr = vec![0u32; (w * h) as usize].leak().as_mut_ptr();
+    unsafe { host_set_framebuffer(ptr as i32, w as i32, h as i32) };
+    ptr
+}
+
+
 
 pub fn tcp_connect(ip_addr: [u8; 4], port: u16) -> anyhow::Result<i32> {
     let ip_addr: i32 = i32::from_le_bytes(ip_addr);

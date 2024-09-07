@@ -11,7 +11,7 @@ use alloc::format;
 use anyhow::Context;
 use applib::{Color, Rect};
 use core::cell::OnceCell;
-use guestlib::{FramebufferHandle, WasmLogger};
+use guestlib::{PixelData, WasmLogger};
 
 use applib::content::TrackedContent;
 use applib::input::Keycode;
@@ -36,7 +36,7 @@ static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState {
-    fb_handle: FramebufferHandle,
+    pixel_data: PixelData,
 
     url_text: TrackedContent<String>,
     url_cursor: usize,
@@ -155,7 +155,6 @@ pub fn init() -> () {
     log::set_logger(&LOGGER).unwrap();
 
     let win_rect = guestlib::get_win_rect();
-    let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
 
     let url_text = String::from("https://news.ycombinator.com/");
     let url_len = url_text.len();
@@ -163,7 +162,7 @@ pub fn init() -> () {
     let mut uuid_provider = uitk::IncrementalUuidProvider::new();
 
     let state = AppState {
-        fb_handle,
+        pixel_data: PixelData::new(),
         url_text: TrackedContent::new(url_text, &mut uuid_provider),
         url_cursor: url_len,
 
@@ -224,19 +223,12 @@ pub fn step() {
     let win_input_state = system_state.input.change_origin(&win_rect);
 
     let AppState {
-        fb_handle,
-        url_text,
-        url_cursor,
-        ui_layout,
-        buffer,
         ui_store,
         uuid_provider,
-        webview_scroll_offsets,
-        webview_scroll_dragging,
-        request_state,
+        ..
     } = state;
 
-    let mut framebuffer = state.fb_handle.as_framebuffer();
+    let mut framebuffer = state.pixel_data.get_framebuffer();
     framebuffer.fill(Color::BLACK);
 
     let mut uitk_context = ui_store.get_context(&mut framebuffer, &win_input_state, uuid_provider);
@@ -341,7 +333,7 @@ fn update_request_state(
             domain: current_domain,
             layout,
         } => {
-            let mut framebuffer = state.fb_handle.as_framebuffer();
+            let mut framebuffer = state.pixel_data.get_framebuffer();
             let mut uitk_context =
                 state
                     .ui_store

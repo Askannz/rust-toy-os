@@ -4,14 +4,13 @@ use alloc::format;
 use applib::drawing::text::{draw_str, DEFAULT_FONT};
 use applib::{Color, FbViewMut};
 use core::cell::OnceCell;
-use guestlib::FramebufferHandle;
+use guestlib::PixelData;
 
 mod drawing;
 use drawing::draw_chrono;
 
-#[derive(Debug)]
 struct AppState {
-    fb_handle: FramebufferHandle,
+    pixel_data: PixelData,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -20,15 +19,13 @@ fn main() {}
 
 #[no_mangle]
 pub fn init() -> () {
-    // TESTING
-    // println!("Connecting TCP");
-    // guestlib::tcp_connect();
-
-    let win_rect = guestlib::get_win_rect();
-    let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
-    let state = AppState { fb_handle };
+    let state = AppState { 
+        pixel_data: PixelData::new()
+    };
     unsafe {
-        APP_STATE.set(state).expect("App already initialized");
+        APP_STATE
+            .set(state)
+            .unwrap_or_else(|_| panic!("App already initialized"));
     }
 }
 
@@ -38,7 +35,7 @@ pub fn step() {
 
     let t = guestlib::get_time();
 
-    let mut framebuffer = state.fb_handle.as_framebuffer();
+    let mut framebuffer = state.pixel_data.get_framebuffer();
 
     framebuffer.fill(Color::BLACK);
     draw_chrono(&mut framebuffer, t);

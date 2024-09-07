@@ -12,9 +12,9 @@ use applib::drawing::text::{
 use applib::input::InputEvent;
 use applib::input::{InputState, Keycode};
 use applib::uitk::{self, IncrementalUuidProvider, UiStore};
-use applib::{Color, FbViewMut, Rect};
+use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use core::cell::OnceCell;
-use guestlib::FramebufferHandle;
+use guestlib::{PixelData};
 use guestlib::WasmLogger;
 
 mod python;
@@ -29,7 +29,9 @@ static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState {
-    fb_handle: FramebufferHandle,
+
+    pixel_data: PixelData,
+
     input_buffer: TrackedContent<String>,
     console_buffer: TrackedContent<Vec<EvalResult>>,
 
@@ -52,11 +54,10 @@ pub fn init() -> () {
     log::set_logger(&LOGGER).unwrap();
 
     let win_rect = guestlib::get_win_rect();
-    let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
     let mut uuid_provider = uitk::IncrementalUuidProvider::new();
 
     let state = AppState {
-        fb_handle,
+        pixel_data: PixelData::new(),
         input_buffer: TrackedContent::new(String::new(), &mut uuid_provider),
         console_buffer: TrackedContent::new(Vec::new(), &mut uuid_provider),
         ui_store: uitk::UiStore::new(),
@@ -78,7 +79,7 @@ pub fn step() {
     let state = unsafe { APP_STATE.get_mut().expect("App not initialized") };
 
     let system_state = guestlib::get_system_state();
-    let mut framebuffer = state.fb_handle.as_framebuffer();
+    let mut framebuffer = state.pixel_data.get_framebuffer();
 
     let win_rect = guestlib::get_win_rect();
     let input_state = system_state.input.change_origin(&win_rect);

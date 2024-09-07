@@ -1,7 +1,7 @@
 use applib::uitk::{IncrementalUuidProvider, UiStore};
 use applib::{Color, FbViewMut, Framebuffer, OwnedPixels};
 use core::cell::OnceCell;
-use guestlib::FramebufferHandle;
+use guestlib::PixelData;
 use guestlib::WasmLogger;
 
 mod drawing;
@@ -11,7 +11,7 @@ static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState {
-    fb_handle: FramebufferHandle,
+    pixel_data: PixelData,
     render_fb: Framebuffer<OwnedPixels>,
     ui_store: UiStore,
     uuid_provider: IncrementalUuidProvider,
@@ -33,10 +33,8 @@ pub fn init() -> () {
     log::set_max_level(LOGGING_LEVEL);
     log::set_logger(&LOGGER).unwrap();
 
-    let win_rect = guestlib::get_win_rect();
-    let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
     let state = AppState {
-        fb_handle,
+        pixel_data: PixelData::new(),
         render_fb: Framebuffer::new_owned(W as u32, H as u32),
         ui_store: UiStore::new(),
         uuid_provider: IncrementalUuidProvider::new(),
@@ -59,7 +57,7 @@ pub fn step() {
     let win_rect = guestlib::get_win_rect();
     let system_state = guestlib::get_system_state();
 
-    let mut framebuffer = state.fb_handle.as_framebuffer();
+    let mut framebuffer = state.pixel_data.get_framebuffer();
 
     let input_state_local = system_state.input.change_origin(&win_rect);
     let pointer = &input_state_local.pointer;

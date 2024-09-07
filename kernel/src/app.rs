@@ -22,12 +22,18 @@ pub struct AppDescriptor {
     pub icon: Option<&'static Framebuffer<OwnedPixels>>,
 }
 
+enum GrabState {
+    None,
+    MoveGrab(i64, i64),
+    ResizeGrab,
+}
+
 pub struct App {
     pub wasm_app: WasmApp,
     pub descriptor: AppDescriptor,
     pub is_open: bool,
     pub rect: Rect,
-    pub grab_pos: Option<(i64, i64)>,
+    pub grab: GrabState,
     pub time_used: f64,
 }
 
@@ -46,7 +52,7 @@ impl AppDescriptor {
             ),
             is_open: false,
             rect: self.init_win_rect.clone(),
-            grab_pos: None,
+            grab: GrabState::None,
             time_used: 0.0,
         }
     }
@@ -68,9 +74,11 @@ impl App {
         const COLOR_HOVER: Color = Color::rgba(0x88, 0x88, 0x88, 0xff);
         const COLOR_SHADOW: Color = Color::rgba(0x0, 0x0, 0x0, ALPHA_SHADOW);
         const COLOR_TEXT: Color = Color::rgba(0xff, 0xff, 0xff, 0xff);
+        const COLOR_RESIZE_HANDLE: Color = Color::rgba(0xff, 0xff, 0xff, 0x80);
     
         const OFFSET_SHADOW: i64 = 10;
         const DECO_PADDING: i64 = 5;
+        const RESIZE_HANDLE_W: u32 = 10;
 
         let app = self;
 
@@ -100,12 +108,31 @@ impl App {
                 h: app.rect.h + titlebar_h,
             };
 
-            if let Some((dx, dy)) = app.grab_pos {
+            let resize_handle_rect = Rect {
+                x0: app.rect.x0 + (app.rect.w - RESIZE_HANDLE_W) as i64,
+                y0: app.rect.y0 + (app.rect.h - RESIZE_HANDLE_W) as i64,
+                w: RESIZE_HANDLE_W,
+                h: RESIZE_HANDLE_W,
+            };
+
+            if let GrabState::MoveGrab(dx, dy) = app.grab {
                 if pointer_state.left_clicked {
                     app.rect.x0 = pointer_state.x - dx;
                     app.rect.y0 = pointer_state.y - dy;
                 } else {
-                    app.grab_pos = None
+                    app.grab = GrabState::None;
+                }
+            } else if let GrabState::ResizeGrab = app.grab  {
+
+                if pointer_state.left_clicked {
+
+                    let [x1, y1, _, _] = app.rect.as_xyxy();
+                    let x2 = pointer_state.x;
+                    let y2 = pointer_state.y;
+                    app.rect = Rect::from_xyxy([x1, y1, x2, y2]);
+
+                } else {
+                    app.grab = GrabState::None;
                 }
             } else {
                 let titlebar_rect = Rect {
@@ -114,13 +141,23 @@ impl App {
                     w: deco_rect.w,
                     h: titlebar_h,
                 };
-                let app_hover =
-                    titlebar_rect.check_contains_point(pointer_state.x, pointer_state.y);
-                if app_hover && pointer_state.left_click_trigger {
+                let titlebar_hover = titlebar_rect.check_contains_point(pointer_state.x, pointer_state.y);
+                let resize_hover = resize_handle_rect.check_contains_point(pointer_state.x, pointer_state.y);
+
+                // DEBUG
+                if resize_hover {
+                    log::debug!("RESIZE HOVER");
+                }
+
+                if titlebar_hover && pointer_state.left_click_trigger {
                     let dx = pointer_state.x - app.rect.x0;
                     let dy = pointer_state.y - app.rect.y0;
-                    app.grab_pos = Some((dx, dy));
-                } else if app_hover && pointer_state.right_clicked {
+
+                    app.grab = GrabState::MoveGrab(dx, dy);
+
+                } else if resize_hover && pointer_state.left_click_trigger {
+                    app.grab = GrabState::ResizeGrab;
+                } else if titlebar_hover && pointer_state.right_clicked {
                     app.is_open = false;
                 }
             }
@@ -160,6 +197,8 @@ impl App {
             let t1 = system.as_ref().borrow().clock.time();
             const SMOOTHING: f64 = 0.9;
             app.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * app.time_used;
+
+            blend_rect(*fb, &resize_handle_rect, COLOR_RESIZE_HANDLE);
         }
     }
 

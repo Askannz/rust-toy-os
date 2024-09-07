@@ -1,15 +1,16 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::Framebuffer;
 use crate::content::{TrackedContent, UuidProvider};
 use crate::drawing::primitives::draw_rect;
 use crate::drawing::text::{draw_rich_slice, draw_str, Font, FormattedRichText, HACK_15};
 use crate::input::{InputEvent, InputState};
 use crate::input::{Keycode, CHARMAP};
-use crate::uitk::UiContext;
+use crate::uitk::{UiContext, ContentId};
 use crate::{Color, FbViewMut, Rect};
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct EditableTextConfig {
     pub rect: Rect,
     pub font: &'static Font,
@@ -130,38 +131,58 @@ impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
             fb,
             input_state,
             uuid_provider,
+            tile_cache,
             ..
         } = self;
 
-        let original_cursor = *cursor;
-        let original_content_id = buffer.get_id();
-
         string_input(buffer, input_state, false, cursor, *uuid_provider);
 
-        let EditableTextConfig {
-            font,
-            color,
-            bg_color,
-            ..
-        } = config;
-        let Rect { x0, y0, .. } = config.rect;
-
-        if let Some(bg_color) = bg_color {
-            draw_rect(*fb, &config.rect, *bg_color);
-        }
-        draw_str(*fb, buffer.as_ref(), x0, y0, font, *color, None);
-
         let time_sec = (time as u64) / 1000;
-        if time_sec % 2 == 0 || buffer.get_id() != original_content_id || *cursor != original_cursor
-        {
-            let cursor_rect = Rect {
-                x0: x0 + (*cursor * font.char_w) as i64,
-                y0: y0,
-                w: 2,
-                h: font.char_h as u32,
-            };
-            draw_rect(*fb, &cursor_rect, *color);
-        }
+        let cursor_visible = time_sec % 2 == 0;
+
+        let tile_content_id = ContentId::from_hash((
+            config,
+            cursor_visible,
+            buffer.get_id()
+        ));
+
+        let tile_fb = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
+
+            //
+            // Draw text
+
+            let EditableTextConfig {
+                rect,
+                font,
+                color,
+                bg_color,
+            } = config;
+
+            let mut tile_fb = Framebuffer::new_owned(rect.w, rect.h);
+
+            if let Some(bg_color) = bg_color {
+                draw_rect(&mut tile_fb, &config.rect, *bg_color);
+            }
+            draw_str(&mut tile_fb, buffer.as_ref(), 0, 0, font, *color, None);
+
+            //
+            // Draw blinking cursor
+
+            if cursor_visible {
+                let cursor_rect = Rect {
+                    x0: (*cursor * font.char_w) as i64,
+                    y0: 0,
+                    w: 2,
+                    h: font.char_h as u32,
+                };
+                draw_rect(&mut tile_fb, &cursor_rect, *color);
+            }
+
+            tile_fb
+        });
+
+        let Rect { x0, y0, .. } = config.rect;
+        fb.copy_from_fb(tile_fb, (x0, y0), false);
     }
 }
 

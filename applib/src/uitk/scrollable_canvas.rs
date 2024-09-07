@@ -1,8 +1,10 @@
+use crate::content::UuidProvider;
 use crate::input::{InputEvent, InputState};
 use crate::{FbView, FbViewMut, Framebuffer};
 use crate::Rect;
 use crate::Color;
 use crate::drawing::primitives::draw_rect;
+use crate::uitk::{UiStore, UiContext};
 
 use super::{TileRenderer, TileRenderContext, dyn_scrollable_canvas, TileCache};
 
@@ -25,26 +27,25 @@ impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
     }
 }
 
-pub fn scrollable_canvas<F1: FbView, F2: FbViewMut>(
-    dst_fb: &mut F2,
+impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
+
+pub fn scrollable_canvas<F1: FbView>(
+    &mut self,
     dst_rect: &Rect,
     src_fb: &F1,
     offsets: &mut (i64, i64),
-    input_state: &InputState,
     dragging: &mut bool,
 ) {
 
     let renderer = BufferCopyRenderer { src_fb };
 
-    dyn_scrollable_canvas(
-        &mut TileCache::new(),
-        dst_fb,
+    self.dyn_scrollable_canvas(
         dst_rect,
         &renderer,
         offsets,
-        input_state,
         dragging,
     )
+}
 }
 
 pub fn set_autoscroll(

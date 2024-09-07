@@ -10,11 +10,11 @@ use core::cell::OnceCell;
 use alloc::format;
 use alloc::collections::BTreeMap;
 use anyhow::Context;
-use guestlib::{FramebufferHandle, WasmLogger, TimeUuidProvider};
+use guestlib::{FramebufferHandle, WasmLogger};
 use applib::{Color, Rect};
 
 use applib::{Framebuffer, FbViewMut};
-use applib::uitk;
+use applib::uitk::{self, IncrementalUuidProvider};
 use applib::input::{InputState, InputEvent};
 use applib::input::{Keycode, CHARMAP};
 use applib::content::TrackedContent;
@@ -35,13 +35,16 @@ const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 struct AppState {
     fb_handle: FramebufferHandle,
 
-    url_text: TrackedContent<TimeUuidProvider, String>,
+    url_text: TrackedContent<String>,
     url_cursor: usize,
 
     ui_layout: UiLayout,
 
     buffer: Vec<u8>,
-    tile_cache: uitk::TileCache,
+
+    uuid_provider: IncrementalUuidProvider,
+    ui_store: uitk::UiStore,
+
     webview_scroll_offsets: (i64, i64),
     webview_scroll_dragging: bool,
 
@@ -56,7 +59,7 @@ struct UiLayout{
 }
 
 enum RequestState {
-    Idle { domain: Option<String>, layout: TrackedContent<TimeUuidProvider, LayoutNode> },
+    Idle { domain: Option<String>, layout: TrackedContent<LayoutNode> },
     Dns { domain: String, path: String, dns_socket: Socket, dns_state: DnsState },
     Https { domain: String, path: String, tls_client: TlsClient, https_state: HttpsState },
     Render { domain: Option<String>, html: String },
@@ -129,10 +132,11 @@ pub fn init() -> () {
     let url_text = String::from("https://news.ycombinator.com/");
     let url_len = url_text.len();
 
+    let mut uuid_provider = uitk::IncrementalUuidProvider::new();
+
     let state = AppState { 
         fb_handle,
-        tile_cache: uitk::TileCache::new(),
-        url_text: TrackedContent::new(url_text),
+        url_text: TrackedContent::new(url_text, &mut uuid_provider),
         url_cursor: url_len,
 
         ui_layout: UiLayout {
@@ -143,6 +147,8 @@ pub fn init() -> () {
         },
 
         buffer: vec![0u8; BUFFER_SIZE],
+        ui_store: uitk::UiStore::new(),
+        uuid_provider: IncrementalUuidProvider::new(),
         webview_scroll_offsets: (0, 0),
         webview_scroll_dragging: false,
         request_state: RequestState::Render { 
@@ -166,37 +172,47 @@ pub fn step() {
     let win_rect = guestlib::get_win_rect();
     let win_input_state = system_state.input.change_origin(&win_rect);
 
-    let mut framebuffer = state.fb_handle.as_framebuffer();
+    let AppState { 
+        fb_handle,
+        url_text,
+        url_cursor,
+        ui_layout,
+        buffer,
+        ui_store,
+        uuid_provider,
+        webview_scroll_offsets,
+        webview_scroll_dragging,
+        request_state
+    } = state;
 
+    let mut framebuffer = state.fb_handle.as_framebuffer();
     framebuffer.fill(Color::BLACK);
 
-    let is_button_fired = uitk::button(
+    let mut uitk_context = ui_store.get_context(&mut framebuffer, &win_input_state, uuid_provider);
+
+    let is_button_fired = uitk_context.button(
         &uitk::ButtonConfig {
             rect: state.ui_layout.button_rect.clone(),
             text: "GO".into(),
             ..Default::default()
         },
-        &mut framebuffer,
-        &win_input_state
     );
 
-    uitk::editable_text(
+    uitk_context.editable_text(
         &uitk::EditableTextConfig {
             rect: state.ui_layout.url_bar_rect.clone(),
             color: Color::WHITE,
             bg_color: Some(Color::rgb(128, 128, 128)),
             ..Default::default()
         },
-        &mut framebuffer,
         &mut state.url_text,
         &mut state.url_cursor,
-        &win_input_state,
         guestlib::get_time(),
     );
 
     let (progress_val, progress_str) = get_progress_repr(&state.request_state);
 
-    uitk::progress_bar(
+    uitk_context.progress_bar(
         &uitk::ProgressBarConfig {
             rect: state.ui_layout.progress_bar_rect.clone(),
             max_val: 8,
@@ -205,7 +221,6 @@ pub fn step() {
             text_color: Color::WHITE,
             ..Default::default()
         },
-        &mut framebuffer,
         progress_val,
         &progress_str
     );
@@ -270,15 +285,14 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
         RequestState::Idle { domain: current_domain, layout } => {
 
             let mut framebuffer = state.fb_handle.as_framebuffer();
+            let mut uitk_context = state.ui_store.get_context(&mut framebuffer, input_state, &mut state.uuid_provider);
 
             let link_hover = html_canvas(
-                &mut state.tile_cache,
-                &mut framebuffer,
+                &mut uitk_context,
                 &layout,
                 &state.ui_layout.canvas_rect,
                 &mut state.webview_scroll_offsets,
                 &mut state.webview_scroll_dragging,
-                input_state,
             );
 
             let mut url_data: Option<(String, String)> = None;
@@ -298,7 +312,7 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             }
 
             if let Some((domain, path)) = url_data {
-                let s_ref = state.url_text.mutate();
+                let s_ref = state.url_text.mutate(&mut state.uuid_provider);
                 let _ = core::mem::replace(s_ref, format!("{}{}{}", SCHEME, domain, path));
                 let dns_socket = Socket::new(DNS_SERVER_IP, 53)?;
                 state.request_state = RequestState::Dns { 
@@ -425,10 +439,9 @@ fn update_request_state(state: &mut AppState, url_go: bool, input_state: &InputS
             let layout = compute_layout(&html_tree)?;
 
             //log::debug!("Layout: {:?}", layout.rect);
-            state.tile_cache.tiles.clear();
             state.request_state = RequestState::Idle { 
                 domain: domain.clone(),
-                layout: TrackedContent::new(layout),
+                layout: TrackedContent::new(layout, &mut state.uuid_provider),
             };
         },
     };

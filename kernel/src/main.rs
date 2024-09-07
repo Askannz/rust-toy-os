@@ -17,7 +17,7 @@ use applib::{Color, Rect, Framebuffer, SystemState, decode_png, OwnedPixels, FbV
 use applib::input::{InputState, InputEvent};
 use applib::drawing::text::{DEFAULT_FONT, draw_str};
 use applib::drawing::primitives::{draw_rect, blend_rect};
-use applib::uitk;
+use applib::uitk::{self, UiStore};
 
 extern crate alloc;
 
@@ -169,6 +169,10 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         input: InputState::new(w, h),
     };
 
+    let mut ui_store = uitk::UiStore::new();
+    let mut uuid_provider = uitk::IncrementalUuidProvider::new();
+
+
     log::info!("Entering main loop");
 
 
@@ -189,7 +193,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         //log::debug!("{:?}", system_state);
 
-        update_apps(&mut framebuffer, &clock, &system_state, &mut applications);
+        update_apps(&mut ui_store, &mut framebuffer, &mut uuid_provider, &clock, &system_state, &mut applications);
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
@@ -203,7 +207,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
 }
 
-fn update_apps<F: FbViewMut>(fb: &mut F, clock: &SystemClock, system_state: &SystemState, applications: &mut Vec<App>) {
+fn update_apps<F: FbViewMut>(ui_store: &mut UiStore, fb: &mut F, uuid_provider: &mut uitk::IncrementalUuidProvider, clock: &SystemClock, system_state: &SystemState, applications: &mut Vec<App>) {
 
     const ALPHA_SHADOW: u8 = 100;
 
@@ -220,15 +224,14 @@ fn update_apps<F: FbViewMut>(fb: &mut F, clock: &SystemClock, system_state: &Sys
 
     for app in applications.iter_mut() {
 
-        let is_button_fired = uitk::button(
+        let mut uitk_context = ui_store.get_context(fb, input_state, uuid_provider);
+        let is_button_fired = uitk_context.button(
             &uitk::ButtonConfig {
                 rect: app.descriptor.launch_rect.clone(),
                 text: app.descriptor.name.to_string(),
                 icon: app.descriptor.icon,
                 ..Default::default()
-            },
-            fb,
-            input_state
+            }
         );
 
         if is_button_fired && !app.is_open {

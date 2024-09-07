@@ -1,12 +1,14 @@
 use alloc::collections::BTreeMap;
 
-use crate::content::ContentId;
+use crate::content::{ContentId, UuidProvider};
 
 use crate::input::{InputEvent, InputState};
 use crate::{Framebuffer, OwnedPixels, FbViewMut, BorrowedMutPixels};
 use crate::Rect;
 use crate::Color;
 use crate::drawing::primitives::draw_rect;
+
+use crate::uitk::{TileCache, UiContext};
 
 
 const SCROLL_SPEED: u32 = 10;
@@ -17,16 +19,6 @@ const SBAR_INNER_IDLE_COLOR: Color = Color::RED;
 const SBAR_INNER_HOVER_COLOR: Color = Color::YELLOW;
 const SBAR_INNER_DRAGGING_COLOR: Color = Color::AQUA;
 
-
-pub struct TileCache {
-    pub tiles: BTreeMap<ContentId, Framebuffer<OwnedPixels>>
-}
-
-impl TileCache {
-    pub fn new() -> Self {
-        Self { tiles: BTreeMap::new() }
-    }
-}
 
 pub trait TileRenderer {
 
@@ -40,16 +32,19 @@ pub struct TileRenderContext<'a> {
     pub tile_cache: &'a mut TileCache,
 }
 
+impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
 
-pub fn dyn_scrollable_canvas<F: FbViewMut, T: TileRenderer>(
-    tile_cache: &mut TileCache,
-    dst_fb: &mut F,
+
+pub fn dyn_scrollable_canvas<T: TileRenderer>(
+    &mut self,
     dst_rect: &Rect,
     renderer: &T,
     offsets: &mut (i64, i64),
-    input_state: &InputState,
     dragging: &mut bool,
 ) {
+
+    let UiContext { fb: dst_fb, tile_cache, input_state, .. } = self;
+
     let (src_max_w, src_max_h) = renderer.shape();
     let (scroll_x0, scroll_y0) = offsets;
 
@@ -128,8 +123,8 @@ pub fn dyn_scrollable_canvas<F: FbViewMut, T: TileRenderer>(
             }
         };
 
-        draw_rect(dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR);
-        draw_rect(dst_fb, &sbar_inner_rect, sbar_color);
+        draw_rect(*dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR);
+        draw_rect(*dst_fb, &sbar_inner_rect, sbar_color);
 
         if p_state.left_clicked {
             if p_state.left_click_trigger && sbar_hover {
@@ -140,4 +135,5 @@ pub fn dyn_scrollable_canvas<F: FbViewMut, T: TileRenderer>(
         }
     }
 
+}
 }

@@ -11,20 +11,19 @@ impl ContentId {
 }
 
 #[derive(Debug)]
-pub struct TrackedContent<P: UuidProvider, T> {
+pub struct TrackedContent<T> {
     inner: T,
     content_id: ContentId,
-    _marker: core::marker::PhantomData<P>
 }
 
-impl<P: UuidProvider, T> TrackedContent<P, T> {
+impl<T> TrackedContent<T> {
 
-    pub fn new(inner: T) -> Self {
-        Self { inner, content_id: P::make_id(), _marker: core::marker::PhantomData }
+    pub fn new<P: UuidProvider>(inner: T, uuid_provider: &mut P) -> Self {
+        Self { inner, content_id: uuid_provider.make_id() }
     }
 
-    pub fn mutate<'a>(&'a mut self) -> &'a mut T {
-        self.content_id = P::make_id();
+    pub fn mutate<'a, P: UuidProvider>(&'a mut self, uuid_provider: &mut P) -> &'a mut T {
+        self.content_id = uuid_provider.make_id();
         &mut self.inner
     }
 
@@ -38,5 +37,26 @@ impl<P: UuidProvider, T> TrackedContent<P, T> {
 }
 
 pub trait UuidProvider {
-    fn make_id() -> ContentId;
+    fn make_id(&mut self) -> ContentId;
+}
+
+pub struct IncrementalUuidProvider {
+    next: u64
+}
+
+impl UuidProvider for IncrementalUuidProvider {
+    fn make_id(&mut self) -> ContentId {
+        let content_id = ContentId(self.next);
+        self.next += 1;
+        if self.next == u64::MAX {
+            log::warn!("Reached max content ID, wrapping around")
+        }
+        content_id
+    }
+}
+
+impl IncrementalUuidProvider {
+    pub fn new() -> Self {
+        Self { next: 0 }
+    }
 }

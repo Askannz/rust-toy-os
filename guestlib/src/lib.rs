@@ -238,16 +238,6 @@ impl Log for WasmLogger {
     fn flush(&self) {}
 }
 
-pub struct TimeUuidProvider;
-
-impl UuidProvider for TimeUuidProvider {
-    fn make_id() -> ContentId {
-        let t = get_time();
-        let content_id = unsafe { core::mem::transmute(t) };
-        ContentId(content_id)
-    }
-}
-
 // #[macro_export]
 // macro_rules! print {
 //     ($($arg:tt)*) => {

@@ -3,37 +3,33 @@ use applib::drawing::primitives::{draw_rect, blend_rect};
 use applib::{Framebuffer, FbViewMut, FbView};
 use applib::Rect;
 use applib::Color;
-use applib::uitk::{self, TileRenderer};
+use applib::uitk::{self, TileRenderer, UiContext};
 use applib::hash::compute_hash;
-use applib::content::{TrackedContent, ContentId};
-use guestlib::TimeUuidProvider;
+use applib::content::{ContentId, TrackedContent, UuidProvider};
 use log::log;
 use super::layout::{LayoutNode, NodeData};
 use super::render::render_html;
 
-pub fn html_canvas<'a, F: FbViewMut>(
-    tile_cache: &mut uitk::TileCache,
-    fb: &mut F,
-    layout: &'a TrackedContent<TimeUuidProvider, LayoutNode>,
+pub fn html_canvas<'a, F: FbViewMut, P: UuidProvider>(
+    uitk_context: &mut UiContext<'a, F, P>,
+    layout: &'a TrackedContent<LayoutNode>,
     dst_rect: &Rect,
     offsets: &mut (i64, i64),
     dragging: &mut bool,
-    input_state: &InputState
 ) -> Option<&'a str> {
+
+    uitk_context.dyn_scrollable_canvas(
+        dst_rect,
+        &HtmlRenderer { layout },
+        offsets,
+        dragging,
+    );
+
+    let UiContext { fb, tile_cache, input_state, .. } = uitk_context;
 
     let (ox, oy) = *offsets;
     let p = &input_state.pointer;
     let vr = dst_rect;
-
-    uitk::dyn_scrollable_canvas(
-        tile_cache,
-        fb,
-        dst_rect,
-        &HtmlRenderer { layout },
-        offsets,
-        input_state,
-        dragging,
-    );
 
     match get_hovered_link(p.x - vr.x0 + ox, p.y - vr.y0 + oy, layout.as_ref()) {
         Some(link_data) => {
@@ -43,7 +39,7 @@ pub fn html_canvas<'a, F: FbViewMut>(
                 w: link_data.rect.w,
                 h: link_data.rect.h,
             };
-            blend_rect(fb, &draw_rect, Color::rgba(0, 0, 255, 128));
+            blend_rect(*fb, &draw_rect, Color::rgba(0, 0, 255, 128));
             Some(&link_data.url)
         }
         None => None,
@@ -76,7 +72,7 @@ fn get_hovered_link(x: i64, y: i64, node: &LayoutNode) -> Option<LinkData> {
 }
 
 struct HtmlRenderer<'a> {
-    layout: &'a TrackedContent<TimeUuidProvider, LayoutNode>,
+    layout: &'a TrackedContent<LayoutNode>,
 }
 
 impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {

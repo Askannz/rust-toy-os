@@ -7,12 +7,12 @@ use alloc::{format, borrow::ToOwned};
 use alloc::string::String;
 use alloc::vec::Vec;
 use guestlib::FramebufferHandle;
-use guestlib::{WasmLogger, TimeUuidProvider};
+use guestlib::{WasmLogger};
 use applib::{Color, Framebuffer, Rect, FbView, FbViewMut, BorrowedMutPixels};
 use applib::input::InputEvent;
 use applib::input::{Keycode, CHARMAP, InputState};
 use applib::drawing::text::{format_rich_lines, draw_rich_slice, Font, FormattedRichText, RichText, HACK_15};
-use applib::uitk::{self, TileRenderer};
+use applib::uitk::{self, IncrementalUuidProvider, TileRenderer, UiStore};
 use applib::content::{TrackedContent, ContentId};
 use applib::drawing::primitives::draw_rect;
 
@@ -29,10 +29,11 @@ const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState {
     fb_handle: FramebufferHandle,
-    input_buffer: TrackedContent<TimeUuidProvider, String>,
-    console_buffer: TrackedContent<TimeUuidProvider, Vec<EvalResult>>,
+    input_buffer: TrackedContent<String>,
+    console_buffer: TrackedContent<Vec<EvalResult>>,
 
-    tile_cache: uitk::TileCache,
+    ui_store: UiStore,
+    uuid_provider: uitk::IncrementalUuidProvider,
     scroll_offsets: (i64, i64),
     dragging: bool,
 
@@ -52,12 +53,14 @@ pub fn init() -> () {
 
     let win_rect = guestlib::get_win_rect();
     let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
+    let mut uuid_provider = uitk::IncrementalUuidProvider::new();
 
     let state = AppState { 
         fb_handle,
-        input_buffer: TrackedContent::new(String::new()),
-        console_buffer: TrackedContent::new(Vec::new()),
-        tile_cache: uitk::TileCache::new(),
+        input_buffer: TrackedContent::new(String::new(), &mut uuid_provider),
+        console_buffer: TrackedContent::new(Vec::new(), &mut uuid_provider),
+        ui_store: uitk::UiStore::new(),
+        uuid_provider: IncrementalUuidProvider::new(),
         scroll_offsets: (0, 0),
         dragging: false,
         python: python::Python::new(),
@@ -78,14 +81,14 @@ pub fn step() {
     let input_state = system_state.input.change_origin(&win_rect);
 
     let mut cursor = state.input_buffer.as_ref().len();
-    uitk::string_input(&mut state.input_buffer, &input_state, false, &mut cursor);
+    uitk::string_input(&mut state.input_buffer, &input_state, false, &mut cursor, &mut state.uuid_provider);
 
     let mut autoscroll = false;
     if check_enter_pressed(&input_state) && !state.input_buffer.as_ref().is_empty() {
         let cmd = state.input_buffer.as_ref().to_owned();
         let pyres = state.python.run_code(&cmd);
-        state.console_buffer.mutate().push(EvalResult { cmd, pyres });
-        state.input_buffer.mutate().clear();
+        state.console_buffer.mutate(&mut state.uuid_provider).push(EvalResult { cmd, pyres });
+        state.input_buffer.mutate(&mut state.uuid_provider).clear();
         autoscroll = true;
     }
 
@@ -99,13 +102,12 @@ pub fn step() {
 
     framebuffer.fill(Color::BLACK);
 
-    uitk::dyn_scrollable_canvas(
-        &mut state.tile_cache,
-        &mut framebuffer,
+    let mut uitk_context = state.ui_store.get_context(&mut framebuffer, &input_state, &mut state.uuid_provider);
+
+    uitk_context.dyn_scrollable_canvas(
         &rect_console,
         &renderer,
         &mut state.scroll_offsets,
-        &input_state,
         &mut state.dragging,
     );
 

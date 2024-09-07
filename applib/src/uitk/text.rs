@@ -8,6 +8,7 @@ use crate::input::{InputState, InputEvent};
 use crate::input::{Keycode, CHARMAP};
 use crate::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText, FormattedRichText, HACK_15};
 use crate::content::{TrackedContent, ContentId, UuidProvider};
+use crate::uitk::UiContext;
 
 #[derive(Clone)]
 pub struct EditableTextConfig {
@@ -29,7 +30,7 @@ impl Default for EditableTextConfig {
 }
 
 
-pub fn string_input<P: UuidProvider>(buffer: &mut TrackedContent<P, String>, input_state: &InputState, allow_newline: bool, cursor: &mut usize) {
+pub fn string_input<P: UuidProvider>(buffer: &mut TrackedContent<String>, input_state: &InputState, allow_newline: bool, cursor: &mut usize, uuid_provider: &mut P) {
 
     let buf_len = buffer.as_ref().len();
     *cursor = usize::min(buf_len, *cursor);
@@ -74,7 +75,7 @@ pub fn string_input<P: UuidProvider>(buffer: &mut TrackedContent<P, String>, inp
     }
 
     if !updates.is_empty() {
-        let buffer = buffer.mutate();
+        let buffer = buffer.mutate(uuid_provider);
         for update in updates {
             match update {
                 TextUpdate::Newline => {
@@ -97,28 +98,30 @@ pub fn string_input<P: UuidProvider>(buffer: &mut TrackedContent<P, String>, inp
 
 }
 
+impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
 
-pub fn editable_text<P: UuidProvider, F: FbViewMut>(
+pub fn editable_text(
+    &mut self,
     config: &EditableTextConfig,
-    fb: &mut F,
-    buffer: &mut TrackedContent<P, String>,
+    buffer: &mut TrackedContent<String>,
     cursor: &mut usize,
-    input_state: &InputState,
     time: f64,
 ) {
+
+    let UiContext { fb, input_state, uuid_provider, .. } = self;
 
     let original_cursor = *cursor;
     let original_content_id = buffer.get_id();
 
-    string_input(buffer, input_state, false, cursor);
+    string_input(buffer, input_state, false, cursor, *uuid_provider);
 
     let EditableTextConfig { font, color, bg_color, .. } = config;
     let Rect { x0, y0, .. } = config.rect;
 
     if let Some(bg_color) = bg_color {
-        draw_rect(fb, &config.rect, *bg_color);
+        draw_rect(*fb, &config.rect, *bg_color);
     }
-    draw_str(fb, buffer.as_ref(), x0, y0, font, *color, None);
+    draw_str(*fb, buffer.as_ref(), x0, y0, font, *color, None);
 
     let time_sec = (time as u64) / 1000;
     if time_sec % 2 == 0 || buffer.get_id() != original_content_id || *cursor != original_cursor {
@@ -128,8 +131,9 @@ pub fn editable_text<P: UuidProvider, F: FbViewMut>(
             w: 2,
             h: font.char_h as u32,
         };
-        draw_rect(fb, &cursor_rect, *color);
+        draw_rect(*fb, &cursor_rect, *color);
     }
+}
 }
 
 pub fn render_rich_text<F: FbViewMut>(dst_fb: &mut F, dst_rect: &Rect, formatted: &FormattedRichText, offsets: (i64, i64)) {

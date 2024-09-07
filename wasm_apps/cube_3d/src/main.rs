@@ -1,6 +1,6 @@
 use core::cell::OnceCell;
 use applib::{Color, Framebuffer, Rect, OwnedPixels, FbViewMut};
-use applib::uitk;
+use applib::uitk::{self, IncrementalUuidProvider, UiStore};
 use guestlib::FramebufferHandle;
 use guestlib::{WasmLogger};
 
@@ -13,6 +13,8 @@ const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 struct AppState {
     fb_handle: FramebufferHandle,
     render_fb: Framebuffer<OwnedPixels>,
+    ui_store: UiStore,
+    uuid_provider: IncrementalUuidProvider,
     scroll_offsets: (i64, i64),
     dragging_sbar: bool,
     prev_pointer: Option<(i64, i64)>,
@@ -37,6 +39,8 @@ pub fn init() -> () {
     let state = AppState {
         fb_handle,
         render_fb: Framebuffer::new_owned(W as u32, H as u32),
+        ui_store: UiStore::new(),
+        uuid_provider: IncrementalUuidProvider::new(),
         scroll_offsets: (0, 0),
         dragging_sbar: false,
         prev_pointer: None,
@@ -74,12 +78,13 @@ pub fn step() {
     }
 
     framebuffer.fill(Color::BLACK);
-    uitk::scrollable_canvas(
-        &mut framebuffer,
+
+    let mut uitk_context = state.ui_store.get_context(&mut framebuffer, &input_state_local, &mut state.uuid_provider);
+
+    uitk_context.scrollable_canvas(
         &win_rect.zero_origin(),
         &state.render_fb,
         &mut state.scroll_offsets,
-        &input_state_local,
         &mut state.dragging_sbar
     );
 }

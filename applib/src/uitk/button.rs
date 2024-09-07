@@ -1,15 +1,21 @@
 use alloc::borrow::ToOwned;
 use alloc::string::String;
+use crate::content::UuidProvider;
 use crate::{Rect, Color, Framebuffer, FbViewMut, FbView, OwnedPixels};
 use crate::input::InputState;
 use crate::drawing::text::{Font, draw_str, DEFAULT_FONT};
 use crate::drawing::primitives::draw_rect;
+use crate::uitk::UiContext;
 
 
-pub fn button<F: FbViewMut>(config: &ButtonConfig, fb: &mut F, input_state: &InputState) -> bool {
+impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
+
+pub fn button(&mut self, config: &ButtonConfig) -> bool {
 
     #[derive(PartialEq)]
     enum InteractionState { Idle, Hover, Clicked }
+
+    let UiContext { fb, input_state, .. } = self;
 
     let ps = &input_state.pointer;
 
@@ -32,7 +38,7 @@ pub fn button<F: FbViewMut>(config: &ButtonConfig, fb: &mut F, input_state: &Inp
     let h: i64 = h.into();
     let x_padding: i64 = config.x_padding.into();
 
-    draw_rect(fb, &config.rect, button_color);
+    draw_rect(*fb, &config.rect, button_color);
 
     let mut text_offset_x = 0;
     if let Some(icon) = config.icon {
@@ -49,9 +55,10 @@ pub fn button<F: FbViewMut>(config: &ButtonConfig, fb: &mut F, input_state: &Inp
     let text_x0 = x0 + x_padding + text_offset_x;
     let text_y0 = y0 + i64::max(0, (h - char_h) / 2);
 
-    draw_str(fb, &config.text, text_x0, text_y0, config.font, config.text_color, None);
+    draw_str(*fb, &config.text, text_x0, text_y0, config.font, config.text_color, None);
 
     interaction_state == InteractionState::Clicked
+}
 }
 
 #[derive(Clone)]

@@ -1,18 +1,22 @@
 use alloc::string::String;
+use crate::content::UuidProvider;
 use crate::{Rect, Color, Framebuffer, FbViewMut};
 use crate::drawing::text::{Font, draw_str, DEFAULT_FONT};
 use crate::drawing::primitives::draw_rect;
+use crate::uitk::UiContext;
 
-
-pub fn progress_bar<F: FbViewMut>(
+impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
+pub fn progress_bar(
+    &mut self,
     config: &ProgressBarConfig,
-    fb: &mut F,
     progress: u64,
     text: &str,
 ) {
 
+    let UiContext { fb, input_state, .. } = self;
+
     let Rect { x0, y0, h, w } = config.rect;
-    draw_rect(fb, &config.rect, config.bg_color);
+    draw_rect(*fb, &config.rect, config.bg_color);
 
     let p = config.bar_padding;
     let bar_w = (((w - 2*p) as u64) * progress / config.max_val) as u32;
@@ -23,7 +27,7 @@ pub fn progress_bar<F: FbViewMut>(
         w: bar_w
     };
 
-    draw_rect(fb, &bar_rect, config.bar_color);
+    draw_rect(*fb, &bar_rect, config.bar_color);
 
     let text_x_padding: i64 = config.text_x_padding.into();
     let &Font { char_h, .. } = config.font;
@@ -33,7 +37,8 @@ pub fn progress_bar<F: FbViewMut>(
     let text_x0 = x0 + text_x_padding;
     let text_y0 = y0 + i64::max(0, (h - char_h) / 2);
 
-    draw_str(fb, &text, text_x0, text_y0, config.font, config.text_color, None);
+    draw_str(*fb, &text, text_x0, text_y0, config.font, config.text_color, None);
+}
 }
 
 #[derive(Clone)]

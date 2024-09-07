@@ -7,11 +7,14 @@ use alloc::format;
 use alloc::rc::Rc;
 use alloc::string::ToString;
 use alloc::vec::Vec;
-use core::cell::RefCell;
+use network::TcpStack;
+use rand::rngs::SmallRng;
+use core::cell::{Ref, RefCell};
 use core::panic::PanicInfo;
 use lazy_static::lazy_static;
 use uefi::prelude::{entry, Boot, Handle, Status, SystemTable};
 use uefi::table::boot::MemoryType;
+use rand::SeedableRng;
 
 use applib::drawing::primitives::{blend_rect, draw_rect};
 use applib::drawing::text::{draw_str, DEFAULT_FONT};
@@ -29,6 +32,8 @@ mod serial;
 mod time;
 mod virtio;
 mod wasm;
+//mod app;
+mod system;
 
 use time::SystemClock;
 
@@ -36,6 +41,7 @@ use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
 use virtio::network::VirtioNetwork;
 
+use system::System;
 use applib::input::keymap::{EventType, Keycode};
 use wasm::{WasmApp, WasmEngine};
 
@@ -169,7 +175,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("All VirtIO devices created");
 
     let runtime_services = unsafe { system_table.runtime_services() };
-    let clock = Rc::new(SystemClock::new(runtime_services));
+    let clock = SystemClock::new(runtime_services);
 
     log::info!("System clock initialized");
 
@@ -179,23 +185,28 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("Display initialized");
 
     let tcp_stack = network::TcpStack::new(&clock, virtio_net);
-    let tcp_stack = Rc::new(RefCell::new(tcp_stack));
 
     //let socket_handle = tcp_stack.borrow_mut().connect(Ipv4Address([93, 184, 216, 34]), 80);
 
     log::info!("TCP stack initialized");
+    
 
     let (w, h) = virtio_gpu.get_dims();
     let (w, h) = (w as u32, h as u32);
     let wasm_engine = WasmEngine::new();
+
+    let system = Rc::new(RefCell::new(System {
+        clock,
+        tcp_stack,
+        rng: SmallRng::seed_from_u64(0),
+    }));
 
     let mut applications: Vec<App> = APPLICATIONS
         .iter()
         .map(|app_desc| App {
             descriptor: app_desc.clone(),
             wasm_app: wasm_engine.instantiate_app(
-                tcp_stack.clone(),
-                clock.clone(),
+                system.clone(),
                 app_desc.data,
                 app_desc.name,
                 &app_desc.init_win_rect,
@@ -218,12 +229,17 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let mut ui_store = uitk::UiStore::new();
     let mut uuid_provider = uitk::IncrementalUuidProvider::new();
 
+
+
     log::info!("Entering main loop");
 
     loop {
-        fps_manager.start_frame(&clock);
 
-        tcp_stack.borrow_mut().poll_interface(&clock);
+        {
+            let System { clock, tcp_stack, .. } = &mut *system.borrow_mut();
+            fps_manager.start_frame(clock);
+            tcp_stack.poll_interface(clock);
+        }
 
         update_input_state(&mut system_state, (w, h), &mut virtio_inputs);
 
@@ -238,15 +254,21 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             &mut ui_store,
             &mut framebuffer,
             &mut uuid_provider,
-            &clock,
+            system.clone(),
             &system_state,
             &mut applications,
         );
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
+
         draw_cursor(&mut framebuffer, &system_state);
-        fps_manager.end_frame(&clock, &mut framebuffer);
+
+        {
+            let System { clock, .. } = &mut *system.borrow_mut();
+            fps_manager.end_frame(clock, &mut framebuffer);
+        }
+
         virtio_gpu.flush();
     }
 
@@ -257,7 +279,7 @@ fn update_apps<F: FbViewMut>(
     ui_store: &mut UiStore,
     fb: &mut F,
     uuid_provider: &mut uitk::IncrementalUuidProvider,
-    clock: &SystemClock,
+    system: Rc<RefCell<System>>,
     system_state: &SystemState,
     applications: &mut Vec<App>,
 ) {
@@ -289,6 +311,7 @@ fn update_apps<F: FbViewMut>(
         }
 
         if app.is_open {
+
             let font_h = DEFAULT_FONT.char_h as u32;
             let titlebar_h = 3 * DECO_PADDING as u32 + font_h;
             let deco_rect = Rect {
@@ -351,9 +374,9 @@ fn update_apps<F: FbViewMut>(
                 None,
             );
 
-            let t0 = clock.time();
-            app.wasm_app.step(system_state, fb, &app.rect);
-            let t1 = clock.time();
+            let t0 = system.as_ref().borrow().clock.time();
+            app.wasm_app.step(system.clone(), system_state, fb, &app.rect);
+            let t1 = system.as_ref().borrow().clock.time();
             const SMOOTHING: f64 = 0.9;
             app.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * app.time_used;
         }

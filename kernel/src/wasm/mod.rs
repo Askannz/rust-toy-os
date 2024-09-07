@@ -5,6 +5,7 @@ use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
 use alloc::{borrow::ToOwned, string::String};
+use core::borrow::BorrowMut;
 use core::cell::RefCell;
 use core::mem::size_of;
 use smoltcp::iface::SocketHandle;
@@ -21,6 +22,7 @@ use applib::{FbViewMut, Framebuffer, Rect, SystemState};
 
 use crate::network::TcpStack;
 use crate::time::SystemClock;
+use crate::system::{self, System};
 
 pub struct WasmEngine {
     engine: Engine,
@@ -36,14 +38,13 @@ impl WasmEngine {
 
     pub fn instantiate_app(
         &self,
-        tcp_stack: Rc<RefCell<TcpStack>>,
-        clock: Rc<SystemClock>,
+        system: Rc<RefCell<System>>,
         wasm_code: &[u8],
         app_name: &str,
         init_rect: &Rect,
     ) -> WasmApp {
         let module = Module::new(&self.engine, wasm_code).unwrap();
-        let store_data = StoreData::new(tcp_stack, clock, app_name, init_rect);
+        let store_data = StoreData::new(app_name, init_rect);
         let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
         let mut linker = <Linker<StoreData>>::new(&self.engine);
 
@@ -63,10 +64,14 @@ impl WasmEngine {
         //
         // App init
 
+        store.data_mut().system = Some(system);
+
         log::info!("Initializing {}", app_name);
         wasm_init
             .call(&mut store, ())
             .expect("Failed to initialize WASM app");
+
+        store.data_mut().system = None;
 
         WasmApp {
             store,
@@ -158,9 +163,7 @@ struct StoreData {
     win_rect: Rect,
     framebuffer: Option<WasmFramebufferDef>,
 
-    rng: SmallRng,
-    tcp_stack: Rc<RefCell<TcpStack>>,
-    clock: Rc<SystemClock>,
+    system: Option<Rc<RefCell<System>>>,
     sockets_store: SocketsStore,
 
     timings: BTreeMap<String, u64>,
@@ -169,9 +172,8 @@ struct StoreData {
 }
 
 impl StoreData {
+
     fn new(
-        tcp_stack: Rc<RefCell<TcpStack>>,
-        clock: Rc<SystemClock>,
         app_name: &str,
         init_rect: &Rect,
     ) -> Self {
@@ -180,14 +182,24 @@ impl StoreData {
             system_state: None,
             framebuffer: None,
             win_rect: init_rect.clone(),
-            rng: SmallRng::seed_from_u64(0),
-            tcp_stack,
-            clock,
+            //rng: SmallRng::seed_from_u64(0),
+            system: None,
             sockets_store: SocketsStore::new(),
             timings: BTreeMap::new(),
 
             qemu_dump: None,
         }
+    }
+
+    fn with_system<F, T>(&self, mut func: F) -> T
+     where F: FnMut(&mut System) -> T {
+
+        let s1 = self.system.clone();
+        let s2 = s1.expect("No System was set");
+        let s3 = s2.as_ref();
+        let mut s4 = s3.borrow_mut();
+
+        func(&mut s4)
     }
 }
 
@@ -200,6 +212,7 @@ pub struct WasmApp {
 impl WasmApp {
     pub fn step<F: FbViewMut>(
         &mut self,
+        system: Rc<RefCell<System>>,
         system_state: &SystemState,
         system_fb: &mut F,
         win_rect: &Rect,
@@ -208,21 +221,17 @@ impl WasmApp {
 
         let mut ctx = self.store.as_context_mut();
         let data_mut = ctx.data_mut();
-        let clock = data_mut.clock.clone();
 
+        data_mut.system = Some(system.clone());
         data_mut.system_state = Some(system_state.clone());
         data_mut.win_rect = win_rect.clone();
         data_mut.timings.clear();
 
-        let t0 = clock.time();
-        let fu0 = self.store.get_fuel().unwrap();
         self.wasm_step
             .call(&mut self.store, ())
             .expect("Failed to step WASM app");
-        let t1 = clock.time();
-        let fu1 = self.store.get_fuel().unwrap();
 
-        debug_stall(t0, t1, fu0, fu1, self.store.data());
+        //debug_stall(t0, t1, fu0, fu1, self.store.data());
 
         let wasm_fb_def = self.store.as_context().data().framebuffer.clone();
         if let Some(wasm_fb_def) = wasm_fb_def {
@@ -378,9 +387,12 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
             precision
         );
 
-        let clock = &caller.data().clock;
+        let s1 = caller.data().system.clone();
+        let s2 = s1.unwrap();
+        let s3 = s2.as_ref();
+        let s4 = s3.borrow_mut();
 
-        let t = (clock.time() * 1e9) as u64; // Not sure about the 1e9
+        let t = (s4.clock.time() * 1e9) as u64; // Not sure about the 1e9
 
         let mem = get_linear_memory(&caller);
         let mem_data = mem.data_mut(&mut caller);
@@ -401,8 +413,10 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         let buf_len = buf_len as usize;
 
         let mut rand_bytes = vec![0u8; buf_len];
-        let rng = &mut caller.data_mut().rng;
-        rng.fill_bytes(&mut rand_bytes);
+
+        caller.data().with_system(|system| {
+            system.rng.fill_bytes(&mut rand_bytes);
+        });
 
         let mem = get_linear_memory(&caller);
         let mem_data = mem.data_mut(&mut caller);
@@ -564,15 +578,17 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                                          ip_addr: i32,
                                          port: i32|
      -> i32 {
+
         let mut try_connect = || -> anyhow::Result<i32> {
-            let data_mut = caller.data_mut();
-            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
 
             let ip_bytes = ip_addr.to_le_bytes();
             let port: u16 = port.try_into().expect("Invalid port value");
 
-            let socket_handle = tcp_stack.connect(Ipv4Address(ip_bytes), port)?;
-            let handle_id = data_mut.sockets_store.add_handle(socket_handle);
+            let socket_handle = caller.data().with_system(|system| {
+                system.tcp_stack.connect(Ipv4Address(ip_bytes), port)
+            })?;
+
+            let handle_id = caller.data_mut().sockets_store.add_handle(socket_handle);
             Ok(handle_id)
         };
 
@@ -585,28 +601,36 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         }
     });
 
-    linker_impl!(m, "host_tcp_may_send", |caller: Caller<StoreData>,
+    linker_impl!(m, "host_tcp_may_send", |mut caller: Caller<StoreData>,
                                           handle_id: i32|
      -> i32 {
-        let data = caller.data();
-        let tcp_stack = data.tcp_stack.borrow_mut();
-        let socket_handle = data
+
+        let socket_handle = caller.data_mut()
             .sockets_store
             .get_handle(handle_id)
             .expect("No TCP connection");
-        tcp_stack.may_send(socket_handle).into()
+
+        let ret: bool = caller.data().with_system(|system| {
+            system.tcp_stack.may_send(socket_handle).into()
+        });
+
+        ret.into()
     });
 
-    linker_impl!(m, "host_tcp_may_recv", |caller: Caller<StoreData>,
+    linker_impl!(m, "host_tcp_may_recv", |mut caller: Caller<StoreData>,
                                           handle_id: i32|
      -> i32 {
-        let data = caller.data();
-        let tcp_stack = data.tcp_stack.borrow_mut();
-        let socket_handle = data
+
+        let socket_handle = caller.data_mut()
             .sockets_store
             .get_handle(handle_id)
             .expect("No TCP connection");
-        tcp_stack.may_recv(socket_handle).into()
+
+        let ret: bool = caller.data().with_system(|system| {
+            system.tcp_stack.may_recv(socket_handle).into()
+        });
+
+        ret.into()
     });
 
     linker_impl!(m, "host_tcp_write", |mut caller: Caller<StoreData>,
@@ -617,16 +641,15 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         let mut try_write = || -> anyhow::Result<i32> {
             let buf = get_wasm_mem_slice(&mut caller, addr, len).to_vec();
 
-            let data_mut = caller.data_mut();
-            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
-
-            let socket_handle = data_mut
+            let socket_handle = caller.data_mut()
                 .sockets_store
                 .get_handle(handle_id)
                 .expect("No TCP connection");
 
-            let written_len = tcp_stack.write(socket_handle, &buf)?;
-
+            let written_len = caller.data().with_system(|system| {
+                system.tcp_stack.write(socket_handle, &buf)
+            })?;
+    
             let written_len: i32 = written_len.try_into().map_err(anyhow::Error::msg)?;
 
             Ok(written_len)
@@ -647,19 +670,20 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                                       handle_id: i32|
      -> i32 {
         let mut try_read = || -> anyhow::Result<i32> {
+
             let len = len as usize;
             let addr = addr as usize;
 
             let mut buf = vec![0u8; len];
 
             let read_len: usize = {
-                let data_mut = caller.data_mut();
-                let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
-                let socket_handle = data_mut
+                let socket_handle = caller.data_mut()
                     .sockets_store
                     .get_handle(handle_id)
                     .expect("No TCP connection");
-                tcp_stack.read(socket_handle, &mut buf)?
+                caller.data().with_system(|system| {
+                    system.tcp_stack.read(socket_handle, &mut buf)
+                })?
             };
 
             let mem = get_linear_memory(&caller);
@@ -685,13 +709,15 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         m,
         "host_tcp_close",
         |mut caller: Caller<StoreData>, handle_id: i32| {
-            let data_mut = caller.data_mut();
-            let mut tcp_stack = data_mut.tcp_stack.borrow_mut();
-            let socket_handle = data_mut
+
+            let socket_handle = caller.data_mut()
                 .sockets_store
                 .get_handle(handle_id)
                 .expect("No TCP connection");
-            tcp_stack.close(socket_handle);
+
+            caller.data().with_system(|system| {
+                system.tcp_stack.close(socket_handle)
+            })
         }
     );
 
@@ -701,7 +727,9 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         |mut caller: Caller<StoreData>, buf: i32| {
             let buf = buf as usize;
 
-            let t = &caller.data().clock.time();
+            let t = caller.data().with_system(|system| {
+                system.clock.time()
+            });
 
             let mem = get_linear_memory(&caller);
             let mem_data = mem.data_mut(&mut caller);

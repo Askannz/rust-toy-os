@@ -12,7 +12,7 @@ use applib::drawing::text::{
 use applib::input::InputEvent;
 use applib::input::{InputState, Keycode};
 use applib::uitk::{self, IncrementalUuidProvider, UiStore};
-use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
+use applib::{Color, FbViewMut, Rect};
 use core::cell::OnceCell;
 use guestlib::{PixelData};
 use guestlib::WasmLogger;

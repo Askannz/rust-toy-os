@@ -5,22 +5,19 @@
 
 use alloc::format;
 use alloc::rc::Rc;
-use alloc::string::ToString;
 use alloc::vec::Vec;
-use network::TcpStack;
 use rand::rngs::SmallRng;
-use core::cell::{Ref, RefCell};
+use core::cell::RefCell;
 use core::panic::PanicInfo;
-use lazy_static::lazy_static;
 use uefi::prelude::{entry, Boot, Handle, Status, SystemTable};
 use uefi::table::boot::MemoryType;
 use rand::SeedableRng;
 
-use applib::drawing::primitives::{blend_rect, draw_rect};
+use applib::drawing::primitives::draw_rect;
 use applib::drawing::text::{draw_str, DEFAULT_FONT};
 use applib::input::{InputEvent, InputState};
-use applib::uitk::{self, UiStore};
-use applib::{decode_png, Color, FbViewMut, Framebuffer, OwnedPixels, Rect, SystemState};
+use applib::uitk::{self};
+use applib::{Color, FbViewMut, Framebuffer, Rect, SystemState};
 
 extern crate alloc;
 
@@ -44,8 +41,8 @@ use virtio::network::VirtioNetwork;
 
 use system::System;
 use applib::input::keymap::{EventType, Keycode};
-use wasm::{WasmApp, WasmEngine};
-use app::{App, AppDescriptor};
+use wasm::WasmEngine;
+use app::App;
 use resources::{WALLPAPER, APPLICATIONS};
 
 const FPS_TARGET: f64 = 60.0;

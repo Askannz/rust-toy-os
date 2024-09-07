@@ -1,4 +1,4 @@
-use core::borrow::{Borrow, BorrowMut};
+use core::borrow::Borrow;
 
 use crate::alloc::string::ToString;
 use alloc::rc::Rc;
@@ -7,9 +7,8 @@ use core::cell::RefCell;
 
 use applib::drawing::primitives::{blend_rect, draw_rect};
 use applib::drawing::text::{draw_str, DEFAULT_FONT};
-use applib::input::{InputEvent, InputState};
-use applib::uitk::{self, UiContext, UiStore};
-use applib::{decode_png, Color, FbViewMut, Framebuffer, OwnedPixels, Rect, SystemState};
+use applib::uitk::{self, UiContext};
+use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect, SystemState};
 
 use crate::system::System;
 use crate::wasm::{WasmApp, WasmEngine};

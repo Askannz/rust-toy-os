@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
 use crate::app::AppDescriptor;
-use applib::{decode_png, Color, FbViewMut, Framebuffer, OwnedPixels, Rect, SystemState};
+use applib::{decode_png, Framebuffer, OwnedPixels, Rect};
 
 lazy_static! {
 

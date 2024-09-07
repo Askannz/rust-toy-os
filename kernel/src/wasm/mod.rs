@@ -10,8 +10,7 @@ use core::cell::RefCell;
 use core::mem::size_of;
 use smoltcp::iface::SocketHandle;
 
-use rand::rngs::SmallRng;
-use rand::{RngCore, SeedableRng};
+use rand::RngCore;
 use smoltcp::wire::Ipv4Address;
 use wasmi::{
     AsContext, AsContextMut, Caller, Config, Engine, Func, Instance, Linker, Memory, Module, Store,
@@ -20,9 +19,7 @@ use wasmi::{
 
 use applib::{FbViewMut, Framebuffer, Rect, SystemState};
 
-use crate::network::TcpStack;
-use crate::time::SystemClock;
-use crate::system::{self, System};
+use crate::system::{System};
 
 pub struct WasmEngine {
     engine: Engine,

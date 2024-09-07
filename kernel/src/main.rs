@@ -32,8 +32,9 @@ mod serial;
 mod time;
 mod virtio;
 mod wasm;
-//mod app;
+mod app;
 mod system;
+mod resources;
 
 use time::SystemClock;
 
@@ -44,104 +45,8 @@ use virtio::network::VirtioNetwork;
 use system::System;
 use applib::input::keymap::{EventType, Keycode};
 use wasm::{WasmApp, WasmEngine};
-
-#[derive(Clone)]
-struct AppDescriptor {
-    data: &'static [u8],
-    launch_rect: Rect,
-    name: &'static str,
-    init_win_rect: Rect,
-    icon: Option<&'static Framebuffer<OwnedPixels>>,
-}
-
-struct App {
-    wasm_app: WasmApp,
-    descriptor: AppDescriptor,
-    is_open: bool,
-    rect: Rect,
-    grab_pos: Option<(i64, i64)>,
-    time_used: f64,
-}
-
-lazy_static! {
-    static ref WALLPAPER: Vec<u8> = decode_png(include_bytes!("../../wallpaper.png"));
-    static ref CUBE_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/cube.png"));
-    static ref CHRONO_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/chronometer.png"));
-    static ref TERMINAL_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/terminal.png"));
-    static ref APPLICATIONS: [AppDescriptor; 4] = [
-        AppDescriptor {
-            data: include_bytes!("../../embedded_data/cube_3d.wasm"),
-            launch_rect: Rect {
-                x0: 100,
-                y0: 100,
-                w: 200,
-                h: 40
-            },
-            name: "3D Cube",
-            init_win_rect: Rect {
-                x0: 200,
-                y0: 200,
-                w: 200,
-                h: 200
-            },
-            icon: Some(&CUBE_ICON),
-        },
-        AppDescriptor {
-            data: include_bytes!("../../embedded_data/chronometer.wasm"),
-            launch_rect: Rect {
-                x0: 100,
-                y0: 150,
-                w: 200,
-                h: 40
-            },
-            name: "Chronometer",
-            init_win_rect: Rect {
-                x0: 600,
-                y0: 200,
-                w: 200,
-                h: 200
-            },
-            icon: Some(&CHRONO_ICON),
-        },
-        AppDescriptor {
-            data: include_bytes!("../../embedded_data/terminal.wasm"),
-            launch_rect: Rect {
-                x0: 100,
-                y0: 200,
-                w: 200,
-                h: 40
-            },
-            name: "Terminal",
-            init_win_rect: Rect {
-                x0: 400,
-                y0: 300,
-                w: 600,
-                h: 300
-            },
-            icon: Some(&TERMINAL_ICON),
-        },
-        AppDescriptor {
-            data: include_bytes!("../../embedded_data/web_browser.wasm"),
-            launch_rect: Rect {
-                x0: 100,
-                y0: 250,
-                w: 200,
-                h: 40
-            },
-            name: "Web Browser",
-            init_win_rect: Rect {
-                x0: 400,
-                y0: 300,
-                w: 800,
-                h: 600
-            },
-            icon: None,
-        },
-    ];
-}
+use app::{App, AppDescriptor};
+use resources::{WALLPAPER, APPLICATIONS};
 
 const FPS_TARGET: f64 = 60.0;
 const LIMIT_FPS: bool = true;
@@ -203,19 +108,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut applications: Vec<App> = APPLICATIONS
         .iter()
-        .map(|app_desc| App {
-            descriptor: app_desc.clone(),
-            wasm_app: wasm_engine.instantiate_app(
-                system.clone(),
-                app_desc.data,
-                app_desc.name,
-                &app_desc.init_win_rect,
-            ),
-            is_open: false,
-            rect: app_desc.init_win_rect.clone(),
-            grab_pos: None,
-            time_used: 0.0,
-        })
+        .map(|app_desc| app_desc.instantiate(system.clone(), &wasm_engine))
         .collect();
 
     log::info!("Applications loaded");
@@ -228,7 +121,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut ui_store = uitk::UiStore::new();
     let mut uuid_provider = uitk::IncrementalUuidProvider::new();
-
 
 
     log::info!("Entering main loop");

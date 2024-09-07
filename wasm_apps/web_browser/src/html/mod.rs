@@ -1,4 +1,4 @@
-pub mod parsing;
-pub mod layout;
-pub mod render;
 pub mod canvas;
+pub mod layout;
+pub mod parsing;
+pub mod render;

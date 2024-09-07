@@ -1,5 +1,5 @@
 use core::hash::{Hash, Hasher};
-use md5::{Md5, Digest};
+use md5::{Digest, Md5};
 
 pub fn compute_hash<T: Hash>(val: T) -> u64 {
     let mut hasher = HasherWrapper(Md5::new());

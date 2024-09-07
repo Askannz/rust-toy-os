@@ -15,10 +15,9 @@ pub struct InputState {
 }
 
 impl InputState {
-
     pub fn new(w: u32, h: u32) -> Self {
-        Self { 
-            pointer: PointerState { 
+        Self {
+            pointer: PointerState {
                 x: (w / 2).into(),
                 y: (h / 2).into(),
                 delta_x: 0,
@@ -40,19 +39,21 @@ impl InputState {
     }
 
     pub fn add_event(&mut self, event: InputEvent) {
-
         self.update_shift_key_state(&event);
 
         if self.next_event_index < self.events.len() {
             self.events[self.next_event_index] = Some(event);
             self.next_event_index += 1;
         } else {
-            log::warn!("Max input events {} reached, dropping event {:?}", MAX_EVENTS, event);
+            log::warn!(
+                "Max input events {} reached, dropping event {:?}",
+                MAX_EVENTS,
+                event
+            );
         }
     }
 
     pub fn change_origin(&self, rect: &Rect) -> Self {
-    
         let mut new = self.clone();
 
         let PointerState { x, y, .. } = self.pointer;
@@ -65,18 +66,15 @@ impl InputState {
     }
 
     fn update_shift_key_state(&mut self, event: &InputEvent) {
-
-        let check_is_shift = |&keycode| {
-            keycode == Keycode::KEY_LEFTSHIFT || 
-            keycode == Keycode::KEY_RIGHTSHIFT
-        };
+        let check_is_shift =
+            |&keycode| keycode == Keycode::KEY_LEFTSHIFT || keycode == Keycode::KEY_RIGHTSHIFT;
 
         match event {
             InputEvent::KeyPress { keycode } if check_is_shift(keycode) => self.shift = true,
             InputEvent::KeyRelease { keycode } if check_is_shift(keycode) => self.shift = false,
-            _ => ()
+            _ => (),
         }
-    } 
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -98,5 +96,5 @@ pub struct PointerState {
 pub enum InputEvent {
     KeyPress { keycode: Keycode },
     KeyRelease { keycode: Keycode },
-    Scroll { delta: i64 }
+    Scroll { delta: i64 },
 }

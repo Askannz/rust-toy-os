@@ -1,10 +1,10 @@
 extern crate alloc;
 
-use core::cell::OnceCell;
 use alloc::format;
-use guestlib::FramebufferHandle;
-use applib::{Color, FbViewMut};
 use applib::drawing::text::{draw_str, DEFAULT_FONT};
+use applib::{Color, FbViewMut};
+use core::cell::OnceCell;
+use guestlib::FramebufferHandle;
 
 mod drawing;
 use drawing::draw_chrono;
@@ -20,7 +20,6 @@ fn main() {}
 
 #[no_mangle]
 pub fn init() -> () {
-
     // TESTING
     // println!("Connecting TCP");
     // guestlib::tcp_connect();
@@ -28,12 +27,13 @@ pub fn init() -> () {
     let win_rect = guestlib::get_win_rect();
     let fb_handle = guestlib::create_framebuffer(win_rect.w, win_rect.h);
     let state = AppState { fb_handle };
-    unsafe { APP_STATE.set(state).expect("App already initialized"); }
+    unsafe {
+        APP_STATE.set(state).expect("App already initialized");
+    }
 }
 
 #[no_mangle]
 pub fn step() {
-
     let state = unsafe { APP_STATE.get_mut().expect("App not initialized") };
 
     let t = guestlib::get_time();
@@ -44,5 +44,13 @@ pub fn step() {
     draw_chrono(&mut framebuffer, t);
 
     let s = format!("{:.1}", t);
-    draw_str(&mut framebuffer, &s, 0, 0, &DEFAULT_FONT, Color::YELLOW, None);
+    draw_str(
+        &mut framebuffer,
+        &s,
+        0,
+        0,
+        &DEFAULT_FONT,
+        Color::YELLOW,
+        None,
+    );
 }

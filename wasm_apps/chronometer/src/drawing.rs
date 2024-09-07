@@ -1,7 +1,6 @@
-use num_traits::Float;
+use applib::drawing::primitives::{draw_triangle, ScreenPoint};
 use applib::{Color, FbViewMut};
-use applib::drawing::primitives::{ScreenPoint, draw_triangle};
-
+use num_traits::Float;
 
 const PI: f64 = 3.14159265359;
 
@@ -11,8 +10,7 @@ const HAND_LEN: f64 = 80.0;
 const DIVIDER: f64 = 60_000.0;
 
 pub fn draw_chrono<F: FbViewMut>(fb: &mut F, time: f64) {
-
-    let angle = (time % DIVIDER) / DIVIDER  * 2.0 * PI;
+    let angle = (time % DIVIDER) / DIVIDER * 2.0 * PI;
 
     let (fb_w, fb_h) = fb.shape();
 
@@ -27,11 +25,19 @@ pub fn draw_chrono<F: FbViewMut>(fb: &mut F, time: f64) {
     let p2y = (y0 - HAND_BASE_HALF_W * angle.cos()).round();
 
     let tri = [
-        ScreenPoint { x: p0x as i64, y: p0y as i64 },
-        ScreenPoint { x: p1x as i64, y: p1y as i64 },
-        ScreenPoint { x: p2x as i64, y: p2y as i64 },
+        ScreenPoint {
+            x: p0x as i64,
+            y: p0y as i64,
+        },
+        ScreenPoint {
+            x: p1x as i64,
+            y: p1y as i64,
+        },
+        ScreenPoint {
+            x: p2x as i64,
+            y: p2y as i64,
+        },
     ];
 
     draw_triangle(fb, &tri, Color::WHITE);
 }
-

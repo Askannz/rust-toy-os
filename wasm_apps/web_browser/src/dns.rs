@@ -1,14 +1,12 @@
 use std::borrow::Borrow;
 
 use alloc::vec::Vec;
-use bytes::{Bytes};
+use bytes::Bytes;
 
-use dns_message_parser::{Dns, Flags, Opcode, RCode, rr::RR};
 use dns_message_parser::question::{QClass, QType, Question};
-
+use dns_message_parser::{rr::RR, Dns, Flags, Opcode, RCode};
 
 pub fn make_tcp_dns_request(domain_name: &str) -> Vec<u8> {
-
     // TODO: make this random
     let id = 0x0001;
 
@@ -59,11 +57,14 @@ pub fn parse_tcp_dns_response(buf: &[u8]) -> anyhow::Result<[u8; 4]> {
     let bytes = Bytes::copy_from_slice(buf);
     let dns = Dns::decode(bytes).expect("Invalid DNS response");
 
-    let ip_addr = dns.answers.iter().find_map(|ans| match ans {
-        RR::A(ans) => Some(ans.ipv4_addr.octets()),
-        _ => None,
-    })
-    .ok_or(anyhow::Error::msg("Invalid DNS response (no A record)"))?;
+    let ip_addr = dns
+        .answers
+        .iter()
+        .find_map(|ans| match ans {
+            RR::A(ans) => Some(ans.ipv4_addr.octets()),
+            _ => None,
+        })
+        .ok_or(anyhow::Error::msg("Invalid DNS response (no A record)"))?;
 
     Ok(ip_addr)
 }

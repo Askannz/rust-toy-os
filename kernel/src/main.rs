@@ -3,32 +3,32 @@
 #![feature(alloc_error_handler)]
 #![feature(abi_x86_interrupt)]
 
-use core::panic::PanicInfo;
-use core::cell::RefCell;
 use alloc::format;
+use alloc::rc::Rc;
 use alloc::string::ToString;
 use alloc::vec::Vec;
-use alloc::rc::Rc;
+use core::cell::RefCell;
+use core::panic::PanicInfo;
 use lazy_static::lazy_static;
-use uefi::prelude::{entry, Handle, SystemTable, Boot, Status};
+use uefi::prelude::{entry, Boot, Handle, Status, SystemTable};
 use uefi::table::boot::MemoryType;
 
-use applib::{Color, Rect, Framebuffer, SystemState, decode_png, OwnedPixels, FbViewMut};
-use applib::input::{InputState, InputEvent};
-use applib::drawing::text::{DEFAULT_FONT, draw_str};
-use applib::drawing::primitives::{draw_rect, blend_rect};
+use applib::drawing::primitives::{blend_rect, draw_rect};
+use applib::drawing::text::{draw_str, DEFAULT_FONT};
+use applib::input::{InputEvent, InputState};
 use applib::uitk::{self, UiStore};
+use applib::{decode_png, Color, FbViewMut, Framebuffer, OwnedPixels, Rect, SystemState};
 
 extern crate alloc;
 
-mod memory;
-mod serial;
 mod logging;
-mod time;
+mod memory;
+mod network;
 mod pci;
+mod serial;
+mod time;
 mod virtio;
 mod wasm;
-mod network;
 
 use time::SystemClock;
 
@@ -37,7 +37,7 @@ use virtio::input::VirtioInput;
 use virtio::network::VirtioNetwork;
 
 use applib::input::keymap::{EventType, Keycode};
-use wasm::{WasmEngine, WasmApp};
+use wasm::{WasmApp, WasmEngine};
 
 #[derive(Clone)]
 struct AppDescriptor {
@@ -45,7 +45,7 @@ struct AppDescriptor {
     launch_rect: Rect,
     name: &'static str,
     init_win_rect: Rect,
-    icon: Option<&'static Framebuffer<OwnedPixels>>
+    icon: Option<&'static Framebuffer<OwnedPixels>>,
 }
 
 struct App {
@@ -59,37 +59,79 @@ struct App {
 
 lazy_static! {
     static ref WALLPAPER: Vec<u8> = decode_png(include_bytes!("../../wallpaper.png"));
-    static ref CUBE_ICON: Framebuffer<OwnedPixels> = Framebuffer::from_png(include_bytes!("../icons/cube.png"));
-    static ref CHRONO_ICON: Framebuffer<OwnedPixels> = Framebuffer::from_png(include_bytes!("../icons/chronometer.png"));
-    static ref TERMINAL_ICON: Framebuffer<OwnedPixels> = Framebuffer::from_png(include_bytes!("../icons/terminal.png"));
-
+    static ref CUBE_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/cube.png"));
+    static ref CHRONO_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/chronometer.png"));
+    static ref TERMINAL_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/terminal.png"));
     static ref APPLICATIONS: [AppDescriptor; 4] = [
         AppDescriptor {
             data: include_bytes!("../../embedded_data/cube_3d.wasm"),
-            launch_rect: Rect { x0: 100, y0: 100, w: 200, h: 40 },
+            launch_rect: Rect {
+                x0: 100,
+                y0: 100,
+                w: 200,
+                h: 40
+            },
             name: "3D Cube",
-            init_win_rect: Rect { x0: 200, y0: 200, w: 200, h: 200 },
+            init_win_rect: Rect {
+                x0: 200,
+                y0: 200,
+                w: 200,
+                h: 200
+            },
             icon: Some(&CUBE_ICON),
         },
         AppDescriptor {
             data: include_bytes!("../../embedded_data/chronometer.wasm"),
-            launch_rect: Rect { x0: 100, y0: 150, w: 200, h: 40 },
+            launch_rect: Rect {
+                x0: 100,
+                y0: 150,
+                w: 200,
+                h: 40
+            },
             name: "Chronometer",
-            init_win_rect: Rect { x0: 600, y0: 200, w: 200, h: 200 },
+            init_win_rect: Rect {
+                x0: 600,
+                y0: 200,
+                w: 200,
+                h: 200
+            },
             icon: Some(&CHRONO_ICON),
         },
         AppDescriptor {
             data: include_bytes!("../../embedded_data/terminal.wasm"),
-            launch_rect: Rect { x0: 100, y0: 200, w: 200, h: 40 },
+            launch_rect: Rect {
+                x0: 100,
+                y0: 200,
+                w: 200,
+                h: 40
+            },
             name: "Terminal",
-            init_win_rect: Rect { x0: 400, y0: 300, w: 600, h: 300 },
+            init_win_rect: Rect {
+                x0: 400,
+                y0: 300,
+                w: 600,
+                h: 300
+            },
             icon: Some(&TERMINAL_ICON),
         },
         AppDescriptor {
             data: include_bytes!("../../embedded_data/web_browser.wasm"),
-            launch_rect: Rect { x0: 100, y0: 250, w: 200, h: 40 },
+            launch_rect: Rect {
+                x0: 100,
+                y0: 250,
+                w: 200,
+                h: 40
+            },
             name: "Web Browser",
-            init_win_rect: Rect { x0: 400, y0: 300, w: 800, h: 600 },
+            init_win_rect: Rect {
+                x0: 400,
+                y0: 300,
+                w: 800,
+                h: 600
+            },
             icon: None,
         },
     ];
@@ -98,21 +140,17 @@ lazy_static! {
 const FPS_TARGET: f64 = 60.0;
 const LIMIT_FPS: bool = true;
 
-
-
 static LOGGER: logging::SerialLogger = logging::SerialLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 #[entry]
 fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
-
     log::set_max_level(LOGGING_LEVEL);
     log::set_logger(&LOGGER).unwrap();
 
     log::info!("Booting kernel");
 
-    let (system_table, memory_map) = system_table
-        .exit_boot_services(MemoryType::LOADER_DATA);
+    let (system_table, memory_map) = system_table.exit_boot_services(MemoryType::LOADER_DATA);
 
     log::info!("Exited UEFI boot services");
 
@@ -145,39 +183,44 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     //let socket_handle = tcp_stack.borrow_mut().connect(Ipv4Address([93, 184, 216, 34]), 80);
 
-
     log::info!("TCP stack initialized");
 
     let (w, h) = virtio_gpu.get_dims();
     let (w, h) = (w as u32, h as u32);
     let wasm_engine = WasmEngine::new();
 
-    let mut applications: Vec<App> = APPLICATIONS.iter().map(|app_desc| App {
-        descriptor: app_desc.clone(),
-        wasm_app: wasm_engine.instantiate_app(tcp_stack.clone(), clock.clone(), app_desc.data, app_desc.name, &app_desc.init_win_rect),
-        is_open: false,
-        rect: app_desc.init_win_rect.clone(),
-        grab_pos: None,
-        time_used: 0.0,
-    }).collect();
+    let mut applications: Vec<App> = APPLICATIONS
+        .iter()
+        .map(|app_desc| App {
+            descriptor: app_desc.clone(),
+            wasm_app: wasm_engine.instantiate_app(
+                tcp_stack.clone(),
+                clock.clone(),
+                app_desc.data,
+                app_desc.name,
+                &app_desc.init_win_rect,
+            ),
+            is_open: false,
+            rect: app_desc.init_win_rect.clone(),
+            grab_pos: None,
+            time_used: 0.0,
+        })
+        .collect();
 
     log::info!("Applications loaded");
 
     let mut fps_manager = FpsManager::new(FPS_TARGET);
 
-    let mut system_state = SystemState { 
+    let mut system_state = SystemState {
         input: InputState::new(w, h),
     };
 
     let mut ui_store = uitk::UiStore::new();
     let mut uuid_provider = uitk::IncrementalUuidProvider::new();
 
-
     log::info!("Entering main loop");
 
-
     loop {
-
         fps_manager.start_frame(&clock);
 
         tcp_stack.borrow_mut().poll_interface(&clock);
@@ -186,14 +229,19 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 
-        let fb_data = unsafe {
-            virtio_gpu.framebuffer.as_mut().align_to_mut::<u32>().1
-        };
+        let fb_data = unsafe { virtio_gpu.framebuffer.as_mut().align_to_mut::<u32>().1 };
         let mut framebuffer = Framebuffer::new(fb_data, w, h);
 
         //log::debug!("{:?}", system_state);
 
-        update_apps(&mut ui_store, &mut framebuffer, &mut uuid_provider, &clock, &system_state, &mut applications);
+        update_apps(
+            &mut ui_store,
+            &mut framebuffer,
+            &mut uuid_provider,
+            &clock,
+            &system_state,
+            &mut applications,
+        );
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
@@ -202,13 +250,17 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         virtio_gpu.flush();
     }
 
-
     //loop { x86_64::instructions::hlt(); }
-
 }
 
-fn update_apps<F: FbViewMut>(ui_store: &mut UiStore, fb: &mut F, uuid_provider: &mut uitk::IncrementalUuidProvider, clock: &SystemClock, system_state: &SystemState, applications: &mut Vec<App>) {
-
+fn update_apps<F: FbViewMut>(
+    ui_store: &mut UiStore,
+    fb: &mut F,
+    uuid_provider: &mut uitk::IncrementalUuidProvider,
+    clock: &SystemClock,
+    system_state: &SystemState,
+    applications: &mut Vec<App>,
+) {
     const ALPHA_SHADOW: u8 = 100;
 
     const COLOR_IDLE: Color = Color::rgba(0x44, 0x44, 0x44, 0xff);
@@ -223,16 +275,13 @@ fn update_apps<F: FbViewMut>(ui_store: &mut UiStore, fb: &mut F, uuid_provider: 
     let pointer_state = &input_state.pointer;
 
     for app in applications.iter_mut() {
-
         let mut uitk_context = ui_store.get_context(fb, input_state, uuid_provider);
-        let is_button_fired = uitk_context.button(
-            &uitk::ButtonConfig {
-                rect: app.descriptor.launch_rect.clone(),
-                text: app.descriptor.name.to_string(),
-                icon: app.descriptor.icon,
-                ..Default::default()
-            }
-        );
+        let is_button_fired = uitk_context.button(&uitk::ButtonConfig {
+            rect: app.descriptor.launch_rect.clone(),
+            text: app.descriptor.name.to_string(),
+            icon: app.descriptor.icon,
+            ..Default::default()
+        });
 
         if is_button_fired && !app.is_open {
             log::info!("{} is open", app.descriptor.name);
@@ -240,7 +289,6 @@ fn update_apps<F: FbViewMut>(ui_store: &mut UiStore, fb: &mut F, uuid_provider: 
         }
 
         if app.is_open {
-
             let font_h = DEFAULT_FONT.char_h as u32;
             let titlebar_h = 3 * DECO_PADDING as u32 + font_h;
             let deco_rect = Rect {
@@ -264,7 +312,8 @@ fn update_apps<F: FbViewMut>(ui_store: &mut UiStore, fb: &mut F, uuid_provider: 
                     w: deco_rect.w,
                     h: titlebar_h,
                 };
-                let app_hover = titlebar_rect.check_contains_point(pointer_state.x, pointer_state.y);
+                let app_hover =
+                    titlebar_rect.check_contains_point(pointer_state.x, pointer_state.y);
                 if app_hover && pointer_state.left_click_trigger {
                     let dx = pointer_state.x - app.rect.x0;
                     let dy = pointer_state.y - app.rect.y0;
@@ -274,7 +323,7 @@ fn update_apps<F: FbViewMut>(ui_store: &mut UiStore, fb: &mut F, uuid_provider: 
                 }
             }
 
-            let shadow_rect = Rect { 
+            let shadow_rect = Rect {
                 x0: deco_rect.x0 + OFFSET_SHADOW,
                 y0: deco_rect.y0 + OFFSET_SHADOW,
                 w: deco_rect.w,
@@ -284,11 +333,23 @@ fn update_apps<F: FbViewMut>(ui_store: &mut UiStore, fb: &mut F, uuid_provider: 
             blend_rect(fb, &shadow_rect, COLOR_SHADOW);
 
             let instance_hover = deco_rect.check_contains_point(pointer_state.x, pointer_state.y);
-            let color_app = if instance_hover { COLOR_HOVER } else { COLOR_IDLE };
+            let color_app = if instance_hover {
+                COLOR_HOVER
+            } else {
+                COLOR_IDLE
+            };
             draw_rect(fb, &deco_rect, color_app);
 
             let (x_txt, y_txt) = (app.rect.x0, app.rect.y0 - font_h as i64 - DECO_PADDING);
-            draw_str(fb, app.descriptor.name, x_txt, y_txt, &DEFAULT_FONT, COLOR_TEXT, None);
+            draw_str(
+                fb,
+                app.descriptor.name,
+                x_txt,
+                y_txt,
+                &DEFAULT_FONT,
+                COLOR_TEXT,
+                None,
+            );
 
             let t0 = clock.time();
             app.wasm_app.step(system_state, fb, &app.rect);
@@ -300,7 +361,6 @@ fn update_apps<F: FbViewMut>(ui_store: &mut UiStore, fb: &mut F, uuid_provider: 
 }
 
 fn draw_cursor<F: FbViewMut>(fb: &mut F, system_state: &SystemState) {
-
     const SIZE: u32 = 5;
     const BORDER: u32 = 1;
 
@@ -308,25 +368,33 @@ fn draw_cursor<F: FbViewMut>(fb: &mut F, system_state: &SystemState) {
     let x = pointer_state.x;
     let y = pointer_state.y;
 
-    let rect_outer = Rect { x0: x, y0: y, w: SIZE, h: SIZE };
-    let rect_inner = Rect { 
+    let rect_outer = Rect {
+        x0: x,
+        y0: y,
+        w: SIZE,
+        h: SIZE,
+    };
+    let rect_inner = Rect {
         x0: x + BORDER as i64,
         y0: y + BORDER as i64,
         w: SIZE - 2 * BORDER,
-        h: SIZE - 2*BORDER
+        h: SIZE - 2 * BORDER,
     };
 
     draw_rect(fb, &rect_outer, Color::BLACK);
     draw_rect(fb, &rect_inner, Color::WHITE);
 }
 
-fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_inputs: &mut [VirtioInput]) {
-
+fn update_input_state(
+    system_state: &mut SystemState,
+    dims: (u32, u32),
+    virtio_inputs: &mut [VirtioInput],
+) {
     let (w, h) = dims;
     let (w, h) = (w as i32, h as i32);
 
     let input_state = &mut system_state.input;
-    
+
     input_state.clear_events();
     input_state.pointer.left_click_trigger = false;
     input_state.pointer.right_click_trigger = false;
@@ -335,15 +403,12 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
 
     for virtio_inp in virtio_inputs.iter_mut() {
         for event in virtio_inp.poll() {
-
             //log::debug!("{:?}", event);
 
             match EventType::n(event._type) {
-
-                Some(EventType::EV_SYN) => {},
+                Some(EventType::EV_SYN) => {}
 
                 Some(EventType::EV_KEY) => match Keycode::n(event.code) {
-
                     // Mouse click
                     Some(Keycode::BTN_MOUSE_LEFT) => match event.value {
                         1 => {
@@ -351,7 +416,7 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                                 input_state.pointer.left_click_trigger = true;
                             }
                             input_state.pointer.left_clicked = true;
-                        },
+                        }
                         _ => input_state.pointer.left_clicked = false,
                     },
                     Some(Keycode::BTN_MOUSE_RIGHT) => match event.value {
@@ -360,7 +425,7 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                                 input_state.pointer.right_click_trigger = true;
                             }
                             input_state.pointer.right_clicked = true;
-                        },
+                        }
                         _ => input_state.pointer.right_clicked = false,
                     },
 
@@ -368,35 +433,40 @@ fn update_input_state(system_state: &mut SystemState, dims: (u32, u32), virtio_i
                     Some(keycode) => match event.value {
                         0 => input_state.add_event(InputEvent::KeyRelease { keycode }),
                         1 => input_state.add_event(InputEvent::KeyPress { keycode }),
-                        val => log::warn!("Unknown key state {}", val)
+                        val => log::warn!("Unknown key state {}", val),
                     },
-                    None => log::warn!("Unknown keycode {} for keyboard event", event.code)
+                    None => log::warn!("Unknown keycode {} for keyboard event", event.code),
                 },
 
                 // Mouse movement
                 Some(EventType::EV_REL) => match event.code {
-                    0 => {  // X axis
+                    0 => {
+                        // X axis
                         let dx = (event.value as i32) as i64;
                         let pointer_state = &mut input_state.pointer;
-                        let new_x = i64::max(0, i64::min(w as i64 - 1, pointer_state.x as i64 + dx));
+                        let new_x =
+                            i64::max(0, i64::min(w as i64 - 1, pointer_state.x as i64 + dx));
                         pointer_state.delta_x += dx;
                         pointer_state.x = new_x;
                     }
-                    1 => {  // Y axis
+                    1 => {
+                        // Y axis
                         let dy = (event.value as i32) as i64;
                         let pointer_state = &mut input_state.pointer;
-                        let new_y = i64::max(0, i64::min(h as i64 - 1, pointer_state.y as i64 + dy));
+                        let new_y =
+                            i64::max(0, i64::min(h as i64 - 1, pointer_state.y as i64 + dy));
                         pointer_state.delta_y += dy;
                         pointer_state.y = new_y;
-                    },
-                    8 => {  // Scroll wheel
+                    }
+                    8 => {
+                        // Scroll wheel
                         let delta = (event.value as i32) as i64;
                         input_state.add_event(InputEvent::Scroll { delta });
                     }
-                    _ => log::warn!("Unknown event code {} for pointer event", event.code)
+                    _ => log::warn!("Unknown event code {} for pointer event", event.code),
                 },
 
-                _ => log::warn!("Unknown event type {}", event._type)
+                _ => log::warn!("Unknown event type {}", event._type),
             };
         }
     }
@@ -410,9 +480,13 @@ struct FpsManager {
 }
 
 impl FpsManager {
-
     fn new(fps_target: f64) -> Self {
-        FpsManager { fps_target, frame_start_t: 0.0, frametime: 1000.0 / fps_target, used: 0.0 }
+        FpsManager {
+            fps_target,
+            frame_start_t: 0.0,
+            frametime: 1000.0 / fps_target,
+            used: 0.0,
+        }
     }
 
     fn start_frame(&mut self, clock: &SystemClock) {
@@ -420,7 +494,6 @@ impl FpsManager {
     }
 
     fn end_frame<F: FbViewMut>(&mut self, clock: &SystemClock, fb: &mut F) {
-
         const SMOOTHING: f64 = 0.8;
 
         let frametime_target = 1000.0 / self.fps_target;
@@ -435,16 +508,50 @@ impl FpsManager {
         let used_frac = self.used / frametime_target;
         let used_w = (used_frac * graph_w as f64) as u32;
         let graph_color = {
-            if 0.0 <= used_frac && used_frac < 0.50  { Color::GREEN }
-            else if 0.50 <= used_frac && used_frac < 0.75  { Color::YELLOW }
-            else { Color::RED }
+            if 0.0 <= used_frac && used_frac < 0.50 {
+                Color::GREEN
+            } else if 0.50 <= used_frac && used_frac < 0.75 {
+                Color::YELLOW
+            } else {
+                Color::RED
+            }
         };
-        draw_rect(fb, &Rect { x0: 0, y0: char_h as i64, w: graph_w, h: 12 }, Color::BLACK);
-        draw_rect(fb, &Rect { x0: 0, y0: char_h as i64 + 3, w: used_w, h: graph_h }, graph_color);
+        draw_rect(
+            fb,
+            &Rect {
+                x0: 0,
+                y0: char_h as i64,
+                w: graph_w,
+                h: 12,
+            },
+            Color::BLACK,
+        );
+        draw_rect(
+            fb,
+            &Rect {
+                x0: 0,
+                y0: char_h as i64 + 3,
+                w: used_w,
+                h: graph_h,
+            },
+            graph_color,
+        );
 
-        let budget_color = if self.used < frametime_target { Color::WHITE } else {  Color::RED };
+        let budget_color = if self.used < frametime_target {
+            Color::WHITE
+        } else {
+            Color::RED
+        };
         let budget_txt = format!("{:>6.2} ms", self.used);
-        draw_str(fb, &budget_txt, 0, (char_h + graph_h + 6) as i64, &DEFAULT_FONT, budget_color, None);
+        draw_str(
+            fb,
+            &budget_txt,
+            0,
+            (char_h + graph_h + 6) as i64,
+            &DEFAULT_FONT,
+            budget_color,
+            None,
+        );
 
         let frame_end_t = clock.time();
 
@@ -454,8 +561,8 @@ impl FpsManager {
             true => {
                 clock.spin_delay(frametime_target - self.used);
                 frametime_target
-            },
-            false => self.used
+            }
+            false => self.used,
         };
 
         self.frametime = SMOOTHING * self.frametime + (1.0 - SMOOTHING) * new_frametime;
@@ -463,7 +570,7 @@ impl FpsManager {
 }
 
 #[panic_handler]
-fn panic(info: &PanicInfo) ->  ! {
+fn panic(info: &PanicInfo) -> ! {
     log::error!("{}", info);
     loop {}
 }

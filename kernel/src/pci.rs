@@ -1,15 +1,14 @@
 use alloc::borrow::ToOwned;
-use alloc::vec::Vec;
-use core::mem;
 use alloc::collections::BTreeMap;
-use x86_64::instructions::port::{PortWriteOnly, Port};
+use alloc::vec::Vec;
+use bitvec::field::BitField;
 use bitvec::prelude::Lsb0;
 use bitvec::view::BitView;
-use bitvec::field::BitField;
+use core::mem;
+use x86_64::instructions::port::{Port, PortWriteOnly};
 
 #[derive(Debug)]
 pub struct PciDevice {
-
     pub addr: PciAddress,
     pub vendor_id: u16,
     pub device_id: u16,
@@ -23,44 +22,44 @@ pub struct PciDevice {
 pub struct PciAddress {
     bus: u8,
     device: u8,
-    function: u8
+    function: u8,
 }
 
 #[derive(Debug, Clone)]
 pub struct PciCapability {
     pub vendor: u8,
-    pub offset: u8
+    pub offset: u8,
 }
 
 #[derive(Debug)]
 pub struct PciConfigSpace {
     address_port: PortWriteOnly<u32>,
-    data_port: Port<u32>
+    data_port: Port<u32>,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum PciBar { 
+pub enum PciBar {
     Memory {
         addr_type: BarAddrType,
         prefetchable: bool,
         base_addr: u64,
-        size: u32
+        size: u32,
     },
     IO {
         base_addr: u32,
-        size: u32
-    }
+        size: u32,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum BarAddrType { Bar32, Bar64 }
-
+pub enum BarAddrType {
+    Bar32,
+    Bar64,
+}
 
 impl PciDevice {
-
     #[allow(dead_code)]
     pub fn set_interrupt_line(&self, line: u8) {
-
         let mut pci_config_space = PciConfigSpace::new();
 
         let mut word = unsafe { pci_config_space.read(&self.addr, 0x3c) };
@@ -77,7 +76,6 @@ impl PciDevice {
 
     #[allow(dead_code)]
     pub fn read_interrupt_line(&self) -> u8 {
-
         let mut pci_config_space = PciConfigSpace::new();
 
         let mut word = unsafe { pci_config_space.read(&self.addr, 0x3c) };
@@ -87,15 +85,11 @@ impl PciDevice {
     }
 
     pub fn disable_msix(&self) {
-
         let mut pci_config_space = PciConfigSpace::new();
-        
-        let cap = self.capabilities.iter()
-            .find(|cap| cap.vendor == 0x11);
-        
-        let cap = 
-            if let Some(cap) = cap { cap }
-            else { return };
+
+        let cap = self.capabilities.iter().find(|cap| cap.vendor == 0x11);
+
+        let cap = if let Some(cap) = cap { cap } else { return };
 
         let mut word = unsafe { pci_config_space.read(&self.addr, cap.offset) };
 
@@ -106,9 +100,7 @@ impl PciDevice {
     }
 }
 
-
 pub fn enumerate() -> Vec<PciDevice> {
-
     let mut pci_config_space = PciConfigSpace::new();
 
     // Don't care about multi-function devices for now
@@ -120,13 +112,18 @@ pub fn enumerate() -> Vec<PciDevice> {
     bus_iter
         .flat_map(move |bus| device_iter.clone().map(move |device| (bus, device)))
         .filter_map(move |(bus, device)| {
-
-            let addr = PciAddress { bus, device, function };
+            let addr = PciAddress {
+                bus,
+                device,
+                function,
+            };
 
             let word_0 = unsafe { pci_config_space.read(&addr, 0x0) };
 
             // No device at this address
-            if word_0 == u32::MAX { return None }
+            if word_0 == u32::MAX {
+                return None;
+            }
 
             // Header type
             let word_0c = unsafe { pci_config_space.read(&addr, 0x0c) };
@@ -149,18 +146,28 @@ pub fn enumerate() -> Vec<PciDevice> {
             let capabilities = get_capabilities(&mut pci_config_space, &addr);
             let bars = get_bars(&mut pci_config_space, &addr);
 
-            log::info!("Found PCI device, vendor={:#x} device={:#x}", vendor_id, device_id);
+            log::info!(
+                "Found PCI device, vendor={:#x} device={:#x}",
+                vendor_id,
+                device_id
+            );
 
             Some(PciDevice {
-                addr, vendor_id, device_id, class,
-                capabilities, bars,
+                addr,
+                vendor_id,
+                device_id,
+                class,
+                capabilities,
+                bars,
             })
         })
         .collect()
 }
 
-fn get_capabilities(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) -> Vec<PciCapability> {
-    
+fn get_capabilities(
+    pci_config_space: &mut PciConfigSpace,
+    addr: &PciAddress,
+) -> Vec<PciCapability> {
     let mut cap_ptr = {
         let mut word_34 = unsafe { pci_config_space.read(&addr, 0x34) };
         let bits_34 = word_34.view_bits_mut::<Lsb0>();
@@ -170,14 +177,14 @@ fn get_capabilities(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) ->
 
     let mut capabilities = Vec::new();
     while cap_ptr != 0x00 {
-
         let mut word_0 = unsafe { pci_config_space.read(&addr, cap_ptr) };
         let bits_0 = word_0.view_bits_mut::<Lsb0>();
 
         let vendor = bits_0[..8].load();
 
         capabilities.push(PciCapability {
-            vendor, offset: cap_ptr
+            vendor,
+            offset: cap_ptr,
         });
 
         cap_ptr = bits_0[8..16].load();
@@ -186,16 +193,13 @@ fn get_capabilities(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) ->
     capabilities
 }
 
-
 fn get_bars(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) -> BTreeMap<u32, PciBar> {
-
     const MAX_BARS: u32 = 6;
 
     let mut bars = BTreeMap::new();
     let mut it = 0..MAX_BARS;
 
     while let Some(i) = it.next() {
-
         let offset = 0x10 + 0x4 * (i as u8);
         let word_bars = unsafe { pci_config_space.read(&addr, offset) };
 
@@ -206,7 +210,6 @@ fn get_bars(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) -> BTreeMa
 
         // BAR size
         let size: u32 = {
-
             let mut word_size = unsafe {
                 pci_config_space.write(&addr, offset, u32::MAX);
                 let word_size = pci_config_space.read(&addr, offset);
@@ -217,9 +220,12 @@ fn get_bars(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) -> BTreeMa
             let bits_size = word_size.view_bits_mut::<Lsb0>();
             bits_size[..n_flags].fill(false);
             let val: u32 = bits_size.load();
-            
-            if val == 0 { 0 }
-            else { !val + 1 }
+
+            if val == 0 {
+                0
+            } else {
+                !val + 1
+            }
         };
 
         if size == 0 {
@@ -227,15 +233,13 @@ fn get_bars(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) -> BTreeMa
         }
 
         let bar = match io_mapped {
-    
             // Memory-mapped BAR
             false => {
-
                 // 32 or 64-bit BAR?
                 let addr_type = match bits_bar[1..3].load::<u8>() {
                     0x00 => BarAddrType::Bar32,
                     0x02 => BarAddrType::Bar64,
-                    val => panic!("Unsupported BAR size type: {}", val)
+                    val => panic!("Unsupported BAR size type: {}", val),
                 };
 
                 // Address (lower bits)
@@ -247,23 +251,21 @@ fn get_bars(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) -> BTreeMa
                 };
 
                 let base_addr = match addr_type {
-
                     BarAddrType::Bar32 => addr_low_bits.load::<u64>(),
 
                     BarAddrType::Bar64 => {
-
                         // Grabbing high bits of the address from next BAR
                         let next_i = it.next().expect("64-bit BAR but already in last BAR");
                         let next_offset = 0x10 + 0x4 * (next_i as u8);
                         let next_word_bars = unsafe { pci_config_space.read(&addr, next_offset) };
-                        let next_word_bars: u64 = next_word_bars.into(); 
+                        let next_word_bars: u64 = next_word_bars.into();
                         let addr_high_bits = next_word_bars.view_bits::<Lsb0>();
 
                         let addr_low_bits = addr_low_bits.as_bitslice();
 
                         let mut addr = 0u64;
                         let addr_bits = addr.view_bits_mut::<Lsb0>();
-                        
+
                         addr_bits[00..32].copy_from_bitslice(&addr_low_bits[..32]);
                         addr_bits[32..64].copy_from_bitslice(&addr_high_bits[..32]);
 
@@ -275,9 +277,9 @@ fn get_bars(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) -> BTreeMa
                     addr_type,
                     prefetchable: bits_bar[3],
                     base_addr,
-                    size
+                    size,
                 }
-            },
+            }
 
             // I/0-mapped BAR
             true => {
@@ -294,26 +296,25 @@ fn get_bars(pci_config_space: &mut PciConfigSpace, addr: &PciAddress) -> BTreeMa
     bars
 }
 
-
 impl PciConfigSpace {
-
     pub fn new() -> Self {
         PciConfigSpace {
             address_port: PortWriteOnly::<u32>::new(0xCF8),
-            data_port: Port::<u32>::new(0xCFC)
+            data_port: Port::<u32>::new(0xCFC),
         }
     }
 
     pub unsafe fn read_struct<T: Clone>(&mut self, addr: &PciAddress, offset: u8) -> T {
-
         let n = mem::size_of::<T>();
         assert_eq!(n % 4, 0);
         let num_words = n / 4;
 
-        let buf: Vec<u32> = (0..num_words).map(|i| {
-            let i: u8 = i.try_into().unwrap();
-            self.read(addr, offset + 4 * i)
-        }).collect();
+        let buf: Vec<u32> = (0..num_words)
+            .map(|i| {
+                let i: u8 = i.try_into().unwrap();
+                self.read(addr, offset + 4 * i)
+            })
+            .collect();
 
         let ptr = buf.as_ptr() as *const T;
         ptr.as_ref().unwrap().clone()
@@ -321,16 +322,14 @@ impl PciConfigSpace {
 
     // Unsafe because addr and offset have to point to valid data
     pub unsafe fn read(&mut self, addr: &PciAddress, offset: u8) -> u32 {
-
         let addr_word = Self::get_addr_word(addr, offset);
 
         self.address_port.write(addr_word);
-        self.data_port.read() 
+        self.data_port.read()
     }
 
     // Same
     pub unsafe fn write(&mut self, addr: &PciAddress, offset: u8, val: u32) {
-
         let addr_word = Self::get_addr_word(addr, offset);
 
         self.address_port.write(addr_word);
@@ -338,7 +337,6 @@ impl PciConfigSpace {
     }
 
     fn get_addr_word(addr: &PciAddress, offset: u8) -> u32 {
-
         let mut val = 0u32;
         let bits = val.view_bits_mut::<Lsb0>();
 

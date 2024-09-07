@@ -1,5 +1,5 @@
-use core::hash::Hash;
 use super::hash::compute_hash;
+use core::hash::Hash;
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub struct ContentId(pub u64);
@@ -17,9 +17,11 @@ pub struct TrackedContent<T> {
 }
 
 impl<T> TrackedContent<T> {
-
     pub fn new<P: UuidProvider>(inner: T, uuid_provider: &mut P) -> Self {
-        Self { inner, content_id: uuid_provider.make_id() }
+        Self {
+            inner,
+            content_id: uuid_provider.make_id(),
+        }
     }
 
     pub fn mutate<'a, P: UuidProvider>(&'a mut self, uuid_provider: &mut P) -> &'a mut T {
@@ -41,7 +43,7 @@ pub trait UuidProvider {
 }
 
 pub struct IncrementalUuidProvider {
-    next: u64
+    next: u64,
 }
 
 impl UuidProvider for IncrementalUuidProvider {

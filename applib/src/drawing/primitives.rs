@@ -1,14 +1,20 @@
-use crate::{Color, Rect, blend_colors, FbViewMut};
+use crate::{blend_colors, Color, FbViewMut, Rect};
 
 #[derive(Debug, Clone)]
-pub struct ScreenPoint { pub x: i64, pub y: i64 }
+pub struct ScreenPoint {
+    pub x: i64,
+    pub y: i64,
+}
 
-pub fn draw_triangle<F:FbViewMut>(fb: &mut F, tri: &[ScreenPoint; 3], color: Color) {
-
+pub fn draw_triangle<F: FbViewMut>(fb: &mut F, tri: &[ScreenPoint; 3], color: Color) {
     let i = {
-        if tri[0].y <= i64::min(tri[1].y, tri[2].y) { 0 }
-        else if tri[1].y <= i64::min(tri[0].y, tri[2].y) { 1 }
-        else { 2 }
+        if tri[0].y <= i64::min(tri[1].y, tri[2].y) {
+            0
+        } else if tri[1].y <= i64::min(tri[0].y, tri[2].y) {
+            1
+        } else {
+            2
+        }
     };
 
     let p0 = &tri[i];
@@ -26,18 +32,20 @@ pub fn draw_triangle<F:FbViewMut>(fb: &mut F, tri: &[ScreenPoint; 3], color: Col
 }
 
 #[inline]
-fn fill_half_triangle<F:FbViewMut>(
+fn fill_half_triangle<F: FbViewMut>(
     fb: &mut F,
-    left: (&ScreenPoint, &ScreenPoint), right: (&ScreenPoint, &ScreenPoint),
+    left: (&ScreenPoint, &ScreenPoint),
+    right: (&ScreenPoint, &ScreenPoint),
     range: (i64, i64),
-    color: Color
+    color: Color,
 ) {
-
     let (pl0, pl1) = left;
     let (pr0, pr1) = right;
     let (y_min, y_max) = range;
 
-    if pl0.y == pl1.y || pr0.y == pr1.y { return; }
+    if pl0.y == pl1.y || pr0.y == pr1.y {
+        return;
+    }
 
     let f_left = (pl1.x - pl0.x) as f32 / (pl1.y - pl0.y) as f32;
     let f_right = (pr1.x - pr0.x) as f32 / (pr1.y - pr0.y) as f32;
@@ -52,28 +60,36 @@ fn fill_half_triangle<F:FbViewMut>(
     }
 }
 
-pub fn draw_rect<F:FbViewMut>(fb: &mut F, rect: &Rect, color: Color) {
-
+pub fn draw_rect<F: FbViewMut>(fb: &mut F, rect: &Rect, color: Color) {
     let (fb_w, fb_h) = fb.shape();
-    let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb_w, h: fb_h});
+    let rect = rect.intersection(&Rect {
+        x0: 0,
+        y0: 0,
+        w: fb_w,
+        h: fb_h,
+    });
 
     if let Some(Rect { x0, y0, w, h }) = rect {
         let h: i64 = h.into();
-        for y in y0..y0+h {
+        for y in y0..y0 + h {
             fb.fill_line(x0, w, y, color);
         }
     }
 }
 
-pub fn blend_rect<F:FbViewMut>(fb: &mut F, rect: &Rect, color: Color) {
-
+pub fn blend_rect<F: FbViewMut>(fb: &mut F, rect: &Rect, color: Color) {
     let (fb_w, fb_h) = fb.shape();
-    let rect = rect.intersection(&Rect { x0: 0, y0: 0, w: fb_w, h: fb_h});
+    let rect = rect.intersection(&Rect {
+        x0: 0,
+        y0: 0,
+        w: fb_w,
+        h: fb_h,
+    });
 
     if let Some(Rect { x0, y0, w, h }) = rect {
         let (w, h): (i64, i64) = (w.into(), h.into());
-        for y in y0..y0+h {
-            for x in x0..x0+w {
+        for y in y0..y0 + h {
+            for x in x0..x0 + w {
                 if let Some(curr_color) = fb.get_pixel(x, y) {
                     let new_color = blend_colors(color, curr_color);
                     fb.set_pixel(x, y, new_color);
@@ -82,4 +98,3 @@ pub fn blend_rect<F:FbViewMut>(fb: &mut F, rect: &Rect, color: Color) {
         }
     }
 }
-

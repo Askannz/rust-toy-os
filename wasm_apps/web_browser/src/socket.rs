@@ -1,6 +1,7 @@
 use std::io;
-pub struct Socket { handle_id: i32 }
-
+pub struct Socket {
+    handle_id: i32,
+}
 
 impl io::Read for Socket {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -21,7 +22,6 @@ impl io::Write for Socket {
 }
 
 impl Socket {
-
     pub fn new(ip_addr: [u8; 4], port: u16) -> anyhow::Result<Self> {
         let handle_id = guestlib::tcp_connect(ip_addr, port)?;
         Ok(Socket { handle_id })
@@ -34,7 +34,7 @@ impl Socket {
     pub fn may_send(&self) -> bool {
         guestlib::tcp_may_send(self.handle_id)
     }
-    
+
     pub fn close(&mut self) {
         guestlib::tcp_close(self.handle_id)
     }

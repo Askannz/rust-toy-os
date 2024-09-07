@@ -2,11 +2,10 @@ use core::hash::Hasher;
 
 use anyhow::anyhow;
 
+use applib::drawing::text::{Font, HACK_15};
 use applib::{Color, Rect};
-use applib::drawing::text::{HACK_15, Font};
 
-
-use super::parsing::{HtmlTree, NodeId as HtmlNodeId, NodeData as HtmlNodeData};
+use super::parsing::{HtmlTree, NodeData as HtmlNodeData, NodeId as HtmlNodeId};
 
 pub struct LayoutNode {
     pub id: u64,
@@ -15,20 +14,20 @@ pub struct LayoutNode {
 }
 
 pub enum NodeData {
-    Text { 
+    Text {
         text: String,
         color: Color,
         font: &'static Font,
-        url: Option<String>
+        url: Option<String>,
     },
     Image,
-    Container { 
+    Container {
         children: Vec<LayoutNode>,
         orientation: Orientation,
         bg_color: Option<Color>,
         url: Option<String>,
         tag: String,
-    }
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -45,11 +44,9 @@ struct Margins {
 }
 
 pub fn compute_layout(html_tree: &HtmlTree) -> anyhow::Result<LayoutNode> {
-
     let mut next_node_id = 0u64;
     parse_node(&mut next_node_id, &html_tree, HtmlNodeId(0), 0, 0, false)
         .ok_or(anyhow!("Error computing HTML layout"))
-    
 }
 
 fn make_node_id(next_node_id: &mut u64) -> u64 {
@@ -58,19 +55,40 @@ fn make_node_id(next_node_id: &mut u64) -> u64 {
     new_id
 }
 
-fn parse_node<'b>(next_node_id: &mut u64, tree: &HtmlTree, html_node_id: HtmlNodeId, mut x0: i64, mut y0: i64, link: bool) -> Option<LayoutNode> {
-
-    const ZERO_M: Margins = Margins { left: 0, right: 0, top: 0, bottom: 0};
-    const TR_M: Margins  = Margins { left: 0, right: 0, top: 5, bottom: 5};
+fn parse_node<'b>(
+    next_node_id: &mut u64,
+    tree: &HtmlTree,
+    html_node_id: HtmlNodeId,
+    mut x0: i64,
+    mut y0: i64,
+    link: bool,
+) -> Option<LayoutNode> {
+    const ZERO_M: Margins = Margins {
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+    };
+    const TR_M: Margins = Margins {
+        left: 0,
+        right: 0,
+        top: 5,
+        bottom: 5,
+    };
 
     let node = tree.get_node(html_node_id).unwrap();
 
     match &node.data {
-
         HtmlNodeData::Tag { name, .. } if *name == "head" => None,
 
         HtmlNodeData::Tag { name, attrs, .. } if *name == "img" => {
-            let parse_dim = |attr: &str| -> u32 { attrs.get(attr).map(|s| s.parse().ok()).flatten().unwrap_or(0) };
+            let parse_dim = |attr: &str| -> u32 {
+                attrs
+                    .get(attr)
+                    .map(|s| s.parse().ok())
+                    .flatten()
+                    .unwrap_or(0)
+            };
             let w: u32 = parse_dim("width");
             let h: u32 = parse_dim("height");
             Some(LayoutNode {
@@ -78,13 +96,12 @@ fn parse_node<'b>(next_node_id: &mut u64, tree: &HtmlTree, html_node_id: HtmlNod
                 rect: Rect { x0, y0, w, h },
                 data: NodeData::Image,
             })
-        },
+        }
 
         HtmlNodeData::Tag { name, attrs, .. } => {
-
             let bg_color = match attrs.get("bgcolor") {
                 Some(hex_str) => Some(parse_hexcolor(hex_str)),
-                _ => None
+                _ => None,
             };
 
             let url: Option<String> = match name.as_str() {
@@ -102,7 +119,7 @@ fn parse_node<'b>(next_node_id: &mut u64, tree: &HtmlTree, html_node_id: HtmlNod
                 "div" => (Orientation::Vertical, ZERO_M),
                 "span" => (Orientation::Horizontal, ZERO_M),
                 "p" => (Orientation::Horizontal, ZERO_M),
-                _ => (Orientation::Horizontal, ZERO_M)
+                _ => (Orientation::Horizontal, ZERO_M),
             };
 
             x0 += margin.left as i64;
@@ -112,10 +129,10 @@ fn parse_node<'b>(next_node_id: &mut u64, tree: &HtmlTree, html_node_id: HtmlNod
             let (mut child_x0, mut child_y0): (i64, i64) = (x0, y0);
 
             for html_child_id in node.children.iter() {
-
                 let html_child = tree.get_node(*html_child_id).unwrap();
 
-                let is_block = check_is_block_element(&html_child.data) && orientation == Orientation::Horizontal;
+                let is_block = check_is_block_element(&html_child.data)
+                    && orientation == Orientation::Horizontal;
 
                 // TODO: this should only happen is self.parse_node() is successful
                 if is_block {
@@ -125,9 +142,19 @@ fn parse_node<'b>(next_node_id: &mut u64, tree: &HtmlTree, html_node_id: HtmlNod
                     }
                 }
 
-                if let Some(child_node) = parse_node(next_node_id, tree, *html_child_id, child_x0, child_y0, url.is_some()) {
-
-                    let Rect { w: child_w, h: child_h, .. } = child_node.rect;
+                if let Some(child_node) = parse_node(
+                    next_node_id,
+                    tree,
+                    *html_child_id,
+                    child_x0,
+                    child_y0,
+                    url.is_some(),
+                ) {
+                    let Rect {
+                        w: child_w,
+                        h: child_h,
+                        ..
+                    } = child_node.rect;
                     match orientation {
                         Orientation::Horizontal => child_x0 += child_w as i64,
                         Orientation::Vertical => child_y0 += child_h as i64,
@@ -139,7 +166,8 @@ fn parse_node<'b>(next_node_id: &mut u64, tree: &HtmlTree, html_node_id: HtmlNod
 
             if children.len() > 0 {
                 let rect_0 = children[0].rect.clone();
-                let mut container_rect = children.iter()
+                let mut container_rect = children
+                    .iter()
                     .map(|c| c.rect.clone())
                     .fold(rect_0, |acc, r| r.bounding_box(&acc));
                 container_rect.w += margin.right;
@@ -147,53 +175,58 @@ fn parse_node<'b>(next_node_id: &mut u64, tree: &HtmlTree, html_node_id: HtmlNod
                 Some(LayoutNode {
                     id: make_node_id(next_node_id),
                     rect: container_rect,
-                    data: NodeData::Container { children, orientation, bg_color, url, tag }
+                    data: NodeData::Container {
+                        children,
+                        orientation,
+                        bg_color,
+                        url,
+                        tag,
+                    },
                 })
             } else {
                 None
             }
-        },
+        }
 
         HtmlNodeData::Text { text } if check_is_whitespace(&text) => None,
 
         HtmlNodeData::Text { text } => {
-
             let m = ZERO_M;
 
             let text = core::str::from_utf8(text.as_bytes()).expect("Not UTF-8");
             let font = &HACK_15; // TODO
             let color = if link { Color::BLUE } else { Color::BLACK };
             let w = (text.len() * font.char_w) as u32 + m.left + m.right;
-            let h = font.char_h as u32  + m.top + m.bottom;
+            let h = font.char_h as u32 + m.top + m.bottom;
 
             Some(LayoutNode {
                 id: make_node_id(next_node_id),
-                rect: Rect { 
+                rect: Rect {
                     x0: x0 + m.left as i64,
                     y0: y0 + m.top as i64,
-                    w, h
+                    w,
+                    h,
                 },
-                data: NodeData::Text { 
+                data: NodeData::Text {
                     text: text.to_string(),
                     color,
-                    font, 
+                    font,
                     url: None,
-                }
+                },
             })
-        },
+        }
 
-        _ => None
+        _ => None,
     }
 }
 
 fn parse_hexcolor(hex_str: &str) -> Color {
-
     let mut color_bytes = hex::decode(hex_str.replace("#", "")).expect("Invalid color");
 
     match color_bytes.len() {
         3 => color_bytes.push(255),
         4 => (),
-        _ => panic!("Invalid color: {:?}", color_bytes)
+        _ => panic!("Invalid color: {:?}", color_bytes),
     };
 
     let color_bytes: [u8; 4] = color_bytes.try_into().unwrap();
@@ -207,20 +240,16 @@ fn check_is_whitespace(s: &str) -> bool {
 
 fn check_is_block_element(node_data: &HtmlNodeData) -> bool {
     match node_data {
-        HtmlNodeData::Tag { name, .. } => {
-            match name.as_str() {
-                "p" => true,
-                _ => false
-            }
+        HtmlNodeData::Tag { name, .. } => match name.as_str() {
+            "p" => true,
+            _ => false,
         },
-        _ => false
+        _ => false,
     }
 }
 
 fn debug_layout(root_node: &LayoutNode) {
-
     fn repr_node(out_str: &mut String, node: &LayoutNode, is_last: bool, prefix: &str) {
-
         let c = match is_last {
             true => "└",
             false => "├",
@@ -231,13 +260,20 @@ fn debug_layout(root_node: &LayoutNode) {
                 for line in text.split("\n") {
                     out_str.push_str(&format!("{}{}{}\n", prefix, c, line));
                 }
-            },
+            }
             NodeData::Image => {
                 out_str.push_str(&format!("{}{}IMAGE {:?}\n", prefix, c, node.rect));
-            },
-            NodeData::Container { children, orientation, tag, .. } => {
-
-                out_str.push_str(&format!("{}{}CONTAINER {} {:?} {:?}\n", prefix, c, tag, orientation, node.rect));
+            }
+            NodeData::Container {
+                children,
+                orientation,
+                tag,
+                ..
+            } => {
+                out_str.push_str(&format!(
+                    "{}{}CONTAINER {} {:?} {:?}\n",
+                    prefix, c, tag, orientation, node.rect
+                ));
 
                 let c2 = match is_last {
                     true => " ",
@@ -258,6 +294,4 @@ fn debug_layout(root_node: &LayoutNode) {
     repr_node(&mut out_str, root_node, false, "");
 
     guestlib::print_console(&out_str);
-
 }
-

@@ -1,19 +1,17 @@
 mod device;
 
-
 use alloc::vec;
 
-
-use crate::virtio::network::VirtioNetwork;
 use crate::time::SystemClock;
+use crate::virtio::network::VirtioNetwork;
 
 use device::SmolTcpVirtio;
-use smoltcp::iface::{Config, Interface, SocketSet, SocketHandle};
+use lazy_static::lazy_static;
+use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet};
 use smoltcp::phy::{Device, Medium};
 use smoltcp::socket::tcp;
-use smoltcp::time:: Instant;
-use smoltcp::wire::{EthernetAddress, IpCidr, IpAddress, Ipv4Address};
-use lazy_static::lazy_static;
+use smoltcp::time::Instant;
+use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 
 lazy_static! {
     static ref IFACE_ADDR: IpCidr = IpCidr::new(IpAddress::v4(10, 0, 2, 15), 24);
@@ -21,7 +19,6 @@ lazy_static! {
 }
 
 const BUF_SIZE: usize = 4096;
-
 
 pub struct TcpStack {
     device: SmolTcpVirtio,
@@ -31,35 +28,39 @@ pub struct TcpStack {
 }
 
 impl TcpStack {
-
     pub fn new<'a>(clock: &SystemClock, virtio_dev: VirtioNetwork) -> Self {
         let mut device = SmolTcpVirtio::new(virtio_dev);
         let mac_addr = device.virtio_dev.mac_addr;
-    
+
         let config = match device.capabilities().medium {
-            Medium::Ethernet => {
-                Config::new(EthernetAddress(mac_addr).into())
-            }
+            Medium::Ethernet => Config::new(EthernetAddress(mac_addr).into()),
         };
 
         let timestamp = clock.time();
-    
-        let mut interface = Interface::new(config, &mut device, Instant::from_millis(timestamp as i64));
+
+        let mut interface =
+            Interface::new(config, &mut device, Instant::from_millis(timestamp as i64));
         interface.update_ip_addrs(|ip_addrs| {
             ip_addrs.push(*IFACE_ADDR).unwrap();
         });
 
-        interface.routes_mut().add_default_ipv4_route(*GATEWAY_ADDR).unwrap();
+        interface
+            .routes_mut()
+            .add_default_ipv4_route(*GATEWAY_ADDR)
+            .unwrap();
 
         let sockets_storage: [_; 1] = Default::default();
         let sockets = SocketSet::new(sockets_storage);
 
-        TcpStack { device, interface, sockets, next_port: 65000 }
-
+        TcpStack {
+            device,
+            interface,
+            sockets,
+            next_port: 65000,
+        }
     }
 
     pub fn connect(&mut self, addr: Ipv4Address, port: u16) -> anyhow::Result<SocketHandle> {
-
         let mut socket = {
             let tcp_rx_buffer = tcp::SocketBuffer::new(vec![0u8; BUF_SIZE]);
             let tcp_tx_buffer = tcp::SocketBuffer::new(vec![0u8; BUF_SIZE]);
@@ -68,7 +69,9 @@ impl TcpStack {
 
         let cx = self.interface.context();
 
-        socket.connect(cx, (addr, port), self.next_port).map_err(anyhow::Error::msg)?;
+        socket
+            .connect(cx, (addr, port), self.next_port)
+            .map_err(anyhow::Error::msg)?;
         self.next_port += 1;
 
         let socket_handle = self.sockets.add(socket);
@@ -99,18 +102,18 @@ impl TcpStack {
     }
 
     pub fn read(&mut self, handle: SocketHandle, buf: &mut [u8]) -> anyhow::Result<usize> {
-
         let socket = self.sockets.get_mut::<tcp::Socket>(handle);
 
-        let recv_len = socket.recv(|recv_buffer| {
+        let recv_len = socket
+            .recv(|recv_buffer| {
+                let src_len = recv_buffer.len();
+                let dst_len = buf.len();
+                let cpy_len = usize::min(src_len, dst_len);
 
-            let src_len = recv_buffer.len();
-            let dst_len = buf.len();
-            let cpy_len = usize::min(src_len, dst_len);
-
-            buf[..cpy_len].copy_from_slice(&recv_buffer[..cpy_len]);
-            (cpy_len, cpy_len)
-        }).map_err(anyhow::Error::msg)?;
+                buf[..cpy_len].copy_from_slice(&recv_buffer[..cpy_len]);
+                (cpy_len, cpy_len)
+            })
+            .map_err(anyhow::Error::msg)?;
 
         log::debug!("Received {}B from socket {:?}", recv_len, handle);
 
@@ -127,9 +130,7 @@ impl TcpStack {
     pub fn poll_interface(&mut self, clock: &SystemClock) {
         let timestamp = clock.time();
         let elapsed = Instant::from_millis(timestamp as i64);
-        self.interface.poll(elapsed, &mut self.device, &mut self.sockets);
+        self.interface
+            .poll(elapsed, &mut self.device, &mut self.sockets);
     }
-
-
-
 }

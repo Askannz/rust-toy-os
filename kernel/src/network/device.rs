@@ -16,9 +16,7 @@ pub struct SmolTcpVirtio {
 
 impl SmolTcpVirtio {
     pub fn new(virtio_dev: VirtioNetwork) -> SmolTcpVirtio {
-        SmolTcpVirtio {
-            virtio_dev
-        }
+        SmolTcpVirtio { virtio_dev }
     }
 }
 
@@ -27,7 +25,6 @@ impl Device for SmolTcpVirtio {
     type TxToken<'a> = TxToken<'a>;
 
     fn capabilities(&self) -> DeviceCapabilities {
-
         let mut caps = DeviceCapabilities::default();
         caps.max_transmission_unit = MAX_PACKET_SIZE;
         caps.medium = Medium::Ethernet;
@@ -77,7 +74,9 @@ impl<'a> phy::TxToken for TxToken<'a> {
         F: FnOnce(&mut [u8]) -> R,
     {
         let mut buffer = ArrayVec::<[u8; MAX_PACKET_SIZE]>::new();
-        for _ in 0..len { buffer.push(0x00); }
+        for _ in 0..len {
+            buffer.push(0x00);
+        }
         let result = f(&mut buffer);
         self.virtio_dev.send(buffer);
         result

@@ -1,11 +1,11 @@
-use core::cell::OnceCell;
-use applib::{Color, Framebuffer, OwnedPixels, FbViewMut};
 use applib::uitk::{IncrementalUuidProvider, UiStore};
+use applib::{Color, FbViewMut, Framebuffer, OwnedPixels};
+use core::cell::OnceCell;
 use guestlib::FramebufferHandle;
-use guestlib::{WasmLogger};
+use guestlib::WasmLogger;
 
 mod drawing;
-use drawing::{draw_scene, Scene, load_scene};
+use drawing::{draw_scene, load_scene, Scene};
 
 static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
@@ -30,7 +30,6 @@ fn main() {}
 
 #[no_mangle]
 pub fn init() -> () {
-
     log::set_max_level(LOGGING_LEVEL);
     log::set_logger(&LOGGER).unwrap();
 
@@ -44,14 +43,17 @@ pub fn init() -> () {
         scroll_offsets: (0, 0),
         dragging_sbar: false,
         prev_pointer: None,
-        scene: load_scene()
+        scene: load_scene(),
     };
-    unsafe { APP_STATE.set(state).unwrap_or_else(|_| panic!("App already initialized")); }
+    unsafe {
+        APP_STATE
+            .set(state)
+            .unwrap_or_else(|_| panic!("App already initialized"));
+    }
 }
 
 #[no_mangle]
 pub fn step() {
-
     let state = unsafe { APP_STATE.get_mut().expect("App not initialized") };
 
     let win_rect = guestlib::get_win_rect();
@@ -67,7 +69,7 @@ pub fn step() {
         _ => {
             state.prev_pointer = Some((pointer.x, pointer.y));
             true
-        },
+        }
     };
 
     if redraw {
@@ -79,12 +81,16 @@ pub fn step() {
 
     framebuffer.fill(Color::BLACK);
 
-    let mut uitk_context = state.ui_store.get_context(&mut framebuffer, &input_state_local, &mut state.uuid_provider);
+    let mut uitk_context = state.ui_store.get_context(
+        &mut framebuffer,
+        &input_state_local,
+        &mut state.uuid_provider,
+    );
 
     uitk_context.scrollable_canvas(
         &win_rect.zero_origin(),
         &state.render_fb,
         &mut state.scroll_offsets,
-        &mut state.dragging_sbar
+        &mut state.dragging_sbar,
     );
 }

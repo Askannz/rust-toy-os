@@ -13,20 +13,12 @@ pub struct TlsClient {
 }
 
 impl TlsClient {
-    pub fn new(
-        sock: Socket,
-        server_name: &str,
-    ) -> Self {
-
+    pub fn new(sock: Socket, server_name: &str) -> Self {
         let server_name = ServerName::try_from(server_name)
             .expect("Invalid server name")
             .to_owned();
 
-        let root_store = RootCertStore::from_iter(
-            webpki_roots::TLS_SERVER_ROOTS
-                .iter()
-                .cloned(),
-        );
+        let root_store = RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
         let config = rustls::ClientConfig::builder()
             .with_root_certificates(root_store)
@@ -40,7 +32,6 @@ impl TlsClient {
     }
 
     pub fn update(&mut self) -> usize {
-
         if self.closed {
             return 0;
         }
@@ -59,15 +50,14 @@ impl TlsClient {
     }
 
     fn do_read(&mut self) -> usize {
-
         match self.tls_conn.read_tls(&mut self.socket) {
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => return 0,
             Err(error) => {
                 log::error!("TLS read error: {:?}", error);
                 self.closed = true;
                 return 0;
-            },
-            Ok(_) => {},
+            }
+            Ok(_) => {}
         };
 
         let io_state = match self.tls_conn.process_new_packets() {
@@ -93,8 +83,8 @@ impl TlsClient {
                 log::error!("TLS write error: {:?}", error);
                 self.closed = true;
                 return;
-            },
-            Ok(_) => {},
+            }
+            Ok(_) => {}
         };
     }
 
@@ -105,7 +95,6 @@ impl TlsClient {
     pub fn tls_closed(&self) -> bool {
         self.closed
     }
-
 }
 impl io::Write for TlsClient {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
@@ -126,4 +115,3 @@ impl io::Read for TlsClient {
         }
     }
 }
-

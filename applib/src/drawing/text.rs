@@ -1,7 +1,7 @@
-use alloc::vec::Vec;
+use crate::{blend_colors, decode_png, Color, FbView, FbViewMut, Rect};
 use alloc::string::String;
+use alloc::vec::Vec;
 use lazy_static::lazy_static;
-use crate::{Color, Rect, blend_colors, decode_png, FbView, FbViewMut};
 
 struct FontSpec {
     bitmap_png: &'static [u8],
@@ -13,8 +13,13 @@ struct FontSpec {
 
 impl FontSpec {
     fn load(&self) -> Font {
-
-        let FontSpec { nb_chars, char_h, char_w, base_y, .. } = *self;
+        let FontSpec {
+            nb_chars,
+            char_h,
+            char_w,
+            base_y,
+            ..
+        } = *self;
 
         let bitmap = decode_png(self.bitmap_png);
 
@@ -22,7 +27,13 @@ impl FontSpec {
             panic!("Invalid font bitmap size");
         }
 
-        Font { bitmap, nb_chars, char_h, char_w, base_y }
+        Font {
+            bitmap,
+            nb_chars,
+            char_h,
+            char_w,
+            base_y,
+        }
     }
 }
 
@@ -35,7 +46,6 @@ pub struct Font {
     pub base_y: usize,
 }
 
-
 lazy_static! {
     pub static ref DEFAULT_FONT: Font = FontSpec {
         bitmap_png: include_bytes!("../../fonts/default.png"),
@@ -43,18 +53,27 @@ lazy_static! {
         char_h: 24,
         char_w: 12,
         base_y: 19
-    }.load();
-
+    }
+    .load();
     pub static ref HACK_15: Font = FontSpec {
         bitmap_png: include_bytes!("../../fonts/hack_15.png"),
         nb_chars: 95,
         char_h: 18,
         char_w: 10,
         base_y: 14,
-    }.load();
+    }
+    .load();
 }
 
-pub fn draw_str<F: FbViewMut>(fb: &mut F, s: &str, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>) {
+pub fn draw_str<F: FbViewMut>(
+    fb: &mut F,
+    s: &str,
+    x0: i64,
+    y0: i64,
+    font: &Font,
+    color: Color,
+    bg_color: Option<Color>,
+) {
     let mut x = x0;
     for c in s.chars() {
         draw_char(fb, c, x, y0, font, color, bg_color, true);
@@ -62,44 +81,63 @@ pub fn draw_str<F: FbViewMut>(fb: &mut F, s: &str, x0: i64, y0: i64, font: &Font
     }
 }
 
-pub fn draw_char<F: FbViewMut>(fb: &mut F, c: char, x0: i64, y0: i64, font: &Font, color: Color, bg_color: Option<Color>, blend: bool) {
-
+pub fn draw_char<F: FbViewMut>(
+    fb: &mut F,
+    c: char,
+    x0: i64,
+    y0: i64,
+    font: &Font,
+    color: Color,
+    bg_color: Option<Color>,
+    blend: bool,
+) {
     let mut c = c as u8;
 
     // Replacing unsupported chars with spaces
-    if c < 32 || c > 126 { c = 32 }
+    if c < 32 || c > 126 {
+        c = 32
+    }
 
     let c_index = (c - 32) as usize;
-    let Font { nb_chars, char_h, char_w, .. } = *font;
-    let (r, g, b, _a ) = color.as_rgba();
+    let Font {
+        nb_chars,
+        char_h,
+        char_w,
+        ..
+    } = *font;
+    let (r, g, b, _a) = color.as_rgba();
 
-    let char_rect = Rect { x0, y0, w: char_w as u32, h: char_h as u32 };
+    let char_rect = Rect {
+        x0,
+        y0,
+        w: char_w as u32,
+        h: char_h as u32,
+    };
 
     let [xc0, yc0, xc1, yc1] = char_rect.as_xyxy();
 
     for x in xc0..=xc1 {
         for y in yc0..=yc1 {
-
-            let i_font = (y - yc0) as usize * char_w * nb_chars + (x - xc0) as usize + c_index * char_w;
+            let i_font =
+                (y - yc0) as usize * char_w * nb_chars + (x - xc0) as usize + c_index * char_w;
             let val_font = font.bitmap[i_font];
             let is_in_font = val_font > 0;
 
             let txt_color = Color::rgba(r, g, b, val_font);
 
             let new_color = match blend {
-
                 true => match fb.get_pixel(x, y) {
                     Some(curr_color) => match is_in_font {
                         true => Some(blend_colors(txt_color, curr_color)),
-                        false => bg_color.map(|bg_color| blend_colors(bg_color, curr_color))
-                    }
-                    None => None
-                }
+                        false => bg_color.map(|bg_color| blend_colors(bg_color, curr_color)),
+                    },
+                    None => None,
+                },
 
                 false => match is_in_font {
                     true => Some(txt_color),
-                    false => bg_color
-                }
+                    false => bg_color,
+                },
             };
 
             if let Some(new_color) = new_color {
@@ -117,8 +155,19 @@ impl RichText {
         RichText(Vec::new())
     }
 
-    pub fn add_part(&mut self, s: &str, color: Color, font: &'static Font, bg_color: Option<Color>) {
-        self.0.extend(s.chars().map(|c| RichChar { c, color, font, bg_color }));
+    pub fn add_part(
+        &mut self,
+        s: &str,
+        color: Color,
+        font: &'static Font,
+        bg_color: Option<Color>,
+    ) {
+        self.0.extend(s.chars().map(|c| RichChar {
+            c,
+            color,
+            font,
+            bg_color,
+        }));
     }
 
     pub fn from_str(s: &str, color: Color, font: &'static Font, bg_color: Option<Color>) -> Self {
@@ -161,11 +210,20 @@ pub struct FormattedRichText {
 }
 
 pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
-
     let rich_vec = &text.0;
 
-    if rich_vec.is_empty() { return FormattedRichText { lines: Vec::new(), w: 0, h: 0 }; }
-    let max_char_w = rich_vec.iter().map(|rich_char| rich_char.font.char_w).max().unwrap();
+    if rich_vec.is_empty() {
+        return FormattedRichText {
+            lines: Vec::new(),
+            w: 0,
+            h: 0,
+        };
+    }
+    let max_char_w = rich_vec
+        .iter()
+        .map(|rich_char| rich_char.font.char_w)
+        .max()
+        .unwrap();
 
     let max_per_line = max_w as usize / max_char_w;
 
@@ -174,23 +232,27 @@ pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
     let mut i0 = 0;
 
     for (i, rich_char) in rich_vec.iter().enumerate() {
-
         let i1 = {
-            if rich_char.c == '\n' { Some(i) }
-            else if i - i0 + 1 >= max_per_line || i == rich_vec.len() - 1 { Some(i+1) }
-            else { None }
+            if rich_char.c == '\n' {
+                Some(i)
+            } else if i - i0 + 1 >= max_per_line || i == rich_vec.len() - 1 {
+                Some(i + 1)
+            } else {
+                None
+            }
         };
 
         if let Some(i1) = i1 {
-
             let rich_slice = &rich_vec[i0..i1];
 
-            let line_h = rich_slice.iter()
+            let line_h = rich_slice
+                .iter()
                 .map(|rich_char| rich_char.font.char_h)
                 .max()
                 .unwrap_or(0) as u32;
 
-            let line_w = rich_slice.iter()
+            let line_w = rich_slice
+                .iter()
                 .map(|rich_char| rich_char.font.char_w)
                 .sum::<usize>() as u32;
 
@@ -207,19 +269,37 @@ pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
         }
     }
 
-    FormattedRichText { lines: formatted_lines, w: text_w, h: text_h }
+    FormattedRichText {
+        lines: formatted_lines,
+        w: text_w,
+        h: text_h,
+    }
 }
 
 pub fn draw_rich_slice<F: FbViewMut>(fb: &mut F, rich_slice: &[RichChar], x0: i64, y0: i64) {
+    if rich_slice.is_empty() {
+        return;
+    }
 
-    if rich_slice.is_empty() { return; }
-
-    let max_base_y = rich_slice.iter().map(|rich_char| rich_char.font.base_y).max().unwrap();
+    let max_base_y = rich_slice
+        .iter()
+        .map(|rich_char| rich_char.font.base_y)
+        .max()
+        .unwrap();
 
     let mut x = x0;
     for rich_char in rich_slice.iter() {
-        let dy = (max_base_y - rich_char.font.base_y)  as i64;
-        draw_char(fb, rich_char.c, x, y0 + dy, rich_char.font, rich_char.color, rich_char.bg_color, true);
+        let dy = (max_base_y - rich_char.font.base_y) as i64;
+        draw_char(
+            fb,
+            rich_char.c,
+            x,
+            y0 + dy,
+            rich_char.font,
+            rich_char.color,
+            rich_char.bg_color,
+            true,
+        );
         x += rich_char.font.char_w as i64;
     }
 }

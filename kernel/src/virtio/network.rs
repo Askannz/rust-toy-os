@@ -1,10 +1,9 @@
-
 use core::mem::MaybeUninit;
 
+use super::{QueueMessage, VirtioDevice, VirtioQueue, VirtqSerializable};
+use crate::pci::PciDevice;
 use alloc::vec::Vec;
 use tinyvec::ArrayVec;
-use crate::pci::PciDevice;
-use super::{VirtioDevice, VirtioQueue, QueueMessage, VirtqSerializable};
 
 const Q_SIZE: usize = 256;
 // https://docs.oasis-open.org/virtio/virtio/v1.1/csprd01/virtio-v1.1-csprd01.html#x1-2050006
@@ -15,7 +14,7 @@ const BUF_SIZE: usize = core::mem::size_of::<VirtioNetPacket>();
 #[repr(u32)]
 #[allow(non_camel_case_types)]
 enum NetworkFeatureBits {
-    VIRTIO_NET_F_MAC = 0x1 << 5
+    VIRTIO_NET_F_MAC = 0x1 << 5,
 }
 
 pub struct VirtioNetwork {
@@ -27,35 +26,28 @@ pub struct VirtioNetwork {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-struct VirtioNetConfig { 
+struct VirtioNetConfig {
     mac: [u8; 6],
-    status: u16, 
-    max_virtqueue_pairs: u16, 
-    mtu: u16, 
+    status: u16,
+    max_virtqueue_pairs: u16,
+    mtu: u16,
 }
 
 impl VirtioNetwork {
     pub fn new(pci_devices: &mut Vec<PciDevice>) -> Self {
-
         let i = (0..pci_devices.len())
-            .find(|&i| 
-                pci_devices[i].vendor_id == 0x1af4 &&
-                pci_devices[i].device_id == 0x1000
-            )
+            .find(|&i| pci_devices[i].vendor_id == 0x1af4 && pci_devices[i].device_id == 0x1000)
             .expect("Cannot find VirtIO network device");
 
         let pci_dev = pci_devices.swap_remove(i);
         let feature_bits = NetworkFeatureBits::VIRTIO_NET_F_MAC as u32;
         let mut virtio_dev = VirtioDevice::new(pci_dev, feature_bits);
 
+        let mut receiveq1 = virtio_dev.initialize_queue(0); // queue 0 (receiveq1)
+        let transmitq1 = virtio_dev.initialize_queue(1); // queue 1 (transmitq1)
+        virtio_dev.write_status(0x04); // DRIVER_OK
 
-        let mut receiveq1 = virtio_dev.initialize_queue(0);  // queue 0 (receiveq1)
-        let transmitq1 = virtio_dev.initialize_queue(1);  // queue 1 (transmitq1)
-        virtio_dev.write_status(0x04);  // DRIVER_OK
-
-        let device_config = unsafe {
-            virtio_dev.read_device_specific_config::<VirtioNetConfig>()
-        };
+        let device_config = unsafe { virtio_dev.read_device_specific_config::<VirtioNetConfig>() };
 
         let msg = [QueueMessage::<VirtioNetPacket>::DevWriteOnly];
 
@@ -65,59 +57,59 @@ impl VirtioNetwork {
             virtio_dev,
             mac_addr: device_config.mac,
             receiveq1,
-            transmitq1
+            transmitq1,
         }
     }
 
-
     pub fn try_recv(&mut self) -> Option<[u8; MAX_PACKET_SIZE]> {
-
         let resp_list = unsafe { self.receiveq1.try_pop::<_, 1>()? };
 
         let virtio_packet: VirtioNetPacket = resp_list[0];
 
         unsafe {
-            self.receiveq1.try_push(&[
-                QueueMessage::<VirtioNetPacket>::DevWriteOnly
-            ]).unwrap();
+            self.receiveq1
+                .try_push(&[QueueMessage::<VirtioNetPacket>::DevWriteOnly])
+                .unwrap();
         }
 
         Some(virtio_packet.data)
     }
 
     pub fn send(&mut self, mut data: ArrayVec<[u8; MAX_PACKET_SIZE]>) {
-
         let len = data.len();
         data.resize(MAX_PACKET_SIZE, 0x00);
 
         let msg = VirtioNetPacket {
-            hdr: VirtioNetHdr { 
+            hdr: VirtioNetHdr {
                 flags: 0x0,
                 gso_type: 0x0,
                 hdr_len: 0x0,
                 gso_size: 0x0,
                 csum_start: 0x0,
                 csum_offset: 0x0,
-                num_buffers: 0x0
+                num_buffers: 0x0,
             },
-            data: data.into_inner()
+            data: data.into_inner(),
         };
 
         let virtio_buf_len = len + core::mem::size_of::<VirtioNetHdr>();
 
         unsafe {
-            self.transmitq1.try_push(&[
-                QueueMessage::DevReadOnly { data: msg, len: Some(virtio_buf_len) },
-            ]).unwrap();
+            self.transmitq1
+                .try_push(&[QueueMessage::DevReadOnly {
+                    data: msg,
+                    len: Some(virtio_buf_len),
+                }])
+                .unwrap();
             self.transmitq1.notify_device();
         }
 
         loop {
-            let resp_list_opt  = unsafe { self.transmitq1.try_pop::<VirtioNetPacket, 1>() };
+            let resp_list_opt = unsafe { self.transmitq1.try_pop::<VirtioNetPacket, 1>() };
             if let Some(_) = resp_list_opt {
                 break;
             }
-         }
+        }
     }
 }
 

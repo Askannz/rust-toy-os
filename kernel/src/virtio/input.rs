@@ -1,5 +1,4 @@
 
-use alloc::vec;
 use alloc::vec::Vec;
 use crate::pci::PciDevice;
 use super::{VirtioDevice, QueueMessage, VirtqSerializable, VirtioQueue};

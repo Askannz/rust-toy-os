@@ -1,15 +1,12 @@
-use core::hash::{Hash, Hasher};
+use core::hash::Hasher;
 
 use anyhow::anyhow;
 
-use applib::{Color, Rect, Framebuffer};
-use applib::drawing::primitives::{draw_rect, blend_rect};
-use applib::drawing::text::draw_str;
+use applib::{Color, Rect};
 use applib::drawing::text::{HACK_15, Font};
-use applib::input::{InputState, InputEvent, PointerState};
 
 
-use super::parsing::{parse_html, HtmlTree, NodeId as HtmlNodeId, NodeData as HtmlNodeData};
+use super::parsing::{HtmlTree, NodeId as HtmlNodeId, NodeData as HtmlNodeData};
 
 pub struct LayoutNode {
     pub id: u64,

@@ -1,7 +1,7 @@
 extern crate alloc;
 
 use num_traits::Float;
-use applib::{Color, Framebuffer, FbView, FbViewMut};
+use applib::{Color, FbView, FbViewMut};
 use applib::drawing::primitives::{draw_triangle, ScreenPoint};
 
 const COLORS: [Color; 6] = [

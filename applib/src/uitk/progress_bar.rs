@@ -1,6 +1,5 @@
-use alloc::string::String;
 use crate::content::UuidProvider;
-use crate::{Rect, Color, Framebuffer, FbViewMut};
+use crate::{Rect, Color, FbViewMut};
 use crate::drawing::text::{Font, draw_str, DEFAULT_FONT};
 use crate::drawing::primitives::draw_rect;
 use crate::uitk::UiContext;
@@ -13,7 +12,7 @@ pub fn progress_bar(
     text: &str,
 ) {
 
-    let UiContext { fb, input_state, .. } = self;
+    let UiContext { fb,  .. } = self;
 
     let Rect { x0, y0, h, w } = config.rect;
     draw_rect(*fb, &config.rect, config.bg_color);

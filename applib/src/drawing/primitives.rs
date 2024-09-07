@@ -1,4 +1,4 @@
-use crate::{Framebuffer, Color, Rect, blend_colors, FbViewMut};
+use crate::{Color, Rect, blend_colors, FbViewMut};
 
 #[derive(Debug, Clone)]
 pub struct ScreenPoint { pub x: i64, pub y: i64 }

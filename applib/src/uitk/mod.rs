@@ -14,7 +14,7 @@ pub use dyn_scrollable_canvas::{TileRenderer, TileRenderContext};
 
 use crate::{content::UuidProvider, InputState};
 pub use crate::content::{ContentId, IncrementalUuidProvider};
-use crate::{Framebuffer, OwnedPixels, FbViewMut, BorrowedMutPixels};
+use crate::{Framebuffer, OwnedPixels, FbViewMut};
 
 
 pub struct TileCache {

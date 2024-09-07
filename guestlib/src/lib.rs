@@ -6,10 +6,8 @@ use core::fmt::Debug;
 use core::mem::size_of;
 use alloc::vec;
 use alloc::format;
-use applib::content::ContentId;
 use log::{Log, Metadata, Record};
 use applib::{SystemState, Framebuffer, Rect, BorrowedMutPixels};
-use applib::content::UuidProvider;
 
 #[global_allocator]
 static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;

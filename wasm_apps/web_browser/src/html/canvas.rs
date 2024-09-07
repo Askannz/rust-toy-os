@@ -1,12 +1,9 @@
-use applib::input::{InputEvent, InputState, PointerState};
 use applib::drawing::primitives::{draw_rect, blend_rect};
 use applib::{Framebuffer, FbViewMut, FbView};
 use applib::Rect;
 use applib::Color;
 use applib::uitk::{self, TileRenderer, UiContext};
-use applib::hash::compute_hash;
 use applib::content::{ContentId, TrackedContent, UuidProvider};
-use log::log;
 use super::layout::{LayoutNode, NodeData};
 use super::render::render_html;
 
@@ -25,7 +22,7 @@ pub fn html_canvas<'a, F: FbViewMut, P: UuidProvider>(
         dragging,
     );
 
-    let UiContext { fb, tile_cache, input_state, .. } = uitk_context;
+    let UiContext { fb,  input_state, .. } = uitk_context;
 
     let (ox, oy) = *offsets;
     let p = &input_state.pointer;

@@ -1,7 +1,6 @@
 
 use core::mem::MaybeUninit;
 
-use alloc::vec;
 use alloc::vec::Vec;
 use tinyvec::ArrayVec;
 use crate::pci::PciDevice;

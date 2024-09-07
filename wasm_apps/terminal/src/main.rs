@@ -8,13 +8,12 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use guestlib::FramebufferHandle;
 use guestlib::{WasmLogger};
-use applib::{Color, Framebuffer, Rect, FbView, FbViewMut, BorrowedMutPixels};
+use applib::{Color, Rect, FbViewMut};
 use applib::input::InputEvent;
-use applib::input::{Keycode, CHARMAP, InputState};
-use applib::drawing::text::{format_rich_lines, draw_rich_slice, Font, FormattedRichText, RichText, HACK_15};
-use applib::uitk::{self, IncrementalUuidProvider, TileRenderer, UiStore};
+use applib::input::{Keycode, InputState};
+use applib::drawing::text::{format_rich_lines, draw_rich_slice, FormattedRichText, RichText, HACK_15};
+use applib::uitk::{self, IncrementalUuidProvider, UiStore};
 use applib::content::{TrackedContent, ContentId};
-use applib::drawing::primitives::draw_rect;
 
 mod python;
 

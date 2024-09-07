@@ -2,7 +2,6 @@ use alloc::borrow::ToOwned;
 use alloc::string::String;
 use crate::content::UuidProvider;
 use crate::{Rect, Color, Framebuffer, FbViewMut, FbView, OwnedPixels};
-use crate::input::InputState;
 use crate::drawing::text::{Font, draw_str, DEFAULT_FONT};
 use crate::drawing::primitives::draw_rect;
 use crate::uitk::UiContext;

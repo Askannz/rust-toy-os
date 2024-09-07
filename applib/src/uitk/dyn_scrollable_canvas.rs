@@ -1,9 +1,8 @@
-use alloc::collections::BTreeMap;
 
-use crate::content::{ContentId, UuidProvider};
+use crate::content::UuidProvider;
 
-use crate::input::{InputEvent, InputState};
-use crate::{Framebuffer, OwnedPixels, FbViewMut, BorrowedMutPixels};
+use crate::input::InputEvent;
+use crate::{Framebuffer, FbViewMut, BorrowedMutPixels};
 use crate::Rect;
 use crate::Color;
 use crate::drawing::primitives::draw_rect;

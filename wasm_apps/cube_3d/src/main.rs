@@ -1,6 +1,6 @@
 use core::cell::OnceCell;
-use applib::{Color, Framebuffer, Rect, OwnedPixels, FbViewMut};
-use applib::uitk::{self, IncrementalUuidProvider, UiStore};
+use applib::{Color, Framebuffer, OwnedPixels, FbViewMut};
+use applib::uitk::{IncrementalUuidProvider, UiStore};
 use guestlib::FramebufferHandle;
 use guestlib::{WasmLogger};
 

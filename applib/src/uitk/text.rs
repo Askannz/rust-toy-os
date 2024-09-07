@@ -1,13 +1,12 @@
-use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::drawing::primitives::draw_rect;
-use crate::{Color, Framebuffer, Rect, FbView, FbViewMut};
+use crate::{Color, Rect, FbViewMut};
 use crate::input::{InputState, InputEvent};
 use crate::input::{Keycode, CHARMAP};
-use crate::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText, FormattedRichText, HACK_15};
-use crate::content::{TrackedContent, ContentId, UuidProvider};
+use crate::drawing::text::{draw_rich_slice, draw_str, Font, FormattedRichText, HACK_15};
+use crate::content::{TrackedContent, UuidProvider};
 use crate::uitk::UiContext;
 
 #[derive(Clone)]

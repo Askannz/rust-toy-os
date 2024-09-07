@@ -1,12 +1,9 @@
 use crate::content::UuidProvider;
-use crate::input::{InputEvent, InputState};
-use crate::{FbView, FbViewMut, Framebuffer};
+use crate::{FbView, FbViewMut};
 use crate::Rect;
-use crate::Color;
-use crate::drawing::primitives::draw_rect;
-use crate::uitk::{UiStore, UiContext};
+use crate::uitk::UiContext;
 
-use super::{TileRenderer, TileRenderContext, dyn_scrollable_canvas, TileCache};
+use super::{TileRenderer, TileRenderContext};
 
 struct BufferCopyRenderer<'a, F: FbView> {
     src_fb: &'a F,

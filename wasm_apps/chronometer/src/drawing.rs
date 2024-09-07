@@ -1,5 +1,5 @@
 use num_traits::Float;
-use applib::{Color, Framebuffer, FbViewMut};
+use applib::{Color, FbViewMut};
 use applib::drawing::primitives::{ScreenPoint, draw_triangle};
 
 

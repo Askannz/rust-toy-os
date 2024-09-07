@@ -1,5 +1,5 @@
-use applib::{Color, Rect, Framebuffer, FbViewMut};
-use applib::drawing::primitives::{draw_rect, blend_rect};
+use applib::{Rect, FbViewMut};
+use applib::drawing::primitives::draw_rect;
 use applib::drawing::text::draw_str;
 
 use super::layout::{LayoutNode, NodeData};

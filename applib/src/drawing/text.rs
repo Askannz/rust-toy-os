@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use alloc::string::String;
 use lazy_static::lazy_static;
-use crate::{Framebuffer, Color, Rect, blend_colors, decode_png, FbView, FbViewMut};
+use crate::{Color, Rect, blend_colors, decode_png, FbView, FbViewMut};
 
 struct FontSpec {
     bitmap_png: &'static [u8],

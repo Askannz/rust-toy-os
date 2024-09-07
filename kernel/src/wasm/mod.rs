@@ -15,7 +15,7 @@ use smoltcp::wire::{Ipv4Address};
 use wasmi::{Engine, Store, Func, Caller, Module, Linker, Config, TypedFunc, AsContextMut, Instance, AsContext, Memory};
 
 
-use applib::{FbViewMut, Framebuffer, Rect, SystemState, FbView};
+use applib::{FbViewMut, Framebuffer, Rect, SystemState};
 
 use crate::network::TcpStack;
 use crate::time::SystemClock;

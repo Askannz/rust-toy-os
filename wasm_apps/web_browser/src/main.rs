@@ -3,7 +3,7 @@ extern crate alloc;
 use std::io::{Read, Write};
 
 use std::fmt::Debug;
-use std::{any, fmt};
+use std::fmt;
 use std::borrow::Cow;
 
 use core::cell::OnceCell;
@@ -13,10 +13,10 @@ use anyhow::Context;
 use guestlib::{FramebufferHandle, WasmLogger};
 use applib::{Color, Rect};
 
-use applib::{Framebuffer, FbViewMut};
+use applib::FbViewMut;
 use applib::uitk::{self, IncrementalUuidProvider};
 use applib::input::{InputState, InputEvent};
-use applib::input::{Keycode, CHARMAP};
+use applib::input::Keycode;
 use applib::content::TrackedContent;
 
 mod tls;
@@ -26,7 +26,7 @@ mod html;
 
 use tls::TlsClient;
 use socket::Socket;
-use html::{parsing::{HtmlTree, parse_html}, layout::{LayoutNode, compute_layout}, render::render_html};
+use html::{parsing::parse_html, layout::{LayoutNode, compute_layout}};
 use html::canvas::html_canvas;
 
 static LOGGER: WasmLogger = WasmLogger;

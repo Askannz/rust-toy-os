@@ -1,11 +1,7 @@
-use std::borrow::{Borrow, BorrowMut};
 use std::sync::Mutex;
 use std::sync::Arc;
-use alloc::rc::Rc;
-use core::cell::RefCell;
 use rustpython::vm::{self as vm, AsObject};
 use rustpython::vm::{Interpreter, scope::Scope};
-use rustpython::vm::function::IntoPyNativeFn;
 
 pub struct Python {
     interpreter: Interpreter,

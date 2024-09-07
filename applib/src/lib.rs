@@ -2,7 +2,6 @@
 
 extern crate alloc;
 
-use core::borrow::BorrowMut;
 
 use zune_png::PngDecoder;
 
@@ -14,7 +13,6 @@ pub mod content;
 
 use alloc::vec::Vec;
 use alloc::vec;
-use managed::ManagedSlice;
 use input::InputState;
 
 #[derive(Debug, Clone)]

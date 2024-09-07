@@ -2,7 +2,6 @@ use core::convert::TryInto;
 use core::hash::Hasher;
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 
 use core::{mem, usize};
 use x86_64::{VirtAddr, PhysAddr};

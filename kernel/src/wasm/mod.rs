@@ -519,7 +519,6 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                                  len: i32,
                                  level| {
         let ctx = caller.as_context();
-        let app_name = &ctx.data().app_name;
         let mem_slice = get_wasm_mem_slice(&caller, addr, len);
 
         let s = core::str::from_utf8(mem_slice)

@@ -32,6 +32,7 @@ mod wasm;
 mod app;
 mod system;
 mod resources;
+mod shell;
 
 use time::SystemClock;
 
@@ -118,7 +119,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut ui_store = uitk::UiStore::new();
     let mut uuid_provider = uitk::IncrementalUuidProvider::new();
-
+    let mut pie_anchor = None;
 
     log::info!("Entering main loop");
 
@@ -143,6 +144,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         for app in applications.iter_mut() {
             app.step(&mut uitk_context, system.clone(), &system_state);
         }
+        shell::pie_menu(&mut uitk_context, &mut pie_anchor);
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 

@@ -9,6 +9,7 @@ pub mod drawing;
 pub mod hash;
 pub mod input;
 pub mod uitk;
+pub mod geometry;
 
 use alloc::vec;
 use alloc::vec::Vec;

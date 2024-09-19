@@ -10,6 +10,7 @@ log = { version = "0.4.20", default-features = false }
 zune-png = { version = "0.4.0", default-features = false }
 managed = { version = "0.8.0", default-features = false, features = ["alloc"] }
 md-5 = { version = "0.10.6", default-features = false }
+num = { version = "0.4.3", default-features = false, features = ["libm"]  }
 
 # the profile used for `cargo build`
 [profile.dev]

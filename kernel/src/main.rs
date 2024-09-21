@@ -3,6 +3,7 @@
 #![feature(alloc_error_handler)]
 #![feature(abi_x86_interrupt)]
 
+use alloc::borrow::ToOwned;
 use alloc::format;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
@@ -17,7 +18,7 @@ use rand::SeedableRng;
 use num_traits::Float;
 
 use applib::drawing::primitives::{draw_rect, draw_arc, ArcMode};
-use applib::drawing::text::{draw_str, DEFAULT_FONT};
+use applib::drawing::text::{draw_str, DEFAULT_FONT, HACK_15};
 use applib::input::{InputEvent, InputState};
 use applib::uitk::{self};
 use applib::{Color, FbViewMut, Framebuffer, Rect};
@@ -122,10 +123,19 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let mut ui_store = uitk::UiStore::new();
     let mut uuid_provider = uitk::UuidProvider::new();
     let mut pie_anchor = None;
+
+    let make_entry = |text: &str, icon| shell::PieMenuEntry { 
+        icon,
+        bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff),
+        text: text.to_owned(),
+        text_color: Color::WHITE,
+        font: &HACK_15,
+    };
+
     let pie_entries = [
-        shell::PieMenuEntry { icon: &resources::CUBE_ICON, bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff) },
-        shell::PieMenuEntry { icon: &resources::TERMINAL_ICON, bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff) },
-        shell::PieMenuEntry { icon: &resources::CHRONO_ICON, bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff) },
+        make_entry("Cube", &resources::CUBE_ICON),
+        make_entry("Terminal", &resources::TERMINAL_ICON),
+        make_entry("Chrono", &resources::CHRONO_ICON),
     ];
 
     log::info!("Entering main loop");

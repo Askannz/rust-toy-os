@@ -1,12 +1,14 @@
 use core::cell::RefCell;
 use core::f32::consts::PI;
 use core::f32;
+use alloc::string::String;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
 use applib::input::InputState;
 use applib::{Color, FbView, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use applib::uitk::{self, UiContext};
 use applib::drawing::primitives::{draw_arc, draw_quad, ArcMode};
+use applib::drawing::text::{draw_str, Font};
 use applib::geometry::{Point2D, Vec2D, Triangle2D, Quad2D};
 use num_traits::Float;
 use crate::system::System;
@@ -14,6 +16,9 @@ use crate::system::System;
 pub struct PieMenuEntry {
     pub icon: &'static Framebuffer<OwnedPixels>,
     pub bg_color: Color,
+    pub text: String,
+    pub text_color: Color,
+    pub font: &'static Font,
 }
 
 pub fn pie_menu<F: FbViewMut>(
@@ -22,14 +27,15 @@ pub fn pie_menu<F: FbViewMut>(
     anchor: &mut Option<(i64, i64)>,
 ) {
 
-    const INNER_RADIUS: f32 = 100.0;
-    const OUTER_RADIUS: f32 = 150.0;
+    const INNER_RADIUS: f32 = 50.0;
+    const OUTER_RADIUS: f32 = 100.0;
     const COLOR_HOVER: Color = Color::rgba(0x88, 0x88, 0x88, 0xff);
     const COLOR_CLICKED: Color = Color::rgba(200, 200, 200, 0xff);
     const GAP: f32 = 2.0;
     const OFFSET_HOVER: f32 = 10.0;
     const OFFSET_CLICKED: f32 = 20.0;
-    const ARC_PX_PER_PT: f32 = 100.0;
+    const ARC_PX_PER_PT: f32 = 50.0;
+    const TEXT_OFFSET: f32 = 10.0;
 
     let pointer = &uitk_context.input_state.pointer;
 
@@ -64,11 +70,11 @@ pub fn pie_menu<F: FbViewMut>(
 
         let is_hover = v_cursor.cross(v0) < 0.0 && v_cursor.cross(v1) > 0.0;
 
-        let (offset, color) = match is_hover {
-            false => (0.0, entry.bg_color),
+        let (offset, color, text_visible) = match is_hover {
+            false => (0.0, entry.bg_color, false),
             true => match uitk_context.input_state.pointer.left_clicked {
-                false => (OFFSET_HOVER, COLOR_HOVER),
-                true => (OFFSET_CLICKED, COLOR_CLICKED),
+                false => (OFFSET_HOVER, COLOR_HOVER, true),
+                true => (OFFSET_CLICKED, COLOR_CLICKED, true),
             }
         };
 
@@ -89,5 +95,23 @@ pub fn pie_menu<F: FbViewMut>(
         let x0_icon = p_icon.x - (icon_w / 2) as i64;
         let y0_icon = p_icon.y - (icon_h / 2) as i64;
         uitk_context.fb.copy_from_fb(entry.icon, (x0_icon, y0_icon), true);
+
+        if text_visible {
+            let p_text = center + (v_bisect * (OUTER_RADIUS + TEXT_OFFSET)).round_to_int() + v_offset;
+            let (text_w, text_h) = compute_text_bbox(&entry.text, entry.font);
+            let x0_text = match v_bisect.x > 0.0 {
+                true => p_text.x,
+                false => p_text.x - text_w as i64,
+            };
+            let y0_text = p_text.y - (text_h / 2) as i64;
+            draw_str(uitk_context.fb, &entry.text, x0_text, y0_text, entry.font, entry.text_color, None);
+        }
+
     }
+}
+
+fn compute_text_bbox(s: &str, font: &Font) -> (u32, u32) {
+    let w = font.char_w * s.len();
+    let h = font.char_h;
+    (w as u32, h as u32)
 }

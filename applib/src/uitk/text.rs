@@ -2,13 +2,15 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::Framebuffer;
-use crate::content::{TrackedContent, UuidProvider};
+use crate::content::{TrackedContent};
 use crate::drawing::primitives::draw_rect;
 use crate::drawing::text::{draw_rich_slice, draw_str, Font, FormattedRichText, HACK_15};
 use crate::input::{InputEvent, InputState};
 use crate::input::{Keycode, CHARMAP};
 use crate::uitk::{UiContext, ContentId};
 use crate::{Color, FbViewMut, Rect};
+
+use super::UuidProvider;
 
 #[derive(Clone, Hash)]
 pub struct EditableTextConfig {
@@ -34,12 +36,12 @@ impl Default for EditableTextConfig {
     }
 }
 
-pub fn string_input<P: UuidProvider>(
+pub fn string_input(
     buffer: &mut TrackedContent<String>,
     input_state: &InputState,
     allow_newline: bool,
     cursor: &mut usize,
-    uuid_provider: &mut P,
+    uuid_provider: &mut UuidProvider,
 ) {
     let buf_len = buffer.as_ref().len();
     *cursor = usize::min(buf_len, *cursor);
@@ -119,7 +121,7 @@ pub fn string_input<P: UuidProvider>(
     }
 }
 
-impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
+impl<'a, F: FbViewMut> UiContext<'a, F> {
     pub fn editable_text(
         &mut self,
         config: &EditableTextConfig,

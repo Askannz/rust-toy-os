@@ -117,7 +117,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
 
     let mut ui_store = uitk::UiStore::new();
-    let mut uuid_provider = uitk::IncrementalUuidProvider::new();
+    let mut uuid_provider = uitk::UuidProvider::new();
     let mut pie_anchor = None;
 
     log::info!("Entering main loop");

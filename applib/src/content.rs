@@ -17,14 +17,14 @@ pub struct TrackedContent<T> {
 }
 
 impl<T> TrackedContent<T> {
-    pub fn new<P: UuidProvider>(inner: T, uuid_provider: &mut P) -> Self {
+    pub fn new(inner: T, uuid_provider: &mut UuidProvider) -> Self {
         Self {
             inner,
             content_id: uuid_provider.make_id(),
         }
     }
 
-    pub fn mutate<'a, P: UuidProvider>(&'a mut self, uuid_provider: &mut P) -> &'a mut T {
+    pub fn mutate<'a>(&'a mut self, uuid_provider: &mut UuidProvider) -> &'a mut T {
         self.content_id = uuid_provider.make_id();
         &mut self.inner
     }
@@ -38,15 +38,11 @@ impl<T> TrackedContent<T> {
     }
 }
 
-pub trait UuidProvider {
-    fn make_id(&mut self) -> ContentId;
-}
-
-pub struct IncrementalUuidProvider {
+pub struct UuidProvider {
     next: u64,
 }
 
-impl UuidProvider for IncrementalUuidProvider {
+impl UuidProvider {
     fn make_id(&mut self) -> ContentId {
         let content_id = ContentId(self.next);
         if self.next == u64::MAX {
@@ -57,7 +53,7 @@ impl UuidProvider for IncrementalUuidProvider {
     }
 }
 
-impl IncrementalUuidProvider {
+impl UuidProvider {
     pub fn new() -> Self {
         Self { next: 0 }
     }

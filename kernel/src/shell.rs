@@ -3,7 +3,6 @@ use core::f32::consts::PI;
 use core::f32;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
-use applib::content::UuidProvider;
 use applib::input::InputState;
 use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use applib::uitk::{self, UiContext};
@@ -12,8 +11,8 @@ use applib::geometry::{Point2D, Vec2D, Triangle2D, Quad2D};
 use num_traits::Float;
 use crate::system::System;
 
-pub fn pie_menu<F: FbViewMut, P: UuidProvider>(
-    uitk_context: &mut uitk::UiContext<F, P>,
+pub fn pie_menu<F: FbViewMut>(
+    uitk_context: &mut uitk::UiContext<F>,
     anchor: &mut Option<(i64, i64)>,
 ) {
 

@@ -16,7 +16,7 @@ use guestlib::{PixelData, WasmLogger};
 use applib::content::TrackedContent;
 use applib::input::Keycode;
 use applib::input::{InputEvent, InputState};
-use applib::uitk::{self, IncrementalUuidProvider};
+use applib::uitk::{self, UuidProvider};
 use applib::FbViewMut;
 
 mod dns;
@@ -45,7 +45,7 @@ struct AppState {
 
     buffer: Vec<u8>,
 
-    uuid_provider: IncrementalUuidProvider,
+    uuid_provider: UuidProvider,
     ui_store: uitk::UiStore,
 
     webview_scroll_offsets: (i64, i64),
@@ -159,7 +159,7 @@ pub fn init() -> () {
     let url_text = String::from("https://news.ycombinator.com/");
     let url_len = url_text.len();
 
-    let mut uuid_provider = uitk::IncrementalUuidProvider::new();
+    let mut uuid_provider = uitk::UuidProvider::new();
 
     let state = AppState {
         pixel_data: PixelData::new(),
@@ -195,7 +195,7 @@ pub fn init() -> () {
 
         buffer: vec![0u8; BUFFER_SIZE],
         ui_store: uitk::UiStore::new(),
-        uuid_provider: IncrementalUuidProvider::new(),
+        uuid_provider: UuidProvider::new(),
         webview_scroll_offsets: (0, 0),
         webview_scroll_dragging: false,
         request_state: RequestState::Render {

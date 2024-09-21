@@ -11,7 +11,7 @@ use applib::drawing::text::{
 };
 use applib::input::InputEvent;
 use applib::input::{InputState, Keycode};
-use applib::uitk::{self, IncrementalUuidProvider, UiStore};
+use applib::uitk::{self, UuidProvider, UiStore};
 use applib::{Color, FbViewMut, Rect};
 use core::cell::OnceCell;
 use guestlib::{PixelData};
@@ -36,7 +36,7 @@ struct AppState {
     console_buffer: TrackedContent<Vec<EvalResult>>,
 
     ui_store: UiStore,
-    uuid_provider: uitk::IncrementalUuidProvider,
+    uuid_provider: uitk::UuidProvider,
     scroll_offsets: (i64, i64),
     dragging: bool,
 
@@ -54,14 +54,14 @@ pub fn init() -> () {
     log::set_logger(&LOGGER).unwrap();
 
     let win_rect = guestlib::get_win_rect();
-    let mut uuid_provider = uitk::IncrementalUuidProvider::new();
+    let mut uuid_provider = uitk::UuidProvider::new();
 
     let state = AppState {
         pixel_data: PixelData::new(),
         input_buffer: TrackedContent::new(String::new(), &mut uuid_provider),
         console_buffer: TrackedContent::new(Vec::new(), &mut uuid_provider),
         ui_store: uitk::UiStore::new(),
-        uuid_provider: IncrementalUuidProvider::new(),
+        uuid_provider: UuidProvider::new(),
         scroll_offsets: (0, 0),
         dragging: false,
         python: python::Python::new(),

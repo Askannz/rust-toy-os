@@ -1,10 +1,9 @@
-use crate::content::UuidProvider;
 use crate::drawing::primitives::draw_rect;
 use crate::drawing::text::{draw_str, Font, DEFAULT_FONT};
 use crate::uitk::UiContext;
 use crate::{Color, FbViewMut, Rect};
 
-impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
+impl<'a, F: FbViewMut> UiContext<'a, F> {
     pub fn progress_bar(&mut self, config: &ProgressBarConfig, progress: u64, text: &str) {
         let UiContext { fb, .. } = self;
 

@@ -1,4 +1,4 @@
-use applib::uitk::{IncrementalUuidProvider, UiStore};
+use applib::uitk::{UuidProvider, UiStore};
 use applib::{Color, FbViewMut, Framebuffer, OwnedPixels};
 use core::cell::OnceCell;
 use guestlib::PixelData;
@@ -14,7 +14,7 @@ struct AppState {
     pixel_data: PixelData,
     render_fb: Framebuffer<OwnedPixels>,
     ui_store: UiStore,
-    uuid_provider: IncrementalUuidProvider,
+    uuid_provider: UuidProvider,
     scroll_offsets: (i64, i64),
     dragging_sbar: bool,
     prev_pointer: Option<(i64, i64)>,
@@ -37,7 +37,7 @@ pub fn init() -> () {
         pixel_data: PixelData::new(),
         render_fb: Framebuffer::new_owned(W as u32, H as u32),
         ui_store: UiStore::new(),
-        uuid_provider: IncrementalUuidProvider::new(),
+        uuid_provider: UuidProvider::new(),
         scroll_offsets: (0, 0),
         dragging_sbar: false,
         prev_pointer: None,

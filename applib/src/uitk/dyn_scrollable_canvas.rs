@@ -1,5 +1,3 @@
-use crate::content::UuidProvider;
-
 use crate::drawing::primitives::draw_rect;
 use crate::input::InputEvent;
 use crate::Color;
@@ -27,7 +25,7 @@ pub struct TileRenderContext<'a> {
     pub tile_cache: &'a mut TileCache,
 }
 
-impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
+impl<'a, F: FbViewMut> UiContext<'a, F> {
     pub fn dyn_scrollable_canvas<T: TileRenderer>(
         &mut self,
         dst_rect: &Rect,

@@ -1,4 +1,3 @@
-use crate::content::UuidProvider;
 use crate::drawing::primitives::draw_rect;
 use crate::drawing::text::{draw_str, Font, DEFAULT_FONT};
 use crate::uitk::UiContext;
@@ -6,7 +5,7 @@ use crate::{Color, FbView, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use alloc::borrow::ToOwned;
 use alloc::string::String;
 
-impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
+impl<'a, F: FbViewMut> UiContext<'a, F> {
     pub fn button(&mut self, config: &ButtonConfig) -> bool {
         #[derive(PartialEq)]
         enum InteractionState {

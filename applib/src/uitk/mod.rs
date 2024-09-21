@@ -12,8 +12,8 @@ pub use progress_bar::ProgressBarConfig;
 pub use scrollable_canvas::set_autoscroll;
 pub use text::{render_rich_text, string_input, EditableTextConfig, ScrollableTextConfig};
 
-pub use crate::content::{ContentId, IncrementalUuidProvider};
-use crate::{content::UuidProvider, InputState};
+pub use crate::content::{ContentId, UuidProvider};
+use crate::{InputState};
 use crate::{FbViewMut, Framebuffer, OwnedPixels};
 
 pub struct TileCache {
@@ -28,11 +28,11 @@ impl TileCache {
     }
 }
 
-pub struct UiContext<'a, F: FbViewMut, P: UuidProvider> {
+pub struct UiContext<'a, F: FbViewMut> {
     pub fb: &'a mut F,
     pub tile_cache: &'a mut TileCache,
     pub input_state: &'a InputState,
-    pub uuid_provider: &'a mut P,
+    pub uuid_provider: &'a mut UuidProvider,
 }
 
 pub struct UiStore {
@@ -46,12 +46,12 @@ impl UiStore {
         }
     }
 
-    pub fn get_context<'a, F: FbViewMut, P: UuidProvider>(
+    pub fn get_context<'a, F: FbViewMut>(
         &'a mut self,
         fb: &'a mut F,
         input_state: &'a InputState,
-        uuid_provider: &'a mut P,
-    ) -> UiContext<'a, F, P> {
+        uuid_provider: &'a mut UuidProvider,
+    ) -> UiContext<'a, F> {
         UiContext {
             fb,
             tile_cache: &mut self.tile_cache,

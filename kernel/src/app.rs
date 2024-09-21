@@ -2,7 +2,6 @@ use core::borrow::Borrow;
 
 use crate::alloc::string::ToString;
 use alloc::rc::Rc;
-use applib::content::UuidProvider;
 use core::cell::RefCell;
 
 use applib::drawing::primitives::{blend_rect, draw_rect};
@@ -62,9 +61,9 @@ impl AppDescriptor {
 
 impl App {
 
-    pub fn step<F: FbViewMut, P: UuidProvider>(
+    pub fn step<F: FbViewMut>(
         &mut self,
-        uitk_context: &mut uitk::UiContext<F, P>,
+        uitk_context: &mut uitk::UiContext<F>,
         system: &mut System,
         input_state: &InputState
     ) {

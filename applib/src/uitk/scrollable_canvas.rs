@@ -1,4 +1,3 @@
-use crate::content::UuidProvider;
 use crate::uitk::UiContext;
 use crate::Rect;
 use crate::{FbView, FbViewMut};
@@ -21,7 +20,7 @@ impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
     }
 }
 
-impl<'a, F: FbViewMut, P: UuidProvider> UiContext<'a, F, P> {
+impl<'a, F: FbViewMut> UiContext<'a, F> {
     pub fn scrollable_canvas<F1: FbView>(
         &mut self,
         dst_rect: &Rect,

@@ -1,14 +1,14 @@
 use super::layout::{LayoutNode, NodeData};
 use super::render::render_html;
-use applib::content::{ContentId, TrackedContent, UuidProvider};
+use applib::content::{ContentId, TrackedContent};
 use applib::drawing::primitives::{blend_rect, draw_rect};
 use applib::uitk::{self, TileRenderer, UiContext};
 use applib::Color;
 use applib::Rect;
 use applib::{FbView, FbViewMut, Framebuffer};
 
-pub fn html_canvas<'a, F: FbViewMut, P: UuidProvider>(
-    uitk_context: &mut UiContext<'a, F, P>,
+pub fn html_canvas<'a, F: FbViewMut>(
+    uitk_context: &mut UiContext<'a, F>,
     layout: &'a TrackedContent<LayoutNode>,
     dst_rect: &Rect,
     offsets: &mut (i64, i64),

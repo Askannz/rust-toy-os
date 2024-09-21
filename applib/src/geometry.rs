@@ -81,6 +81,11 @@ impl<T: Coord> ops::Add<Vec2D<T>> for Vec2D<T> {
 }
 
 impl<T: Coord> Vec2D<T> {
+
+    pub fn zero() -> Self {
+        Self { x: T::zero(), y: T::zero() }
+    }
+
     pub fn cross(&self, vec: Vec2D<T>) -> T {
         self.x * vec.y - vec.x * self.y
     }

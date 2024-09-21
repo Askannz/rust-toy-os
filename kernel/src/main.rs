@@ -6,14 +6,17 @@
 use alloc::format;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
+use applib::geometry::Point2D;
 use rand::rngs::SmallRng;
 use core::cell::RefCell;
+use core::f32::consts::PI;
 use core::panic::PanicInfo;
 use uefi::prelude::{entry, Boot, Handle, Status, SystemTable};
 use uefi::table::boot::MemoryType;
 use rand::SeedableRng;
+use num_traits::Float;
 
-use applib::drawing::primitives::draw_rect;
+use applib::drawing::primitives::{draw_rect, draw_arc, ArcMode};
 use applib::drawing::text::{draw_str, DEFAULT_FONT};
 use applib::input::{InputEvent, InputState};
 use applib::uitk::{self};
@@ -119,6 +122,11 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let mut ui_store = uitk::UiStore::new();
     let mut uuid_provider = uitk::UuidProvider::new();
     let mut pie_anchor = None;
+    let pie_entries = [
+        shell::PieMenuEntry { icon: &resources::CUBE_ICON, bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff) },
+        shell::PieMenuEntry { icon: &resources::TERMINAL_ICON, bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff) },
+        shell::PieMenuEntry { icon: &resources::CHRONO_ICON, bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff) },
+    ];
 
     log::info!("Entering main loop");
 
@@ -143,9 +151,15 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         for app in applications.iter_mut() {
             app.step(&mut uitk_context, &mut system, &input_state);
         }
-        shell::pie_menu(&mut uitk_context, &mut pie_anchor);
+        shell::pie_menu(&mut uitk_context, &pie_entries, &mut pie_anchor);
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
+
+        // DEBUG
+        // let arc_center = Point2D::<i64> { x: (w / 2).into(), y: (h / 2).into() };
+        // let arc_mode = ArcMode::AngleRange(-PI / 2.0, PI / 2.0);
+        // let r = 200.0 + 50.0 * f32::sin(system.clock.time() as f32 / 1000.0);
+        // draw_arc(&mut framebuffer, arc_center, 50, r as u32, arc_mode, 100.0, Color::RED);
 
         draw_cursor(&mut framebuffer, &input_state);
 

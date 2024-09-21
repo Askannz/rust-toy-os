@@ -1,5 +1,7 @@
+use core::f32::consts::PI;
+use num::Float;
 use crate::{blend_colors, Color, FbViewMut, Rect};
-use crate::geometry::{Triangle2D, Quad2D, Point2D};
+use crate::geometry::{Triangle2D, Quad2D, Point2D, Vec2D};
 
 pub fn draw_triangle<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color) {
     let i = {
@@ -30,6 +32,85 @@ pub fn draw_quad<F: FbViewMut>(fb: &mut F, quad: &Quad2D<i64>, color: Color) {
     let (tri0, tri1) = quad.triangles();
     draw_triangle(fb, &tri0, color);
     draw_triangle(fb, &tri1, color);
+}
+
+pub fn draw_triangle_with_wireframe<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color) {
+
+    const F: f32 = 0.1;
+    const WIREFRAME_COLOR: Color = Color::BLUE;
+
+    let shrink_triangle = |tri: &Triangle2D<i64>| -> Triangle2D<i64> {
+        let [p0, p1, p2] = core::array::from_fn(|i| tri.points[i].to_float());
+        let center = Point2D::<f32> {
+            x: (p0.x + p1.x + p2.x) / 3.0,
+            y: (p0.y + p1.y + p2.y) / 3.0,
+        };
+
+        let p0 = (p0 + (center - p0) * F).round_to_int();
+        let p1 = (p1 + (center - p1) * F).round_to_int();
+        let p2 = (p2 + (center - p2) * F).round_to_int();
+
+        Triangle2D { points: [p0, p1, p2] }
+    };
+
+    let tri_s = shrink_triangle(tri);
+
+    draw_triangle(fb, &tri, WIREFRAME_COLOR);
+    draw_triangle(fb, &tri_s, color);
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ArcMode {
+    Full,
+    AngleRange(f32, f32),
+    MultiAngleRange { inner: (f32, f32), outer: (f32, f32) }
+}
+
+pub fn draw_arc<F: FbViewMut>(
+    fb: &mut F,
+    center: Point2D<i64>,
+    r_inner: f32,
+    r_outer: f32,
+    mode: ArcMode,
+    px_per_pt: f32,
+    color: Color
+) {
+
+    let (a_in_min, a_in_max, a_out_min, a_out_max) = match mode {
+        ArcMode::Full => (0.0, 2.0 * PI, 0.0, 2.0 * PI),
+        ArcMode::AngleRange(amin, amax) => (amin, amax, amin, amax),
+        ArcMode::MultiAngleRange { inner: (a_in_min, a_in_max), outer: (a_out_min, a_out_max) } => (a_in_min, a_in_max, a_out_min, a_out_max),
+    };
+
+    let outer_perimeter = 2.0 * PI * (r_outer as f32);
+
+    let n_edge_pairs = f32::round(0.5 * outer_perimeter / px_per_pt) as usize;
+    let n_outer_edges = 2 * n_edge_pairs;
+    let n_outer_points = n_outer_edges + 1;
+
+    let get_point = |i: usize, amin: f32, amax: f32, r: f32| {
+        let a = amin + (amax - amin) * ((i % n_outer_points) as f32) / ((n_outer_points - 1) as f32);
+        let v = Vec2D::<f32> { x: f32::cos(a), y: f32::sin(a) };
+        center + (v * r).round_to_int()
+    };
+
+    for i in 0..n_edge_pairs {
+
+        let p_out_0 = get_point(2 * i, a_out_min, a_out_max, r_outer);
+        let p_out_1 = get_point(2 * i + 1, a_out_min, a_out_max, r_outer);
+        let p_out_2 = get_point(2 * i + 2, a_out_min, a_out_max, r_outer);
+
+        let p_in_0 = get_point(2 * i, a_in_min, a_in_max, r_inner);
+        let p_in_2 = get_point(2 * i + 2, a_in_min, a_in_max, r_inner);
+
+        let tri_a = Triangle2D::<i64> {  points: [p_in_0, p_out_0, p_out_1] };
+        let tri_b = Triangle2D::<i64> {  points: [p_in_0, p_out_1, p_in_2] };
+        let tri_c = Triangle2D::<i64> {  points: [p_in_2, p_out_1, p_out_2] };
+
+        draw_triangle(fb, &tri_a, color);
+        draw_triangle(fb, &tri_b, color);
+        draw_triangle(fb, &tri_c, color);
+    }
 }
 
 

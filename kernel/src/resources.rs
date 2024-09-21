@@ -14,11 +14,11 @@ lazy_static! {
     //
     // App icons
 
-    static ref CUBE_ICON: Framebuffer<OwnedPixels> =
+    pub static ref CUBE_ICON: Framebuffer<OwnedPixels> =
         Framebuffer::from_png(include_bytes!("../icons/cube.png"));
-    static ref CHRONO_ICON: Framebuffer<OwnedPixels> =
+    pub static ref CHRONO_ICON: Framebuffer<OwnedPixels> =
         Framebuffer::from_png(include_bytes!("../icons/chronometer.png"));
-    static ref TERMINAL_ICON: Framebuffer<OwnedPixels> =
+    pub static ref TERMINAL_ICON: Framebuffer<OwnedPixels> =
         Framebuffer::from_png(include_bytes!("../icons/terminal.png"));
 
     //

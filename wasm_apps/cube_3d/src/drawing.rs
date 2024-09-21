@@ -1,6 +1,7 @@
 extern crate alloc;
 
-use applib::drawing::primitives::{draw_triangle, ScreenPoint};
+use applib::drawing::primitives::{draw_quad};
+use applib::geometry::{Point2D, Quad2D};
 use applib::{Color, FbView, FbViewMut};
 use num_traits::Float;
 
@@ -128,43 +129,40 @@ fn rasterize<F: FbViewMut>(fb: &mut F, geometry: &[Quad; NB_QUADS]) {
         });
 }
 
-fn rasterize_quad<F: FbViewMut>(fb: &mut F, quad: &IntQuad, color: Color) {
+fn rasterize_quad<F: FbViewMut>(fb: &mut F, quad: &Quad2D<i64>, color: Color) {
     if get_direction(quad) < 0 {
         return;
     }
 
-    let [p0, p1, p2, p3] = quad;
-
-    let tri_1 = [p0, p1, p2].map(|v| v.clone());
-    let tri_2 = [p2, p3, p0].map(|v| v.clone());
-
-    draw_triangle(fb, &tri_1, color);
-    draw_triangle(fb, &tri_2, color);
+    draw_quad(fb, quad, color);
 }
 
-fn get_direction(quad: &IntQuad) -> i64 {
-    let p0 = &quad[0];
-    let p1 = &quad[1];
-    let p3 = &quad[3];
-
+fn get_direction(quad: &Quad2D<i64>) -> i64 {
+    let [p0, p1, _p2, p3] = quad.points;
     (p1.x - p0.x) * (p3.y - p0.y) - (p3.x - p0.x) * (p1.y - p0.y)
 }
 
-fn geometry_to_screen_space(w: f32, h: f32, quads: &[Quad; NB_QUADS]) -> [IntQuad; NB_QUADS] {
+fn geometry_to_screen_space(w: f32, h: f32, quads: &[Quad; NB_QUADS]) -> [Quad2D<i64>; NB_QUADS] {
     quads.clone().map(|quad| quad_to_screen_space(w, h, &quad))
 }
 
-fn quad_to_screen_space(w: f32, h: f32, quad: &Quad) -> IntQuad {
-    quad.clone().map(|p| point_to_screen_space(w, h, &p))
+fn quad_to_screen_space(w: f32, h: f32, quad: &Quad) -> Quad2D<i64> {
+
+    let points: [Point2D<i64>; 4] = core::array::from_fn(|i| {
+        point_to_screen_space(w, h, &quad[i])
+    });
+
+    Quad2D { points }
 }
 
-fn point_to_screen_space(w: f32, h: f32, p: &Point) -> ScreenPoint {
+fn point_to_screen_space(w: f32, h: f32, p: &Point) -> Point2D<i64> {
     let y_px = (h - 1.0) * (ZOOM * p.y + 1.0) / 2.0;
     let x_px = (h - 1.0) * (ZOOM * p.x + 1.0) / 2.0 + (w - h) / 2.0;
-    ScreenPoint {
-        x: x_px as i64,
-        y: y_px as i64,
-    }
+    let point = Point2D::<f32> {
+        x: x_px,
+        y: y_px,
+    };
+    point.round_to_int()
 }
 
 fn matmul(m: &Matrix, vec: &Vector) -> Vector {
@@ -186,7 +184,6 @@ struct Vector {
 
 type Point = Vector;
 type Quad = [Point; 4];
-type IntQuad = [ScreenPoint; 4];
 type Matrix = [f32; 9];
 
 #[derive(Debug, Clone, Copy)]

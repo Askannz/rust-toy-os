@@ -1,25 +1,20 @@
 use crate::{blend_colors, Color, FbViewMut, Rect};
+use crate::geometry::{Triangle2D, Quad2D, Point2D};
 
-#[derive(Debug, Clone)]
-pub struct ScreenPoint {
-    pub x: i64,
-    pub y: i64,
-}
-
-pub fn draw_triangle<F: FbViewMut>(fb: &mut F, tri: &[ScreenPoint; 3], color: Color) {
+pub fn draw_triangle<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color) {
     let i = {
-        if tri[0].y <= i64::min(tri[1].y, tri[2].y) {
+        if tri.points[0].y <= i64::min(tri.points[1].y, tri.points[2].y) {
             0
-        } else if tri[1].y <= i64::min(tri[0].y, tri[2].y) {
+        } else if tri.points[1].y <= i64::min(tri.points[0].y, tri.points[2].y) {
             1
         } else {
             2
         }
     };
 
-    let p0 = &tri[i];
-    let p2 = &tri[(i + 1) % 3];
-    let p1 = &tri[(i + 2) % 3];
+    let p0 = &tri.points[i];
+    let p2 = &tri.points[(i + 1) % 3];
+    let p1 = &tri.points[(i + 2) % 3];
 
     let y_half = i64::min(p1.y, p2.y);
     fill_half_triangle(fb, (p0, p1), (p0, p2), (p0.y, y_half), color);
@@ -31,11 +26,18 @@ pub fn draw_triangle<F: FbViewMut>(fb: &mut F, tri: &[ScreenPoint; 3], color: Co
     }
 }
 
+pub fn draw_quad<F: FbViewMut>(fb: &mut F, quad: &Quad2D<i64>, color: Color) {
+    let (tri0, tri1) = quad.triangles();
+    draw_triangle(fb, &tri0, color);
+    draw_triangle(fb, &tri1, color);
+}
+
+
 #[inline]
 fn fill_half_triangle<F: FbViewMut>(
     fb: &mut F,
-    left: (&ScreenPoint, &ScreenPoint),
-    right: (&ScreenPoint, &ScreenPoint),
+    left: (&Point2D<i64>, &Point2D<i64>),
+    right: (&Point2D<i64>, &Point2D<i64>),
     range: (i64, i64),
     color: Color,
 ) {

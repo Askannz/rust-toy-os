@@ -124,15 +124,6 @@ impl Point2D<i64> {
     }
 }
 
-// impl From<Point2D<f32>> for Point2D<i64> {
-//     fn from(value: Point2D<f32>) -> Self {
-//         Point2D::<i64> {
-//             x: i64::try_from(value.x).unwrap(),
-//             y: i64::try_from(value.y).unwrap(),
-//         }
-//     }
-// }
-
 pub struct Triangle2D<T: Coord> {
     pub points: [Point2D<T>; 3]
 }

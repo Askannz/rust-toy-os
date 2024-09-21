@@ -7,7 +7,7 @@ use applib::content::UuidProvider;
 use applib::input::InputState;
 use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use applib::uitk::{self, UiContext};
-use applib::drawing::primitives::{ScreenPoint, draw_triangle};
+use applib::drawing::primitives::{draw_quad};
 use applib::geometry::{Point2D, Vec2D, Triangle2D, Quad2D};
 use num_traits::Float;
 use crate::system::System;
@@ -82,22 +82,4 @@ pub fn pie_menu<F: FbViewMut, P: UuidProvider>(
 
         draw_quad(uitk_context.fb, &quad, color);
     }
-}
-
-pub fn draw_quad<F: FbViewMut>(fb: &mut F, quad: &Quad2D<i64>, color: Color) {
-    let (tri0, tri1) = quad.triangles();
-
-    // TODO
-    let points_0: [ScreenPoint; 3] = core::array::from_fn(|i| {
-        let p = tri0.points[i];
-        ScreenPoint { x: p.x, y: p.y }
-    });
-    let points_1: [ScreenPoint; 3] = core::array::from_fn(|i| {
-        let p = tri1.points[i];
-        ScreenPoint { x: p.x, y: p.y }
-    });
-
-
-    draw_triangle(fb, &points_0, color);
-    draw_triangle(fb, &points_1, color);
 }

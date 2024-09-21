@@ -40,12 +40,13 @@ pub struct App {
 
 impl AppDescriptor {
 
-    pub fn instantiate(&self, system: Rc<RefCell<System>>, wasm_engine: &WasmEngine) -> App {
+    pub fn instantiate(&self, system: &mut System, system_state: &SystemState, wasm_engine: &WasmEngine) -> App {
 
         App {
             descriptor: self.clone(),
             wasm_app: wasm_engine.instantiate_app(
-                system.clone(),
+                system,
+                system_state,
                 self.data,
                 self.name,
                 &self.init_win_rect,
@@ -64,7 +65,7 @@ impl App {
     pub fn step<F: FbViewMut, P: UuidProvider>(
         &mut self,
         uitk_context: &mut uitk::UiContext<F, P>,
-        system: Rc<RefCell<System>>,
+        system: &mut System,
         system_state: &SystemState
     ) {
 
@@ -192,9 +193,9 @@ impl App {
                 None,
             );
 
-            let t0 = system.as_ref().borrow().clock.time();
-            app.wasm_app.step(system.clone(), system_state, *fb, &app.rect);
-            let t1 = system.as_ref().borrow().clock.time();
+            let t0 = system.clock.time();
+            app.wasm_app.step(system, system_state, *fb, &app.rect);
+            let t1 = system.clock.time();
             const SMOOTHING: f64 = 0.9;
             app.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * app.time_used;
 

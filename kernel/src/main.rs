@@ -92,30 +92,31 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     //let socket_handle = tcp_stack.borrow_mut().connect(Ipv4Address([93, 184, 216, 34]), 80);
 
     log::info!("TCP stack initialized");
-    
 
     let (w, h) = virtio_gpu.get_dims();
     let (w, h) = (w as u32, h as u32);
     let wasm_engine = WasmEngine::new();
 
-    let system = Rc::new(RefCell::new(System {
+    let mut system_state = SystemState {
+        input: InputState::new(w, h),
+    };
+
+    let mut system = System {
         clock,
         tcp_stack,
         rng: SmallRng::seed_from_u64(0),
-    }));
+    };
 
     let mut applications: Vec<App> = APPLICATIONS
         .iter()
-        .map(|app_desc| app_desc.instantiate(system.clone(), &wasm_engine))
+        .map(|app_desc| app_desc.instantiate(&mut system, &system_state, &wasm_engine))
         .collect();
 
     log::info!("Applications loaded");
 
     let mut fps_manager = FpsManager::new(FPS_TARGET);
 
-    let mut system_state = SystemState {
-        input: InputState::new(w, h),
-    };
+
 
     let mut ui_store = uitk::UiStore::new();
     let mut uuid_provider = uitk::IncrementalUuidProvider::new();
@@ -126,7 +127,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     loop {
 
         {
-            let System { clock, tcp_stack, .. } = &mut *system.borrow_mut();
+            let System { clock, tcp_stack, .. } = &mut system;
             fps_manager.start_frame(clock);
             tcp_stack.poll_interface(clock);
         }
@@ -142,7 +143,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         let mut uitk_context = ui_store.get_context(&mut framebuffer, &system_state.input, &mut uuid_provider);
         for app in applications.iter_mut() {
-            app.step(&mut uitk_context, system.clone(), &system_state);
+            app.step(&mut uitk_context, &mut system, &system_state);
         }
         shell::pie_menu(&mut uitk_context, &mut pie_anchor);
 
@@ -151,7 +152,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         draw_cursor(&mut framebuffer, &system_state);
 
         {
-            let System { clock, .. } = &mut *system.borrow_mut();
+            let System { clock, .. } = &mut system;
             fps_manager.end_frame(clock, &mut framebuffer);
         }
 

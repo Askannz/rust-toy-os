@@ -35,13 +35,14 @@ impl WasmEngine {
 
     pub fn instantiate_app(
         &self,
-        system: Rc<RefCell<System>>,
+        system: &mut System,
+        system_state: &SystemState,
         wasm_code: &[u8],
         app_name: &str,
         init_rect: &Rect,
     ) -> WasmApp {
         let module = Module::new(&self.engine, wasm_code).unwrap();
-        let store_data = StoreData::new(app_name, init_rect);
+        let store_data = StoreData::new(app_name);
         let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
         let mut linker = <Linker<StoreData>>::new(&self.engine);
 
@@ -56,22 +57,20 @@ impl WasmEngine {
         let wasm_init = instance.get_typed_func::<(), ()>(&store, "init").unwrap();
         let wasm_step = instance.get_typed_func::<(), ()>(&store, "step").unwrap();
 
-        store.set_fuel(u64::MAX).unwrap();
+        let mut store_wrapper = StoreWrapper { store };
 
-        //
-        // App init
-
-        store.data_mut().system = Some(system);
-
-        log::info!("Initializing {}", app_name);
-        wasm_init
-            .call(&mut store, ())
-            .expect("Failed to initialize WASM app");
-
-        store.data_mut().system = None;
+        store_wrapper.with_context(
+            system, system_state, init_rect,
+            |store| {
+                log::info!("Initializing {}", app_name);
+                wasm_init
+                    .call(store, ())
+                    .expect("Failed to initialize WASM app");
+            }
+        );
 
         WasmApp {
-            store,
+            store_wrapper,
             instance,
             wasm_step,
         }
@@ -154,54 +153,88 @@ impl SocketsStore {
     }
 }
 
+struct StoreWrapper {
+    store: Store<StoreData>,
+}
+
+impl StoreWrapper {
+    fn with_context<F>(&mut self, system: &mut System, system_state: &SystemState, win_rect: &Rect, mut func: F)
+        where F: FnMut(&mut Store<StoreData>)
+    {
+
+        self.store.set_fuel(STEP_FUEL).unwrap();
+
+        self.store.as_context_mut().data_mut().step_context = Some(StepContext {
+
+            // reference -> raw pointer conversions here
+            system,
+            system_state,
+
+            win_rect: win_rect.clone(),
+            timings: BTreeMap::new(),
+        });
+
+        func(&mut self.store);
+
+        self.store.as_context_mut().data_mut().step_context = None;
+    }
+}
+
 struct StoreData {
     app_name: String,
-    system_state: Option<SystemState>,
-    win_rect: Rect,
     framebuffer: Option<WasmFramebufferDef>,
-
-    system: Option<Rc<RefCell<System>>>,
     sockets_store: SocketsStore,
+    step_context: Option<StepContext>,
+}
 
+struct StepContext {
+    system: *mut System,
+    system_state: *const SystemState,
+    win_rect: Rect,
     timings: BTreeMap<String, u64>,
+}
 
-    qemu_dump: Option<Vec<u8>>,
+struct StepContextView<'a> {
+    system: &'a mut System,
+    system_state: &'a SystemState,
+    win_rect: &'a Rect,
+    timings: &'a mut BTreeMap<String, u64>,
 }
 
 impl StoreData {
 
     fn new(
         app_name: &str,
-        init_rect: &Rect,
     ) -> Self {
         StoreData {
             app_name: app_name.to_owned(),
-            system_state: None,
             framebuffer: None,
-            win_rect: init_rect.clone(),
-            //rng: SmallRng::seed_from_u64(0),
-            system: None,
             sockets_store: SocketsStore::new(),
-            timings: BTreeMap::new(),
-
-            qemu_dump: None,
+            step_context: None,
         }
     }
 
-    fn with_system<F, T>(&self, mut func: F) -> T
-     where F: FnMut(&mut System) -> T {
+    fn with_step_context<F, T>(&mut self, mut func: F) -> T
+     where F: FnMut(StepContextView) -> T {
 
-        let s1 = self.system.clone();
-        let s2 = s1.expect("No System was set");
-        let s3 = s2.as_ref();
-        let mut s4 = s3.borrow_mut();
+        let step_context = self.step_context.as_mut().expect("No StepContext set");
 
-        func(&mut s4)
+        let step_context_view = StepContextView {
+
+            // Safety: thanks to the StoreDataWrapper scope, those pointers should always be valid
+            system: unsafe { step_context.system.as_mut().unwrap() },
+            system_state: unsafe { step_context.system_state.as_ref().unwrap() },
+
+            win_rect: &step_context.win_rect,
+            timings: &mut step_context.timings
+        };
+
+        func(step_context_view)
     }
 }
 
 pub struct WasmApp {
-    store: Store<StoreData>,
+    store_wrapper: StoreWrapper,
     instance: Instance,
     wasm_step: TypedFunc<(), ()>,
 }
@@ -209,76 +242,72 @@ pub struct WasmApp {
 impl WasmApp {
     pub fn step<F: FbViewMut>(
         &mut self,
-        system: Rc<RefCell<System>>,
+        system: &mut System,
         system_state: &SystemState,
         system_fb: &mut F,
         win_rect: &Rect,
     ) {
-        self.store.set_fuel(STEP_FUEL).unwrap();
 
-        let mut ctx = self.store.as_context_mut();
-        let data_mut = ctx.data_mut();
+        self.store_wrapper.with_context(
+            system, system_state, win_rect,
+            |mut store| {
 
-        data_mut.system = Some(system.clone());
-        data_mut.system_state = Some(system_state.clone());
-        data_mut.win_rect = win_rect.clone();
-        data_mut.timings.clear();
+                self.wasm_step
+                    .call(&mut store, ())
+                    .expect("Failed to step WASM app");
 
-        self.wasm_step
-            .call(&mut self.store, ())
-            .expect("Failed to step WASM app");
 
-        //debug_stall(t0, t1, fu0, fu1, self.store.data());
-
-        let wasm_fb_def = self.store.as_context().data().framebuffer.clone();
-        if let Some(wasm_fb_def) = wasm_fb_def {
-            let mem = self.instance.get_memory(&self.store, "memory").unwrap();
-            let ctx = self.store.as_context_mut();
-            let mem_data = mem.data_mut(ctx);
-
-            let wasm_fb = {
-                let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
-                let fb_data = &mut mem_data[addr..addr + (w * h * 4) as usize];
-                let fb_data = unsafe { fb_data.align_to_mut::<u32>().1 };
-                Framebuffer::new(fb_data, w, h)
-            };
-
-            system_fb.copy_from_fb(&wasm_fb, (win_rect.x0, win_rect.y0), false);
-        }
-    }
-}
-
-fn debug_stall(t0: f64, t1: f64, fu0: u64, fu1: u64, store_data: &StoreData) {
-    const STALL_THRESHOLD: f64 = 1000.0 / 60.0;
-
-    if t1 - t0 > STALL_THRESHOLD {
-        let total_consumed = fu0 - fu1;
-        let total_consumed_f = total_consumed as f64;
-
-        let lines: Vec<String> = store_data
-            .timings
-            .iter()
-            .map(|(k, v)| {
-                format!(
-                    "  {}: {}u ({:.1}%)",
-                    k,
-                    v,
-                    100f64 * (*v as f64) / total_consumed_f
-                )
-            })
-            .collect();
-
-        log::warn!(
-            "STALL ({:.0}ms > {:.0}ms)\n\
-            Total fuel consumed: {}u\n\
-            {}",
-            t1 - t0,
-            STALL_THRESHOLD,
-            total_consumed,
-            lines.join("\n")
+                let wasm_fb_def = store.as_context().data().framebuffer.clone();
+                if let Some(wasm_fb_def) = wasm_fb_def {
+                    let mem = self.instance.get_memory(&store, "memory").unwrap();
+                    let ctx = store.as_context_mut();
+                    let mem_data = mem.data_mut(ctx);
+        
+                    let wasm_fb = {
+                        let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
+                        let fb_data = &mut mem_data[addr..addr + (w * h * 4) as usize];
+                        let fb_data = unsafe { fb_data.align_to_mut::<u32>().1 };
+                        Framebuffer::new(fb_data, w, h)
+                    };
+        
+                    system_fb.copy_from_fb(&wasm_fb, (win_rect.x0, win_rect.y0), false);
+                }
+            }
         );
     }
 }
+
+// fn debug_stall(t0: f64, t1: f64, fu0: u64, fu1: u64, store_data: &StoreData) {
+//     const STALL_THRESHOLD: f64 = 1000.0 / 60.0;
+
+//     if t1 - t0 > STALL_THRESHOLD {
+//         let total_consumed = fu0 - fu1;
+//         let total_consumed_f = total_consumed as f64;
+
+//         let lines: Vec<String> = store_data
+//             .timings
+//             .iter()
+//             .map(|(k, v)| {
+//                 format!(
+//                     "  {}: {}u ({:.1}%)",
+//                     k,
+//                     v,
+//                     100f64 * (*v as f64) / total_consumed_f
+//                 )
+//             })
+//             .collect();
+
+//         log::warn!(
+//             "STALL ({:.0}ms > {:.0}ms)\n\
+//             Total fuel consumed: {}u\n\
+//             {}",
+//             t1 - t0,
+//             STALL_THRESHOLD,
+//             total_consumed,
+//             lines.join("\n")
+//         );
+//     }
+// }
 
 fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData>) {
     macro_rules! linker_impl {
@@ -384,12 +413,9 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
             precision
         );
 
-        let s1 = caller.data().system.clone();
-        let s2 = s1.unwrap();
-        let s3 = s2.as_ref();
-        let s4 = s3.borrow_mut();
-
-        let t = (s4.clock.time() * 1e9) as u64; // Not sure about the 1e9
+        let t = caller.data_mut().with_step_context(|step_context| {
+            (step_context.system.clock.time() * 1e9) as u64 // Not sure about the 1e9
+        });
 
         let mem = get_linear_memory(&caller);
         let mem_data = mem.data_mut(&mut caller);
@@ -411,8 +437,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
 
         let mut rand_bytes = vec![0u8; buf_len];
 
-        caller.data().with_system(|system| {
-            system.rng.fill_bytes(&mut rand_bytes);
+        caller.data_mut().with_step_context(|step_context| {
+            step_context.system.rng.fill_bytes(&mut rand_bytes);
         });
 
         let mem = get_linear_memory(&caller);
@@ -518,7 +544,7 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                                  addr: i32,
                                  len: i32,
                                  level| {
-        let ctx = caller.as_context();
+
         let mem_slice = get_wasm_mem_slice(&caller, addr, len);
 
         let s = core::str::from_utf8(mem_slice)
@@ -538,12 +564,10 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         m,
         "host_get_system_state",
         |mut caller: Caller<StoreData>, addr: i32| {
-            let system_state = caller
-                .data()
-                .system_state
-                .as_ref()
-                .expect("System state not available")
-                .clone();
+
+            let system_state = caller.data_mut().with_step_context(|step_context| {
+                step_context.system_state.clone()
+            });
 
             write_to_wasm_mem(&mut caller, addr, &system_state);
         }
@@ -553,7 +577,9 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         m,
         "host_get_win_rect",
         |mut caller: Caller<StoreData>, addr: i32| {
-            let win_rect = caller.data().win_rect.clone();
+            let win_rect = caller.data_mut().with_step_context(|step_context| {
+                step_context.win_rect.clone()
+            });
             write_to_wasm_mem(&mut caller, addr, &win_rect);
         }
     );
@@ -580,8 +606,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
             let ip_bytes = ip_addr.to_le_bytes();
             let port: u16 = port.try_into().expect("Invalid port value");
 
-            let socket_handle = caller.data().with_system(|system| {
-                system.tcp_stack.connect(Ipv4Address(ip_bytes), port)
+            let socket_handle = caller.data_mut().with_step_context(|step_context| {
+                step_context.system.tcp_stack.connect(Ipv4Address(ip_bytes), port)
             })?;
 
             let handle_id = caller.data_mut().sockets_store.add_handle(socket_handle);
@@ -606,8 +632,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
             .get_handle(handle_id)
             .expect("No TCP connection");
 
-        let ret: bool = caller.data().with_system(|system| {
-            system.tcp_stack.may_send(socket_handle).into()
+        let ret: bool = caller.data_mut().with_step_context(|step_context| {
+            step_context.system.tcp_stack.may_send(socket_handle).into()
         });
 
         ret.into()
@@ -622,8 +648,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
             .get_handle(handle_id)
             .expect("No TCP connection");
 
-        let ret: bool = caller.data().with_system(|system| {
-            system.tcp_stack.may_recv(socket_handle).into()
+        let ret: bool = caller.data_mut().with_step_context(|step_context| {
+            step_context.system.tcp_stack.may_recv(socket_handle).into()
         });
 
         ret.into()
@@ -642,8 +668,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                 .get_handle(handle_id)
                 .expect("No TCP connection");
 
-            let written_len = caller.data().with_system(|system| {
-                system.tcp_stack.write(socket_handle, &buf)
+            let written_len = caller.data_mut().with_step_context(|step_context| {
+                step_context.system.tcp_stack.write(socket_handle, &buf)
             })?;
     
             let written_len: i32 = written_len.try_into().map_err(anyhow::Error::msg)?;
@@ -677,8 +703,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                     .sockets_store
                     .get_handle(handle_id)
                     .expect("No TCP connection");
-                caller.data().with_system(|system| {
-                    system.tcp_stack.read(socket_handle, &mut buf)
+                caller.data_mut().with_step_context(|step_context| {
+                    step_context.system.tcp_stack.read(socket_handle, &mut buf)
                 })?
             };
 
@@ -711,8 +737,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                 .get_handle(handle_id)
                 .expect("No TCP connection");
 
-            caller.data().with_system(|system| {
-                system.tcp_stack.close(socket_handle)
+            caller.data_mut().with_step_context(|step_context| {
+                step_context.system.tcp_stack.close(socket_handle)
             })
         }
     );
@@ -723,8 +749,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         |mut caller: Caller<StoreData>, buf: i32| {
             let buf = buf as usize;
 
-            let t = caller.data().with_system(|system| {
-                system.clock.time()
+            let t = caller.data_mut().with_step_context(|step_context| {
+                step_context.system.clock.time()
             });
 
             let mem = get_linear_memory(&caller);
@@ -759,20 +785,20 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                 .unwrap();
             let consumed: u64 = u64::from_le_bytes(consumed_buf);
 
-            caller.data_mut().timings.insert(key, consumed);
+            caller.data_mut().with_step_context(|step_context| {
+                step_context.timings.insert(key.clone(), consumed)
+            });
         }
     );
 
     linker_impl!(
         m,
         "host_qemu_dump",
-        |mut caller: Caller<StoreData>, addr: i32, len: i32| {
+        |caller: Caller<StoreData>, addr: i32, len: i32| {
             let mem_slice = get_wasm_mem_slice(&caller, addr, len);
             let buf = mem_slice.to_vec();
 
-            let data_mut = caller.data_mut();
-            let phys_addr = buf.as_ptr() as u64;
-            data_mut.qemu_dump = Some(buf);
+            let phys_addr = buf.leak().as_mut_ptr() as u64;
 
             log::debug!(
                 "QEMU DUMP: pmemsave 0x{:x} {} pmem_dump.bin",

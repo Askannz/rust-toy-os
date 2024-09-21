@@ -55,11 +55,11 @@ pub fn step() {
     let state = unsafe { APP_STATE.get_mut().expect("App not initialized") };
 
     let win_rect = guestlib::get_win_rect();
-    let system_state = guestlib::get_system_state();
+    let input_state = guestlib::get_input_state();
 
     let mut framebuffer = state.pixel_data.get_framebuffer();
 
-    let input_state_local = system_state.input.change_origin(&win_rect);
+    let input_state_local = input_state.change_origin(&win_rect);
     let pointer = &input_state_local.pointer;
 
     let redraw = match state.prev_pointer {

@@ -8,7 +8,7 @@ use core::cell::RefCell;
 use applib::drawing::primitives::{blend_rect, draw_rect};
 use applib::drawing::text::{draw_str, DEFAULT_FONT};
 use applib::uitk::{self, UiContext};
-use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect, SystemState};
+use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect, input::InputState};
 
 use crate::system::System;
 use crate::wasm::{WasmApp, WasmEngine};
@@ -40,13 +40,13 @@ pub struct App {
 
 impl AppDescriptor {
 
-    pub fn instantiate(&self, system: &mut System, system_state: &SystemState, wasm_engine: &WasmEngine) -> App {
+    pub fn instantiate(&self, system: &mut System, input_state: &InputState, wasm_engine: &WasmEngine) -> App {
 
         App {
             descriptor: self.clone(),
             wasm_app: wasm_engine.instantiate_app(
                 system,
-                system_state,
+                input_state,
                 self.data,
                 self.name,
                 &self.init_win_rect,
@@ -66,7 +66,7 @@ impl App {
         &mut self,
         uitk_context: &mut uitk::UiContext<F, P>,
         system: &mut System,
-        system_state: &SystemState
+        input_state: &InputState
     ) {
 
         const ALPHA_SHADOW: u8 = 100;
@@ -83,7 +83,6 @@ impl App {
 
         let app = self;
 
-        let input_state = &system_state.input;
         let pointer_state = &input_state.pointer;
 
         let is_button_fired = uitk_context.button(&uitk::ButtonConfig {
@@ -194,7 +193,7 @@ impl App {
             );
 
             let t0 = system.clock.time();
-            app.wasm_app.step(system, system_state, *fb, &app.rect);
+            app.wasm_app.step(system, input_state, *fb, &app.rect);
             let t1 = system.clock.time();
             const SMOOTHING: f64 = 0.9;
             app.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * app.time_used;

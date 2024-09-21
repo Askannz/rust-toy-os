@@ -15,12 +15,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 use input::InputState;
 
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct SystemState {
-    pub input: InputState,
-}
-
 #[derive(Clone, Copy, Hash)]
 #[repr(transparent)]
 pub struct Color(pub u32);

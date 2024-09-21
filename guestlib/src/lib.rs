@@ -4,7 +4,7 @@ extern crate alloc;
 use alloc::format;
 use alloc::vec;
 use alloc::vec::Vec;
-use applib::{BorrowedMutPixels, Framebuffer, Rect, SystemState};
+use applib::{BorrowedMutPixels, Framebuffer, Rect, input::InputState};
 use core::fmt::Debug;
 use core::mem::size_of;
 use log::{Log, Metadata, Record};
@@ -16,7 +16,7 @@ extern "C" {
 
     fn host_print_console(addr: i32, len: i32);
     fn host_log(addr: i32, len: i32, level: i32);
-    fn host_get_system_state(addr: i32);
+    fn host_get_input_state(addr: i32);
     fn host_get_win_rect(addr: i32);
     fn host_set_framebuffer(addr: i32, w: i32, h: i32);
 
@@ -82,11 +82,11 @@ pub fn print_console(s: &str) {
     unsafe { host_print_console(addr, len) };
 }
 
-pub fn get_system_state() -> SystemState {
-    let mut buf = [0u8; size_of::<SystemState>()];
+pub fn get_input_state() -> InputState {
+    let mut buf = [0u8; size_of::<InputState>()];
     let addr = buf.as_mut_ptr() as i32;
     unsafe {
-        host_get_system_state(addr);
+        host_get_input_state(addr);
         core::mem::transmute(buf)
     }
 }

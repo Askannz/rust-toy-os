@@ -17,7 +17,7 @@ use wasmi::{
     TypedFunc,
 };
 
-use applib::{FbViewMut, Framebuffer, Rect, SystemState};
+use applib::{FbViewMut, Framebuffer, Rect, input::InputState};
 
 use crate::system::{System};
 
@@ -36,7 +36,7 @@ impl WasmEngine {
     pub fn instantiate_app(
         &self,
         system: &mut System,
-        system_state: &SystemState,
+        input_state: &InputState,
         wasm_code: &[u8],
         app_name: &str,
         init_rect: &Rect,
@@ -60,7 +60,7 @@ impl WasmEngine {
         let mut store_wrapper = StoreWrapper { store };
 
         store_wrapper.with_context(
-            system, system_state, init_rect,
+            system, input_state, init_rect,
             |store| {
                 log::info!("Initializing {}", app_name);
                 wasm_init
@@ -158,7 +158,7 @@ struct StoreWrapper {
 }
 
 impl StoreWrapper {
-    fn with_context<F>(&mut self, system: &mut System, system_state: &SystemState, win_rect: &Rect, mut func: F)
+    fn with_context<F>(&mut self, system: &mut System, input_state: &InputState, win_rect: &Rect, mut func: F)
         where F: FnMut(&mut Store<StoreData>)
     {
 
@@ -168,7 +168,7 @@ impl StoreWrapper {
 
             // reference -> raw pointer conversions here
             system,
-            system_state,
+            input_state,
 
             win_rect: win_rect.clone(),
             timings: BTreeMap::new(),
@@ -189,14 +189,14 @@ struct StoreData {
 
 struct StepContext {
     system: *mut System,
-    system_state: *const SystemState,
+    input_state: *const InputState,
     win_rect: Rect,
     timings: BTreeMap<String, u64>,
 }
 
 struct StepContextView<'a> {
     system: &'a mut System,
-    system_state: &'a SystemState,
+    input_state: &'a InputState,
     win_rect: &'a Rect,
     timings: &'a mut BTreeMap<String, u64>,
 }
@@ -223,7 +223,7 @@ impl StoreData {
 
             // Safety: thanks to the StoreDataWrapper scope, those pointers should always be valid
             system: unsafe { step_context.system.as_mut().unwrap() },
-            system_state: unsafe { step_context.system_state.as_ref().unwrap() },
+            input_state: unsafe { step_context.input_state.as_ref().unwrap() },
 
             win_rect: &step_context.win_rect,
             timings: &mut step_context.timings
@@ -243,13 +243,13 @@ impl WasmApp {
     pub fn step<F: FbViewMut>(
         &mut self,
         system: &mut System,
-        system_state: &SystemState,
+        input_state: &InputState,
         system_fb: &mut F,
         win_rect: &Rect,
     ) {
 
         self.store_wrapper.with_context(
-            system, system_state, win_rect,
+            system, input_state, win_rect,
             |mut store| {
 
                 self.wasm_step
@@ -562,11 +562,11 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
 
     linker_impl!(
         m,
-        "host_get_system_state",
+        "host_get_input_state",
         |mut caller: Caller<StoreData>, addr: i32| {
 
             let system_state = caller.data_mut().with_step_context(|step_context| {
-                step_context.system_state.clone()
+                step_context.input_state.clone()
             });
 
             write_to_wasm_mem(&mut caller, addr, &system_state);

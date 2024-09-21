@@ -17,7 +17,7 @@ use applib::drawing::primitives::draw_rect;
 use applib::drawing::text::{draw_str, DEFAULT_FONT};
 use applib::input::{InputEvent, InputState};
 use applib::uitk::{self};
-use applib::{Color, FbViewMut, Framebuffer, Rect, SystemState};
+use applib::{Color, FbViewMut, Framebuffer, Rect};
 
 extern crate alloc;
 
@@ -97,9 +97,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     let (w, h) = (w as u32, h as u32);
     let wasm_engine = WasmEngine::new();
 
-    let mut system_state = SystemState {
-        input: InputState::new(w, h),
-    };
+    let mut input_state = InputState::new(w, h);
 
     let mut system = System {
         clock,
@@ -109,7 +107,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut applications: Vec<App> = APPLICATIONS
         .iter()
-        .map(|app_desc| app_desc.instantiate(&mut system, &system_state, &wasm_engine))
+        .map(|app_desc| app_desc.instantiate(&mut system, &input_state, &wasm_engine))
         .collect();
 
     log::info!("Applications loaded");
@@ -132,7 +130,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             tcp_stack.poll_interface(clock);
         }
 
-        update_input_state(&mut system_state, (w, h), &mut virtio_inputs);
+        update_input_state(&mut input_state, (w, h), &mut virtio_inputs);
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 
@@ -141,15 +139,15 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         //log::debug!("{:?}", system_state);
 
-        let mut uitk_context = ui_store.get_context(&mut framebuffer, &system_state.input, &mut uuid_provider);
+        let mut uitk_context = ui_store.get_context(&mut framebuffer, &input_state, &mut uuid_provider);
         for app in applications.iter_mut() {
-            app.step(&mut uitk_context, &mut system, &system_state);
+            app.step(&mut uitk_context, &mut system, &input_state);
         }
         shell::pie_menu(&mut uitk_context, &mut pie_anchor);
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
-        draw_cursor(&mut framebuffer, &system_state);
+        draw_cursor(&mut framebuffer, &input_state);
 
         {
             let System { clock, .. } = &mut system;
@@ -163,11 +161,11 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 }
 
 
-fn draw_cursor<F: FbViewMut>(fb: &mut F, system_state: &SystemState) {
+fn draw_cursor<F: FbViewMut>(fb: &mut F, input_state: &InputState) {
     const SIZE: u32 = 5;
     const BORDER: u32 = 1;
 
-    let pointer_state = &system_state.input.pointer;
+    let pointer_state = &input_state.pointer;
     let x = pointer_state.x;
     let y = pointer_state.y;
 
@@ -189,14 +187,12 @@ fn draw_cursor<F: FbViewMut>(fb: &mut F, system_state: &SystemState) {
 }
 
 fn update_input_state(
-    system_state: &mut SystemState,
+    input_state: &mut InputState,
     dims: (u32, u32),
     virtio_inputs: &mut [VirtioInput],
 ) {
     let (w, h) = dims;
     let (w, h) = (w as i32, h as i32);
-
-    let input_state = &mut system_state.input;
 
     input_state.clear_events();
     input_state.pointer.left_click_trigger = false;

@@ -78,11 +78,11 @@ pub fn init() -> () {
 pub fn step() {
     let state = unsafe { APP_STATE.get_mut().expect("App not initialized") };
 
-    let system_state = guestlib::get_system_state();
+    let input_state = guestlib::get_input_state();
     let mut framebuffer = state.pixel_data.get_framebuffer();
 
     let win_rect = guestlib::get_win_rect();
-    let input_state = system_state.input.change_origin(&win_rect);
+    let input_state = input_state.change_origin(&win_rect);
 
     let mut cursor = state.input_buffer.as_ref().len();
     uitk::string_input(

@@ -5,7 +5,7 @@ use alloc::rc::Rc;
 use alloc::vec::Vec;
 use applib::content::UuidProvider;
 use applib::input::InputState;
-use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect, SystemState};
+use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use applib::uitk::{self, UiContext};
 use applib::drawing::primitives::{ScreenPoint, draw_triangle};
 use applib::geometry::{Point2D, Vec2D, Triangle2D, Quad2D};

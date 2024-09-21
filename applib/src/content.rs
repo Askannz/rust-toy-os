@@ -49,10 +49,10 @@ pub struct IncrementalUuidProvider {
 impl UuidProvider for IncrementalUuidProvider {
     fn make_id(&mut self) -> ContentId {
         let content_id = ContentId(self.next);
-        self.next += 1;
         if self.next == u64::MAX {
             log::warn!("Reached max content ID, wrapping around")
         }
+        self.next += 1;
         content_id
     }
 }

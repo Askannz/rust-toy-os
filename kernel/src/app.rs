@@ -1,14 +1,21 @@
 use core::borrow::Borrow;
 
 use crate::alloc::string::ToString;
+use crate::app;
+use alloc::borrow::ToOwned;
+use alloc::collections::btree_map::BTreeMap;
+use alloc::string::String;
 use alloc::rc::Rc;
+use uefi::proto::console::pointer;
 use core::cell::RefCell;
+use alloc::vec::Vec;
 
 use applib::geometry::Point2D;
 use applib::drawing::primitives::{blend_rect, draw_rect};
-use applib::drawing::text::{draw_str, DEFAULT_FONT};
+use applib::drawing::text::{draw_str, DEFAULT_FONT, HACK_15};
 use applib::uitk::{self, UiContext};
 use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect, input::InputState};
+use crate::shell::{pie_menu, PieMenuEntry};
 
 use crate::system::System;
 use crate::wasm::{WasmApp, WasmEngine};
@@ -19,20 +26,15 @@ pub struct AppDescriptor {
     pub launch_rect: Rect,
     pub name: &'static str,
     pub init_win_rect: Rect,
-    pub icon: Option<&'static Framebuffer<OwnedPixels>>,
+    pub icon: &'static Framebuffer<OwnedPixels>,
 }
 
-enum GrabState {
-    None,
-    MoveGrab(i64, i64),
-    ResizeGrab,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum InteractionState {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AppsInteractionState {
     Idle,
-    TitlebarHold(Point2D<i64>),
-    ResizeHold,
+    TitlebarHold { app_name: &'static str, anchor: Point2D<i64> },
+    ResizeHold { app_name: &'static str },
+    PieMenu { anchor: Point2D<i64> },
 }
 
 pub struct App {
@@ -40,7 +42,7 @@ pub struct App {
     pub descriptor: AppDescriptor,
     pub is_open: bool,
     pub rect: Rect,
-    pub interaction_state: InteractionState,
+    pub interaction_state: AppsInteractionState,
     pub time_used: f64,
 }
 
@@ -60,70 +62,74 @@ impl AppDescriptor {
             ),
             is_open: false,
             rect: self.init_win_rect.clone(),
-            interaction_state: InteractionState::Idle,
+            interaction_state: AppsInteractionState::Idle,
             time_used: 0.0,
         }
     }
 
 }
 
-impl App {
+pub fn run_apps<F: FbViewMut>(
+    uitk_context: &mut uitk::UiContext<F>,
+    system: &mut System,
+    apps: &mut BTreeMap<&str, App>,
+    input_state: &InputState,
+    interaction_state: &mut AppsInteractionState,
+) {
 
-    pub fn step<F: FbViewMut>(
-        &mut self,
-        uitk_context: &mut uitk::UiContext<F>,
-        system: &mut System,
-        input_state: &InputState
-    ) {
+    const ALPHA_SHADOW: u8 = 100;
 
-        const ALPHA_SHADOW: u8 = 100;
+    const COLOR_IDLE: Color = Color::rgba(0x44, 0x44, 0x44, 0xff);
+    const COLOR_HOVER: Color = Color::rgba(0x88, 0x88, 0x88, 0xff);
+    const COLOR_SHADOW: Color = Color::rgba(0x0, 0x0, 0x0, ALPHA_SHADOW);
+    const COLOR_TEXT: Color = Color::rgba(0xff, 0xff, 0xff, 0xff);
+    const COLOR_RESIZE_HANDLE: Color = Color::rgba(0xff, 0xff, 0xff, 0x80);
 
-        const COLOR_IDLE: Color = Color::rgba(0x44, 0x44, 0x44, 0xff);
-        const COLOR_HOVER: Color = Color::rgba(0x88, 0x88, 0x88, 0xff);
-        const COLOR_SHADOW: Color = Color::rgba(0x0, 0x0, 0x0, ALPHA_SHADOW);
-        const COLOR_TEXT: Color = Color::rgba(0xff, 0xff, 0xff, 0xff);
-        const COLOR_RESIZE_HANDLE: Color = Color::rgba(0xff, 0xff, 0xff, 0x80);
+    const OFFSET_SHADOW: i64 = 10;
+    const DECO_PADDING: i64 = 5;
+    const RESIZE_HANDLE_W: u32 = 10;
+
+    struct HoverState {
+        titlebar: bool,
+        window: bool,
+        resize: bool,
+    }
     
-        const OFFSET_SHADOW: i64 = 10;
-        const DECO_PADDING: i64 = 5;
-        const RESIZE_HANDLE_W: u32 = 10;
+    let pointer_state = &input_state.pointer;
 
-        let pointer_state = &input_state.pointer;
+    if let AppsInteractionState::TitlebarHold { app_name, anchor}  = interaction_state {
 
-        let is_button_fired = uitk_context.button(&uitk::ButtonConfig {
-            rect: self.descriptor.launch_rect.clone(),
-            text: self.descriptor.name.to_string(),
-            icon: self.descriptor.icon,
-            ..Default::default()
-        });
-
-        if is_button_fired && !self.is_open {
-            log::info!("{} is open", self.descriptor.name);
-            self.is_open = true;
+        if let Some(app) = apps.get_mut(app_name).filter(|app| app.is_open) {
+            app.rect.x0 = pointer_state.x - anchor.x;
+            app.rect.y0 = pointer_state.y - anchor.y;
         }
 
-        if !self.is_open {
-            return;
-        }
+    } else if let AppsInteractionState::ResizeHold { app_name } = interaction_state {
 
-        if let InteractionState::TitlebarHold(anchor) = self.interaction_state {
-            self.rect.x0 = pointer_state.x - anchor.x;
-            self.rect.y0 = pointer_state.y - anchor.y;
-        } else if let InteractionState::ResizeHold = self.interaction_state {
-            let [x1, y1, _, _] = self.rect.as_xyxy();
+        if let Some(app) = apps.get_mut(app_name).filter(|app| app.is_open) {
+            let [x1, y1, _, _] = app.rect.as_xyxy();
             let x2 = pointer_state.x;
             let y2 = pointer_state.y;
-            self.rect = Rect::from_xyxy([x1, y1, x2, y2]);
+            app.rect = Rect::from_xyxy([x1, y1, x2, y2]);
         }
+    }
+
+    let UiContext { fb, .. } = uitk_context;
+
+    let hover_states: BTreeMap<&'static str, HoverState> = apps.values_mut().map(|app| {
+
+        let app_name = app.descriptor.name;
+
+        if !app.is_open { return (app_name, HoverState { titlebar: false, window: false, resize: false }) }
 
         let font_h = DEFAULT_FONT.char_h as u32;
         let titlebar_h = 3 * DECO_PADDING as u32 + font_h;
 
         let deco_rect = Rect {
-            x0: self.rect.x0 - DECO_PADDING,
-            y0: self.rect.y0 - font_h as i64 - 2 * DECO_PADDING,
-            w: self.rect.w + 2 * DECO_PADDING as u32,
-            h: self.rect.h + titlebar_h,
+            x0: app.rect.x0 - DECO_PADDING,
+            y0: app.rect.y0 - font_h as i64 - 2 * DECO_PADDING,
+            w: app.rect.w + 2 * DECO_PADDING as u32,
+            h: app.rect.h + titlebar_h,
         };
 
         let titlebar_rect = Rect {
@@ -134,27 +140,11 @@ impl App {
         };
 
         let resize_handle_rect = Rect {
-            x0: self.rect.x0 + (self.rect.w - RESIZE_HANDLE_W) as i64,
-            y0: self.rect.y0 + (self.rect.h - RESIZE_HANDLE_W) as i64,
+            x0: app.rect.x0 + (app.rect.w - RESIZE_HANDLE_W) as i64,
+            y0: app.rect.y0 + (app.rect.h - RESIZE_HANDLE_W) as i64,
             w: RESIZE_HANDLE_W,
             h: RESIZE_HANDLE_W,
         };
-
-        let titlebar_hover = titlebar_rect.check_contains_point(pointer_state.x, pointer_state.y);
-        let resize_hover = resize_handle_rect.check_contains_point(pointer_state.x, pointer_state.y);
-
-        self.interaction_state = match pointer_state.left_clicked {
-            false => InteractionState::Idle,
-            true if titlebar_hover => {
-                let dx = pointer_state.x - self.rect.x0;
-                let dy = pointer_state.y - self.rect.y0;
-                InteractionState::TitlebarHold(Point2D { x: dx, y: dy })
-            },
-            true if resize_hover => InteractionState::ResizeHold,
-            _ => InteractionState::Idle
-        };
-
-        let UiContext { fb, .. } = uitk_context;
 
         let shadow_rect = Rect {
             x0: deco_rect.x0 + OFFSET_SHADOW,
@@ -163,20 +153,25 @@ impl App {
             h: deco_rect.h,
         };
 
-        blend_rect(*fb, &shadow_rect, COLOR_SHADOW);
-
-        let instance_hover = deco_rect.check_contains_point(pointer_state.x, pointer_state.y);
-        let color_app = if instance_hover {
-            COLOR_HOVER
-        } else {
-            COLOR_IDLE
+        let hover = HoverState {
+            titlebar: titlebar_rect.check_contains_point(pointer_state.x, pointer_state.y),
+            window: deco_rect.check_contains_point(pointer_state.x, pointer_state.y),
+            resize: resize_handle_rect.check_contains_point(pointer_state.x, pointer_state.y)
         };
+
+
+        let color_app = match hover.window && interaction_state == &AppsInteractionState::Idle {
+            true => COLOR_HOVER,
+            false => COLOR_IDLE,
+        };
+
+        blend_rect(*fb, &shadow_rect, COLOR_SHADOW);
         draw_rect(*fb, &deco_rect, color_app);
 
-        let (x_txt, y_txt) = (self.rect.x0, self.rect.y0 - font_h as i64 - DECO_PADDING);
+        let (x_txt, y_txt) = (app.rect.x0, app.rect.y0 - font_h as i64 - DECO_PADDING);
         draw_str(
             *fb,
-            self.descriptor.name,
+            app.descriptor.name,
             x_txt,
             y_txt,
             &DEFAULT_FONT,
@@ -185,12 +180,79 @@ impl App {
         );
 
         let t0 = system.clock.time();
-        self.wasm_app.step(system, input_state, *fb, &self.rect);
+        app.wasm_app.step(system, input_state, *fb, &app.rect);
         let t1 = system.clock.time();
         const SMOOTHING: f64 = 0.9;
-        self.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * self.time_used;
+        app.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * app.time_used;
 
         blend_rect(*fb, &resize_handle_rect, COLOR_RESIZE_HANDLE);
+
+        (app_name, hover)
+    })
+    .collect();
+
+    if let AppsInteractionState::PieMenu { anchor } = *interaction_state {
+
+        let entries: Vec<PieMenuEntry> = apps.values().map(|app| {
+
+            PieMenuEntry { 
+                icon: app.descriptor.icon,
+                bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff),
+                text: app.descriptor.name.to_owned(),
+                text_color: Color::WHITE,
+                font: &HACK_15,
+            }
+
+        }).collect();
+
+        let selected = pie_menu(uitk_context, &entries, anchor);
+
+        if let Some(entry) = selected {
+            let app_name = &entry.text;
+            apps.get_mut(app_name.as_str()).unwrap().is_open = true;
+        }
+
     }
 
+
+    //
+    // Update interaction state
+
+    let hovered_titlebar = hover_states.iter().find_map(|(app_name, hover)| match hover.titlebar {
+        false => None,
+        true => apps.get(app_name),
+    });
+
+    let hovered_resize = hover_states.iter().find_map(|(app_name, hover)| match hover.resize {
+        false => None,
+        true => apps.get(app_name),
+    });
+
+
+    if *interaction_state == AppsInteractionState::Idle {
+
+        if pointer_state.left_clicked {
+
+            if let Some(app) = hovered_titlebar {
+                let app = hovered_titlebar.unwrap();
+                let dx = pointer_state.x - app.rect.x0;
+                let dy = pointer_state.y - app.rect.y0;
+                *interaction_state = AppsInteractionState::TitlebarHold { 
+                    app_name: app.descriptor.name,
+                    anchor: Point2D { x: dx, y: dy }
+                };
+            } else if let Some(app) = hovered_resize {
+                *interaction_state = AppsInteractionState::ResizeHold { app_name: app.descriptor.name };
+            }
+
+        } else if pointer_state.right_clicked {
+            let anchor = Point2D { x: pointer_state.x, y: pointer_state.y };
+            *interaction_state = AppsInteractionState::PieMenu { anchor };
+        }
+
+    } else {
+        if !pointer_state.left_clicked && !pointer_state.right_clicked {
+            *interaction_state = AppsInteractionState::Idle;
+        }
+    }
 }

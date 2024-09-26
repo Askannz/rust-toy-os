@@ -4,6 +4,7 @@
 #![feature(abi_x86_interrupt)]
 
 use alloc::borrow::ToOwned;
+use alloc::collections::btree_map::BTreeMap;
 use alloc::format;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
@@ -47,7 +48,7 @@ use virtio::network::VirtioNetwork;
 use system::System;
 use applib::input::keymap::{EventType, Keycode};
 use wasm::WasmEngine;
-use app::App;
+use app::{App, run_apps, AppsInteractionState};
 use resources::{WALLPAPER, APPLICATIONS};
 
 const FPS_TARGET: f64 = 60.0;
@@ -109,34 +110,22 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         rng: SmallRng::seed_from_u64(0),
     };
 
-    let mut applications: Vec<App> = APPLICATIONS
+    let mut applications: BTreeMap<&'static str, App> = APPLICATIONS
         .iter()
-        .map(|app_desc| app_desc.instantiate(&mut system, &input_state, &wasm_engine))
+        .map(|app_desc| (
+            app_desc.name,
+            app_desc.instantiate(&mut system, &input_state, &wasm_engine,
+        )))
         .collect();
 
     log::info!("Applications loaded");
 
     let mut fps_manager = FpsManager::new(FPS_TARGET);
 
-
-
     let mut ui_store = uitk::UiStore::new();
     let mut uuid_provider = uitk::UuidProvider::new();
-    let mut pie_anchor = None;
 
-    let make_entry = |text: &str, icon| shell::PieMenuEntry { 
-        icon,
-        bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff),
-        text: text.to_owned(),
-        text_color: Color::WHITE,
-        font: &HACK_15,
-    };
-
-    let pie_entries = [
-        make_entry("Cube", &resources::CUBE_ICON),
-        make_entry("Terminal", &resources::TERMINAL_ICON),
-        make_entry("Chrono", &resources::CHRONO_ICON),
-    ];
+    let mut apps_interaction_state = AppsInteractionState::Idle;
 
     log::info!("Entering main loop");
 
@@ -158,10 +147,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         //log::debug!("{:?}", system_state);
 
         let mut uitk_context = ui_store.get_context(&mut framebuffer, &input_state, &mut uuid_provider);
-        for app in applications.iter_mut() {
-            app.step(&mut uitk_context, &mut system, &input_state);
-        }
-        shell::pie_menu(&mut uitk_context, &pie_entries, &mut pie_anchor);
+        run_apps(&mut uitk_context, &mut system, &mut applications, &input_state, &mut apps_interaction_state);
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 

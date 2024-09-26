@@ -21,11 +21,11 @@ pub struct PieMenuEntry {
     pub font: &'static Font,
 }
 
-pub fn pie_menu<F: FbViewMut>(
+pub fn pie_menu<'a, F: FbViewMut>(
     uitk_context: &mut uitk::UiContext<F>,
-    entries: &[PieMenuEntry],
-    anchor: &mut Option<(i64, i64)>,
-) {
+    entries: &'a [PieMenuEntry],
+    center: Point2D<i64>,
+) -> Option<&'a PieMenuEntry> {
 
     const INNER_RADIUS: f32 = 50.0;
     const OUTER_RADIUS: f32 = 100.0;
@@ -39,19 +39,13 @@ pub fn pie_menu<F: FbViewMut>(
 
     let pointer = &uitk_context.input_state.pointer;
 
-    if !pointer.right_clicked {
-        *anchor = None;
-        return;
-    }
-
-    let (cx, cy) = anchor.get_or_insert((pointer.x, pointer.y));
-
-    let center = Point2D::<i64> { x: *cx, y: *cy };
     let pointer = Point2D::<i64> { x: pointer.x, y: pointer.y };
 
     let n = entries.len();
 
     let r_middle = (INNER_RADIUS + OUTER_RADIUS) * 0.5;
+
+    let mut selected_entry = None;
 
     for (i, entry) in entries.iter().enumerate() {
 
@@ -74,7 +68,10 @@ pub fn pie_menu<F: FbViewMut>(
             false => (0.0, entry.bg_color, false),
             true => match uitk_context.input_state.pointer.left_clicked {
                 false => (OFFSET_HOVER, COLOR_HOVER, true),
-                true => (OFFSET_CLICKED, COLOR_CLICKED, true),
+                true => {
+                    selected_entry = Some(entry);
+                    (OFFSET_CLICKED, COLOR_CLICKED, true)
+                },
             }
         };
 
@@ -106,8 +103,9 @@ pub fn pie_menu<F: FbViewMut>(
             let y0_text = p_text.y - (text_h / 2) as i64;
             draw_str(uitk_context.fb, &entry.text, x0_text, y0_text, entry.font, entry.text_color, None);
         }
-
     }
+
+    selected_entry
 }
 
 fn compute_text_bbox(s: &str, font: &Font) -> (u32, u32) {

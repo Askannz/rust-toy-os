@@ -8,7 +8,7 @@ pub trait Coord: 'static + Signed + Copy + Num + PartialOrd {}
 impl Coord for i64 {}
 impl Coord for f32 {}
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Point2D<T: Coord> {
     pub x: T,
     pub y: T,

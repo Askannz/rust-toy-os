@@ -40,7 +40,7 @@ lazy_static! {
                 w: 200,
                 h: 200
             },
-            icon: Some(&CUBE_ICON),
+            icon: &CUBE_ICON,
         },
         AppDescriptor {
             data: include_bytes!("../../embedded_data/chronometer.wasm"),
@@ -57,7 +57,7 @@ lazy_static! {
                 w: 200,
                 h: 200
             },
-            icon: Some(&CHRONO_ICON),
+            icon: &CHRONO_ICON,
         },
         AppDescriptor {
             data: include_bytes!("../../embedded_data/terminal.wasm"),
@@ -74,7 +74,7 @@ lazy_static! {
                 w: 600,
                 h: 300
             },
-            icon: Some(&TERMINAL_ICON),
+            icon: &TERMINAL_ICON,
         },
         AppDescriptor {
             data: include_bytes!("../../embedded_data/web_browser.wasm"),
@@ -91,7 +91,7 @@ lazy_static! {
                 w: 800,
                 h: 600
             },
-            icon: None,
+            icon: &TERMINAL_ICON,
         },
     ];
 }

@@ -212,6 +212,7 @@ pub fn run_apps<F: FbViewMut>(
                 text: app.descriptor.name.to_owned(),
                 text_color: Color::WHITE,
                 font: &HACK_15,
+                weight: 1.0,
             }
 
         }).collect();
@@ -238,26 +239,39 @@ pub fn run_apps<F: FbViewMut>(
 
         if let Some(app) = apps.get_mut(app_name) {
 
+            let make_blank_entry = |weight| PieMenuEntry { 
+                icon: &resources::BLANK_ICON,
+                bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff),
+                text: "".to_owned(),
+                text_color: Color::WHITE,
+                font: &HACK_15,
+                weight,
+            };
+
             let entries = [
                 PieMenuEntry { 
-                    icon: &resources::RELOAD_ICON,
-                    bg_color: Color::YELLOW,
-                    text: "Reload".to_owned(),
-                    text_color: Color::WHITE,
-                    font: &HACK_15,
-                },
-                PieMenuEntry { 
                     icon: &resources::CLOSE_ICON,
-                    bg_color: Color::RED,
+                    bg_color: Color::rgb(180, 0, 0),
                     text: "Close".to_owned(),
                     text_color: Color::WHITE,
                     font: &HACK_15,
+                    weight: 1.0,
                 },
+                make_blank_entry(1.0),
+                PieMenuEntry { 
+                    icon: &resources::RELOAD_ICON,
+                    bg_color: Color::rgb(180, 180, 0),
+                    text: "Reload".to_owned(),
+                    text_color: Color::WHITE,
+                    font: &HACK_15,
+                    weight: 1.0,
+                },
+                make_blank_entry(3.0),
             ];
 
             let selected = pie_menu(uitk_context, &entries, anchor);
 
-            if selected == Some(1) {
+            if selected == Some(0) {
                 app.is_open = false;
                 *interaction_state = AppsInteractionState::Idle;
             }

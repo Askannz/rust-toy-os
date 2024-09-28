@@ -19,6 +19,7 @@ pub struct PieMenuEntry {
     pub text: String,
     pub text_color: Color,
     pub font: &'static Font,
+    pub weight: f32,
 }
 
 pub fn pie_menu<F: FbViewMut>(
@@ -40,18 +41,17 @@ pub fn pie_menu<F: FbViewMut>(
 
     let pointer = Point2D::<i64> { x: pointer.x, y: pointer.y };
 
-    let n = entries.len();
-
     let r_middle = (INNER_RADIUS + OUTER_RADIUS) * 0.5;
 
+    let total_weight: f32 = entries.iter().map(|entry| entry.weight).sum();
+
     let mut selected_entry = None;
+    let mut a0 = 0.0;
 
     for (i, entry) in entries.iter().enumerate() {
 
-        let get_angle = |i| 2.0 * PI * (i as f32) / (n as f32);
-
-        let a0 = get_angle(i);
-        let a1 = get_angle(i + 1);
+        let delta_angle = 2.0 * PI * entry.weight / total_weight;
+        let a1 = a0 + delta_angle;
 
         let v0 = Vec2D::<f32> { x: f32::cos(a0), y: f32::sin(a0) };
         let v1 = Vec2D::<f32> { x: f32::cos(a1), y: f32::sin(a1) };
@@ -108,6 +108,8 @@ pub fn pie_menu<F: FbViewMut>(
             let y0_text = p_text.y - (text_h / 2) as i64;
             draw_str(uitk_context.fb, &entry.text, x0_text, y0_text, entry.font, entry.text_color, None);
         }
+
+        a0 = a1;
     }
 
     selected_entry

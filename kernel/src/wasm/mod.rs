@@ -5,6 +5,7 @@ use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
 use alloc::{borrow::ToOwned, string::String};
+use applib::BorrowedPixels;
 use core::borrow::BorrowMut;
 use core::cell::RefCell;
 use core::mem::size_of;
@@ -158,6 +159,7 @@ struct StoreWrapper {
 }
 
 impl StoreWrapper {
+
     fn with_context<F>(&mut self, system: &mut System, input_state: &InputState, win_rect: &Rect, mut func: F)
         where F: FnMut(&mut Store<StoreData>)
     {
@@ -177,6 +179,25 @@ impl StoreWrapper {
         func(&mut self.store);
 
         self.store.as_context_mut().data_mut().step_context = None;
+    }
+
+    fn get_framebuffer(&mut self, instance: &Instance) -> Framebuffer<BorrowedPixels> {
+
+        let wasm_fb_def = self.store.as_context().data().framebuffer.clone().expect("No WASM framebuffer");
+
+        let mem = instance.get_memory(&self.store, "memory").unwrap();
+        let ctx = self.store.as_context_mut();
+        let mem_data = mem.data_mut(ctx);
+
+        let wasm_fb = {
+            let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
+            let fb_data = &mem_data[addr..addr + (w * h * 4) as usize];
+            let fb_data = unsafe { fb_data.align_to::<u32>().1 };
+            Framebuffer::<BorrowedPixels>::new(fb_data, w, h)
+        };
+
+        
+        wasm_fb
     }
 }
 
@@ -240,13 +261,12 @@ pub struct WasmApp {
 }
 
 impl WasmApp {
-    pub fn step<F: FbViewMut>(
+    pub fn step(
         &mut self,
         system: &mut System,
         input_state: &InputState,
-        system_fb: &mut F,
         win_rect: &Rect,
-    ) {
+    ) -> Framebuffer<BorrowedPixels> {
 
         self.store_wrapper.with_context(
             system, input_state, win_rect,
@@ -255,25 +275,12 @@ impl WasmApp {
                 self.wasm_step
                     .call(&mut store, ())
                     .expect("Failed to step WASM app");
-
-
-                let wasm_fb_def = store.as_context().data().framebuffer.clone();
-                if let Some(wasm_fb_def) = wasm_fb_def {
-                    let mem = self.instance.get_memory(&store, "memory").unwrap();
-                    let ctx = store.as_context_mut();
-                    let mem_data = mem.data_mut(ctx);
-        
-                    let wasm_fb = {
-                        let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
-                        let fb_data = &mut mem_data[addr..addr + (w * h * 4) as usize];
-                        let fb_data = unsafe { fb_data.align_to_mut::<u32>().1 };
-                        Framebuffer::new(fb_data, w, h)
-                    };
-        
-                    system_fb.copy_from_fb(&wasm_fb, (win_rect.x0, win_rect.y0), false);
-                }
             }
         );
+
+        let wasm_fb = self.store_wrapper.get_framebuffer(&self.instance);
+
+        wasm_fb
     }
 }
 

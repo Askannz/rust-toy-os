@@ -180,10 +180,12 @@ pub fn run_apps<F: FbViewMut>(
         );
 
         let t0 = system.clock.time();
-        app.wasm_app.step(system, input_state, *fb, &app.rect);
+        let wasm_fb = app.wasm_app.step(system, input_state, &app.rect);
         let t1 = system.clock.time();
         const SMOOTHING: f64 = 0.9;
         app.time_used = (1.0 - SMOOTHING) * (t1 - t0) + SMOOTHING * app.time_used;
+
+        fb.copy_from_fb(&wasm_fb, app.rect.origin(), false);
 
         blend_rect(*fb, &resize_handle_rect, COLOR_RESIZE_HANDLE);
 
@@ -234,7 +236,6 @@ pub fn run_apps<F: FbViewMut>(
         if pointer_state.left_clicked {
 
             if let Some(app) = hovered_titlebar {
-                let app = hovered_titlebar.unwrap();
                 let dx = pointer_state.x - app.rect.x0;
                 let dy = pointer_state.y - app.rect.y0;
                 *interaction_state = AppsInteractionState::TitlebarHold { 

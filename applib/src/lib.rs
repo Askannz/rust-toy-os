@@ -2,6 +2,7 @@
 
 extern crate alloc;
 
+use geometry::Point2D;
 use zune_png::PngDecoder;
 
 pub mod content;
@@ -67,6 +68,13 @@ pub struct Rect {
 }
 
 impl Rect {
+
+    // TODO: use Point2D everywhere
+
+    pub fn origin(&self) -> (i64, i64) {
+        (self.x0, self.y0)
+    }
+
     pub fn check_contains_point(&self, x: i64, y: i64) -> bool {
         let [x0, y0, x1, y1] = self.as_xyxy();
 
@@ -233,6 +241,19 @@ impl<'a> Framebuffer<BorrowedMutPixels<'a>> {
         let rect = Rect { x0: 0, y0: 0, w, h };
         Framebuffer {
             data: BorrowedMutPixels(data),
+            data_w: w,
+            data_h: h,
+            rect,
+        }
+    }
+}
+
+impl<'a> Framebuffer<BorrowedPixels<'a>> {
+    pub fn new<'b>(data: &'b [u32], w: u32, h: u32) -> Framebuffer<BorrowedPixels<'b>> {
+        assert_eq!(data.len(), (w * h) as usize);
+        let rect = Rect { x0: 0, y0: 0, w, h };
+        Framebuffer {
+            data: BorrowedPixels(data),
             data_w: w,
             data_h: h,
             rect,

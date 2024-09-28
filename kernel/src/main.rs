@@ -22,7 +22,7 @@ use applib::drawing::primitives::{draw_rect, draw_arc, ArcMode};
 use applib::drawing::text::{draw_str, DEFAULT_FONT, HACK_15};
 use applib::input::{InputEvent, InputState};
 use applib::uitk::{self};
-use applib::{Color, FbViewMut, Framebuffer, Rect};
+use applib::{BorrowedMutPixels, Color, FbViewMut, Framebuffer, Rect};
 
 extern crate alloc;
 
@@ -142,7 +142,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 
         let fb_data = unsafe { virtio_gpu.framebuffer.as_mut().align_to_mut::<u32>().1 };
-        let mut framebuffer = Framebuffer::new(fb_data, w, h);
+        let mut framebuffer = Framebuffer::<BorrowedMutPixels>::new(fb_data, w, h);
 
         //log::debug!("{:?}", system_state);
 

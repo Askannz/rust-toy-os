@@ -304,7 +304,7 @@ impl Framebuffer<OwnedPixels> {
         let data_u8 = decoded.u8().unwrap();
 
         let data_u32 = unsafe {
-            assert_eq!(data_u8.len(), h * w * 4); // Requires an alpha channel
+            assert_eq!(data_u8.len(), h * w * 4, "PNG has wrong dimentsions"); // Requires an alpha channel
             let mut data_u8 = core::mem::ManuallyDrop::new(data_u8);
             Vec::from_raw_parts(data_u8.as_mut_ptr() as *mut u32, h * w, h * w)
         };

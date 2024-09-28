@@ -99,6 +99,10 @@ impl Vec2D<f32> {
             y: f32::round(self.y) as i64,
         }
     }
+
+    pub fn norm(&self) -> f32 {
+        (self.x.powi(2) + self.y.powi(2)).sqrt()
+    }
 }
 
 impl Point2D<f32> {
@@ -107,6 +111,10 @@ impl Point2D<f32> {
             x: f32::round(self.x) as i64,
             y: f32::round(self.y) as i64,
         }
+    }
+
+    pub fn distance_to(&self, other: Point2D<f32>) -> f32 {
+        (*self - other).norm()
     }
 }
 

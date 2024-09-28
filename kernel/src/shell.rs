@@ -21,19 +21,18 @@ pub struct PieMenuEntry {
     pub font: &'static Font,
 }
 
-pub fn pie_menu<'a, F: FbViewMut>(
+pub fn pie_menu<F: FbViewMut>(
     uitk_context: &mut uitk::UiContext<F>,
-    entries: &'a [PieMenuEntry],
+    entries: &[PieMenuEntry],
     center: Point2D<i64>,
-) -> Option<&'a PieMenuEntry> {
+) -> Option<usize> {
 
     const INNER_RADIUS: f32 = 50.0;
     const OUTER_RADIUS: f32 = 100.0;
+    const DEADZONE_RADIUS: f32 = 25.0;
     const COLOR_HOVER: Color = Color::rgba(0x88, 0x88, 0x88, 0xff);
-    const COLOR_CLICKED: Color = Color::rgba(200, 200, 200, 0xff);
     const GAP: f32 = 2.0;
     const OFFSET_HOVER: f32 = 10.0;
-    const OFFSET_CLICKED: f32 = 20.0;
     const ARC_PX_PER_PT: f32 = 50.0;
     const TEXT_OFFSET: f32 = 10.0;
 
@@ -62,15 +61,17 @@ pub fn pie_menu<'a, F: FbViewMut>(
 
         let v_cursor = (pointer - center).to_float();
 
-        let is_hover = v_cursor.cross(v0) < 0.0 && v_cursor.cross(v1) > 0.0;
+        let center_dist = v_cursor.norm();
+
+        let is_hover = v_cursor.cross(v0) < 0.0 && v_cursor.cross(v1) > 0.0 && center_dist > DEADZONE_RADIUS;
 
         let (offset, color, text_visible) = match is_hover {
             false => (0.0, entry.bg_color, false),
             true => match uitk_context.input_state.pointer.left_clicked {
                 false => (OFFSET_HOVER, COLOR_HOVER, true),
                 true => {
-                    selected_entry = Some(entry);
-                    (OFFSET_CLICKED, COLOR_CLICKED, true)
+                    selected_entry = Some(i);
+                    (OFFSET_HOVER, COLOR_HOVER, true)
                 },
             }
         };

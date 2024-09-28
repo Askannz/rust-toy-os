@@ -113,8 +113,6 @@ pub fn draw_arc<F: FbViewMut>(
     }
 }
 
-
-#[inline]
 fn fill_half_triangle<F: FbViewMut>(
     fb: &mut F,
     left: (&Point2D<i64>, &Point2D<i64>),

@@ -10,6 +10,7 @@ use applib::BorrowedPixels;
 use uefi::proto::console::pointer;
 use core::cell::RefCell;
 use alloc::vec::Vec;
+use lazy_static::lazy_static;
 
 use applib::geometry::Point2D;
 use applib::drawing::primitives::{blend_rect, draw_rect};
@@ -20,6 +21,8 @@ use crate::shell::{pie_menu, PieMenuEntry};
 
 use crate::system::System;
 use crate::wasm::{WasmApp, WasmEngine};
+use crate::resources;
+
 
 #[derive(Clone)]
 pub struct AppDescriptor {
@@ -35,7 +38,8 @@ pub enum AppsInteractionState {
     Idle,
     TitlebarHold { app_name: &'static str, anchor: Point2D<i64> },
     ResizeHold { app_name: &'static str },
-    PieMenu { anchor: Point2D<i64> },
+    PieDesktopMenu { anchor: Point2D<i64> },
+    PieAppMenu { app_name: &'static str, anchor: Point2D<i64> },
 }
 
 pub struct App {
@@ -78,58 +82,85 @@ pub fn run_apps<F: FbViewMut>(
 
     let pointer = &input_state.pointer;
 
+    //
+    // Hover
+
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    enum HoverKind {
+        Titlebar,
+        Resize,
+        Window,
+    }
+
+    struct Hover<'a> {
+        app: &'a App,
+        kind: HoverKind,
+    }
+
+    let hover_state = apps.values()
+        .map(|app| {
+            let deco = compute_decorations(app, input_state);
+            (app, deco)
+        })
+        .find_map(|(app, deco)| {
+            if !app.is_open || !deco.window_hover {
+                None
+            } else if deco.titlebar_hover {
+                Some(Hover { app, kind: HoverKind::Titlebar })
+            } else if deco.resize_hover {
+                Some(Hover { app, kind: HoverKind::Resize })
+            } else {
+                Some(Hover { app, kind: HoverKind::Window })
+            }
+        });
+
 
     //
     // Interaction state update
 
-    if *interaction_state == AppsInteractionState::Idle {
+    *interaction_state = match *interaction_state {
 
-        if pointer.left_clicked {
+        AppsInteractionState::Idle if pointer.left_click_trigger =>  match hover_state {
 
-            enum HoverKind<'a> {
-                Titlebar(&'a App),
-                Resize(&'a App)
-            }
-
-            let hovered = apps.values()
-                .map(|app| {
-                    let deco = compute_decorations(app, input_state);
-                    (app, deco)
-                })
-                .find_map(|(app, deco)| {
-                    if !app.is_open {
-                        None
-                    } else if deco.titlebar_hover {
-                        Some(HoverKind::Titlebar(app))
-                    } else if deco.resize_hover {
-                        Some(HoverKind::Resize(app))
-                    } else {
-                        None
-                    }
-                });
-
-            if let Some(HoverKind::Titlebar(app)) = hovered {
+            Some(Hover { app, kind }) if kind == HoverKind::Titlebar => {
                 let dx = pointer.x - app.rect.x0;
                 let dy = pointer.y - app.rect.y0;
-                *interaction_state = AppsInteractionState::TitlebarHold { 
+                AppsInteractionState::TitlebarHold { 
                     app_name: app.descriptor.name,
                     anchor: Point2D { x: dx, y: dy }
-                };
-            } else if let Some(HoverKind::Resize(app)) = hovered {
-                *interaction_state = AppsInteractionState::ResizeHold { app_name: app.descriptor.name };
+                }
+            },
+
+            Some(Hover { app, kind }) if kind == HoverKind::Resize => {
+                AppsInteractionState::ResizeHold { app_name: app.descriptor.name }
+            },
+
+            _ => *interaction_state,
+        },
+
+        AppsInteractionState::Idle if pointer.right_click_trigger =>  match hover_state {
+
+            Some(Hover { app, .. }) => {
+                let anchor = Point2D { x: pointer.x, y: pointer.y };
+                AppsInteractionState::PieAppMenu { app_name: app.descriptor.name , anchor }
+            },
+
+            _ => {
+                let anchor = Point2D { x: pointer.x, y: pointer.y };
+                AppsInteractionState::PieDesktopMenu { anchor }
             }
+        },
 
-        } else if pointer.right_clicked {
-            let anchor = Point2D { x: pointer.x, y: pointer.y };
-            *interaction_state = AppsInteractionState::PieMenu { anchor };
-        }
+        AppsInteractionState::TitlebarHold { .. } if !pointer.left_clicked => AppsInteractionState::Idle,
 
-    } else {
-        if !pointer.left_clicked && !pointer.right_clicked {
-            *interaction_state = AppsInteractionState::Idle;
-        }
-    }
+        AppsInteractionState::ResizeHold { .. } if !pointer.left_clicked => AppsInteractionState::Idle,
 
+        AppsInteractionState::PieAppMenu { .. } if pointer.right_click_trigger => AppsInteractionState::Idle,
+
+        AppsInteractionState::PieDesktopMenu { .. } if pointer.right_click_trigger => AppsInteractionState::Idle,
+
+        _ => *interaction_state,
+    };
 
     //
     // Update window rects
@@ -169,9 +200,9 @@ pub fn run_apps<F: FbViewMut>(
 
     
     //
-    // Pie menu
+    // Pie menus
 
-    if let AppsInteractionState::PieMenu { anchor } = *interaction_state {
+    if let AppsInteractionState::PieDesktopMenu { anchor } = *interaction_state {
 
         let entries: Vec<PieMenuEntry> = apps.values().map(|app| {
 
@@ -187,11 +218,50 @@ pub fn run_apps<F: FbViewMut>(
 
         let selected = pie_menu(uitk_context, &entries, anchor);
 
-        if let Some(entry) = selected {
-            let app_name = &entry.text;
-            apps.get_mut(app_name.as_str()).unwrap().is_open = true;
+        if let Some(i) = selected {
+
+            let app_name = &entries[i].text;
+            let app = apps.get_mut(app_name.as_str()).unwrap();
+
+            app.is_open = true;
+            app.rect = Rect::from_center(
+                pointer.x,
+                pointer.y,
+                app.rect.w,
+                app.rect.h
+            );
+
+            *interaction_state = AppsInteractionState::Idle;
         }
 
+    } else if let AppsInteractionState::PieAppMenu { app_name, anchor } = *interaction_state {
+
+        if let Some(app) = apps.get_mut(app_name) {
+
+            let entries = [
+                PieMenuEntry { 
+                    icon: &resources::RELOAD_ICON,
+                    bg_color: Color::rgb(200, 200, 128),
+                    text: "Reload".to_owned(),
+                    text_color: Color::WHITE,
+                    font: &HACK_15,
+                },
+                PieMenuEntry { 
+                    icon: &resources::CLOSE_ICON,
+                    bg_color: Color::rgb(200, 128, 128),
+                    text: "Close".to_owned(),
+                    text_color: Color::WHITE,
+                    font: &HACK_15,
+                },
+            ];
+
+            let selected = pie_menu(uitk_context, &entries, anchor);
+
+            if selected == Some(1) {
+                app.is_open = false;
+                *interaction_state = AppsInteractionState::Idle;
+            }
+        }
     }
 }
 
@@ -205,6 +275,7 @@ struct AppDecorations {
     titlebar_font: &'static Font,
     titlebar_hover: bool,
     resize_hover: bool,
+    window_hover: bool,
 }
 
 fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
@@ -249,6 +320,7 @@ fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
     let pointer = &input_state.pointer;
     let titlebar_hover = titlebar_rect.check_contains_point(pointer.x, pointer.y);
     let resize_hover = resize_handle_rect.check_contains_point(pointer.x, pointer.y);
+    let window_hover = window_rect.check_contains_point(pointer.x, pointer.y);
 
     AppDecorations {
         content_rect: app.rect.clone(),
@@ -259,6 +331,7 @@ fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
         titlebar_font,
         titlebar_hover,
         resize_hover,
+        window_hover,
     }
 }
 

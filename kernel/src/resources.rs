@@ -20,6 +20,10 @@ lazy_static! {
         Framebuffer::from_png(include_bytes!("../icons/chronometer.png"));
     pub static ref TERMINAL_ICON: Framebuffer<OwnedPixels> =
         Framebuffer::from_png(include_bytes!("../icons/terminal.png"));
+    pub static ref CLOSE_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/close.png"));
+    pub static ref RELOAD_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/reload.png"));
 
     //
     // WASM apps

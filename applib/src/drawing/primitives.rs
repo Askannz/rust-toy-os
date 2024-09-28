@@ -3,7 +3,16 @@ use num::Float;
 use crate::{blend_colors, Color, FbViewMut, Rect};
 use crate::geometry::{Triangle2D, Quad2D, Point2D, Vec2D};
 
-pub fn draw_triangle<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color) {
+
+pub fn draw_triangle<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color, blend: bool) {
+    const WIREFRAME: bool = false;
+    match WIREFRAME {
+        true => draw_triangle_with_wireframe(fb, tri, color, blend),
+        false => internal_draw_triangle(fb, tri, color, blend),
+    }
+}
+
+fn internal_draw_triangle<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color, blend: bool) {
     let i = {
         if tri.points[0].y <= i64::min(tri.points[1].y, tri.points[2].y) {
             0
@@ -14,27 +23,27 @@ pub fn draw_triangle<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Col
         }
     };
 
-    let p0 = &tri.points[i];
-    let p2 = &tri.points[(i + 1) % 3];
-    let p1 = &tri.points[(i + 2) % 3];
+    let p0 = tri.points[i];
+    let p2 = tri.points[(i + 1) % 3];
+    let p1 = tri.points[(i + 2) % 3];
 
     let y_half = i64::min(p1.y, p2.y);
-    fill_half_triangle(fb, (p0, p1), (p0, p2), (p0.y, y_half), color);
+    draw_half_triangle(fb, (p0, p1), (p0, p2), (p0.y, y_half), color, blend);
 
     if p1.y < p2.y {
-        fill_half_triangle(fb, (p1, p2), (p0, p2), (y_half, p2.y), color);
+        draw_half_triangle(fb, (p1, p2), (p0, p2), (y_half+1, p2.y), color, blend);
     } else {
-        fill_half_triangle(fb, (p0, p1), (p2, p1), (y_half, p1.y), color);
+        draw_half_triangle(fb, (p0, p1), (p2, p1), (y_half+1, p1.y), color, blend);
     }
 }
 
-pub fn draw_quad<F: FbViewMut>(fb: &mut F, quad: &Quad2D<i64>, color: Color) {
+pub fn draw_quad<F: FbViewMut>(fb: &mut F, quad: &Quad2D<i64>, color: Color, blend: bool) {
     let (tri0, tri1) = quad.triangles();
-    draw_triangle(fb, &tri0, color);
-    draw_triangle(fb, &tri1, color);
+    draw_triangle(fb, &tri0, color, blend);
+    draw_triangle(fb, &tri1, color, blend);
 }
 
-pub fn draw_triangle_with_wireframe<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color) {
+pub fn draw_triangle_with_wireframe<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color, blend: bool) {
 
     const F: f32 = 0.1;
     const WIREFRAME_COLOR: Color = Color::BLUE;
@@ -55,8 +64,8 @@ pub fn draw_triangle_with_wireframe<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i
 
     let tri_s = shrink_triangle(tri);
 
-    draw_triangle(fb, &tri, WIREFRAME_COLOR);
-    draw_triangle(fb, &tri_s, color);
+    internal_draw_triangle(fb, &tri, WIREFRAME_COLOR, false);
+    internal_draw_triangle(fb, &tri_s, color, blend);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -73,7 +82,8 @@ pub fn draw_arc<F: FbViewMut>(
     r_outer: f32,
     mode: ArcMode,
     px_per_pt: f32,
-    color: Color
+    color: Color,
+    blend: bool,
 ) {
 
     let (a_in_min, a_in_max, a_out_min, a_out_max) = match mode {
@@ -107,18 +117,19 @@ pub fn draw_arc<F: FbViewMut>(
         let tri_b = Triangle2D::<i64> {  points: [p_in_0, p_out_1, p_in_2] };
         let tri_c = Triangle2D::<i64> {  points: [p_in_2, p_out_1, p_out_2] };
 
-        draw_triangle(fb, &tri_a, color);
-        draw_triangle(fb, &tri_b, color);
-        draw_triangle(fb, &tri_c, color);
+        draw_triangle(fb, &tri_a, color, blend);
+        draw_triangle(fb, &tri_b, color, blend);
+        draw_triangle(fb, &tri_c, color, blend);
     }
 }
 
-fn fill_half_triangle<F: FbViewMut>(
+fn draw_half_triangle<F: FbViewMut>(
     fb: &mut F,
-    left: (&Point2D<i64>, &Point2D<i64>),
-    right: (&Point2D<i64>, &Point2D<i64>),
+    left: (Point2D<i64>, Point2D<i64>),
+    right: (Point2D<i64>, Point2D<i64>),
     range: (i64, i64),
     color: Color,
+    blend: bool,
 ) {
     let (pl0, pl1) = left;
     let (pr0, pr1) = right;
@@ -133,15 +144,15 @@ fn fill_half_triangle<F: FbViewMut>(
 
     for y in y_min..=y_max {
         let x_min = ((y - pl0.y) as f32 * f_left) as i64 + pl0.x;
-        let x_max = ((y - pr0.y) as f32 * f_right) as i64 + pr0.x;
+        let x_max = ((y - pr0.y) as f32 * f_right) as i64 + pr0.x - 1;  // -1 to avoid overlap on adjacent triangles
         if x_min <= x_max {
             let line_w = x_max - x_min + 1;
-            fb.fill_line(x_min, line_w as u32, y, color);
+            fb.fill_line(x_min, line_w as u32, y, color, blend);
         }
     }
 }
 
-pub fn draw_rect<F: FbViewMut>(fb: &mut F, rect: &Rect, color: Color) {
+pub fn draw_rect<F: FbViewMut>(fb: &mut F, rect: &Rect, color: Color, blend: bool) {
     let (fb_w, fb_h) = fb.shape();
     let rect = rect.intersection(&Rect {
         x0: 0,
@@ -153,7 +164,7 @@ pub fn draw_rect<F: FbViewMut>(fb: &mut F, rect: &Rect, color: Color) {
     if let Some(Rect { x0, y0, w, h }) = rect {
         let h: i64 = h.into();
         for y in y0..y0 + h {
-            fb.fill_line(x0, w, y, color);
+            fb.fill_line(x0, w, y, color, blend);
         }
     }
 }

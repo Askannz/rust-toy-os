@@ -18,8 +18,9 @@ use uefi::table::boot::MemoryType;
 use rand::SeedableRng;
 use num_traits::Float;
 
-use applib::drawing::primitives::{draw_rect, draw_arc, ArcMode};
+use applib::drawing::primitives::{draw_rect, draw_arc, ArcMode, draw_quad};
 use applib::drawing::text::{draw_str, DEFAULT_FONT, HACK_15};
+use applib::geometry::{Quad2D};
 use applib::input::{InputEvent, InputState};
 use applib::uitk::{self};
 use applib::{BorrowedMutPixels, Color, FbViewMut, Framebuffer, Rect};
@@ -151,12 +152,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
-        // DEBUG
-        // let arc_center = Point2D::<i64> { x: (w / 2).into(), y: (h / 2).into() };
-        // let arc_mode = ArcMode::AngleRange(-PI / 2.0, PI / 2.0);
-        // let r = 200.0 + 50.0 * f32::sin(system.clock.time() as f32 / 1000.0);
-        // draw_arc(&mut framebuffer, arc_center, 50, r as u32, arc_mode, 100.0, Color::RED);
-
         draw_cursor(&mut framebuffer, &input_state);
 
         {
@@ -192,8 +187,8 @@ fn draw_cursor<F: FbViewMut>(fb: &mut F, input_state: &InputState) {
         h: SIZE - 2 * BORDER,
     };
 
-    draw_rect(fb, &rect_outer, Color::BLACK);
-    draw_rect(fb, &rect_inner, Color::WHITE);
+    draw_rect(fb, &rect_outer, Color::BLACK, false);
+    draw_rect(fb, &rect_inner, Color::WHITE, false);
 }
 
 fn update_input_state(
@@ -334,6 +329,7 @@ impl FpsManager {
                 h: 12,
             },
             Color::BLACK,
+            false,
         );
         draw_rect(
             fb,
@@ -344,6 +340,7 @@ impl FpsManager {
                 h: graph_h,
             },
             graph_color,
+            false,
         );
 
         let budget_color = if self.used < frametime_target {

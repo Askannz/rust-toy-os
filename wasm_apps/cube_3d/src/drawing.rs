@@ -134,7 +134,7 @@ fn rasterize_quad<F: FbViewMut>(fb: &mut F, quad: &Quad2D<i64>, color: Color) {
         return;
     }
 
-    draw_quad(fb, quad, color);
+    draw_quad(fb, quad, color, false);
 }
 
 fn get_direction(quad: &Quad2D<i64>) -> i64 {

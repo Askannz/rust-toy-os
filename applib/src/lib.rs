@@ -230,8 +230,14 @@ pub struct FbLine<'a> {
 }
 
 impl<'a> FbLine<'a> {
-    fn fill(&mut self, color: Color) {
-        self.data.fill(color.0)
+    fn fill(&mut self, color: Color, blend: bool) {
+        if blend {
+            self.data.iter_mut().for_each(|pixel| {
+                *pixel = blend_colors(color, Color(*pixel)).0;
+            });
+        } else {
+            self.data.fill(color.0)
+        }
     }
 }
 
@@ -250,7 +256,7 @@ pub trait FbView {
 pub trait FbViewMut: FbView {
     fn subregion_mut(&mut self, rect: &Rect) -> Framebuffer<BorrowedMutPixels>;
     fn set_pixel(&mut self, x: i64, y: i64, color: Color);
-    fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color);
+    fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color, blend: bool);
     fn fill(&mut self, color: Color);
     fn copy_from_fb<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool);
 
@@ -416,7 +422,7 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
         let i1 = self.get_offset_data_coords(x1, y).unwrap();
         let i2 = self.get_offset_data_coords(x2, y).unwrap();
         let data = self.data.as_mut_slice();
-        let line_slice = &mut data[i1..i2 + 1];
+        let line_slice = &mut data[i1..=i2];
 
         FbLine {
             data: line_slice,
@@ -425,14 +431,14 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
         }
     }
 
-    fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color) {
-        self.get_line_mut(x, line_w, y).fill(color);
+    fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color, blend: bool) {
+        self.get_line_mut(x, line_w, y).fill(color, blend);
     }
 
     fn fill(&mut self, color: Color) {
         let (w, h) = self.shape();
         for y in 0..h {
-            self.fill_line(0, w, y.into(), color)
+            self.fill_line(0, w, y.into(), color, false)
         }
     }
 

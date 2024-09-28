@@ -241,14 +241,14 @@ pub fn run_apps<F: FbViewMut>(
             let entries = [
                 PieMenuEntry { 
                     icon: &resources::RELOAD_ICON,
-                    bg_color: Color::rgb(200, 200, 128),
+                    bg_color: Color::YELLOW,
                     text: "Reload".to_owned(),
                     text_color: Color::WHITE,
                     font: &HACK_15,
                 },
                 PieMenuEntry { 
                     icon: &resources::CLOSE_ICON,
-                    bg_color: Color::rgb(200, 128, 128),
+                    bg_color: Color::RED,
                     text: "Close".to_owned(),
                     text_color: Color::WHITE,
                     font: &HACK_15,
@@ -347,7 +347,7 @@ fn draw_app<F: FbViewMut>(fb: &mut F, app_name: &str, app_fb: &Framebuffer<Borro
     const COLOR_RESIZE_HANDLE: Color = Color::rgba(0xff, 0xff, 0xff, 0x80);
 
     blend_rect(fb, &deco.shadow_rect, COLOR_SHADOW);
-    draw_rect(fb, &deco.window_rect, COLOR_IDLE);
+    draw_rect(fb, &deco.window_rect, COLOR_IDLE, false);
 
     let text_h = deco.titlebar_font.char_h as u32;
     let text_w = (deco.titlebar_font.char_w * app_name.len()) as u32;

@@ -117,8 +117,8 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
                 }
             };
 
-            draw_rect(*dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR);
-            draw_rect(*dst_fb, &sbar_inner_rect, sbar_color);
+            draw_rect(*dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR, false);
+            draw_rect(*dst_fb, &sbar_inner_rect, sbar_color, false);
 
             if p_state.left_clicked {
                 if p_state.left_click_trigger && sbar_hover {

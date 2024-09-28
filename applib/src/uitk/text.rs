@@ -163,7 +163,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             let mut tile_fb = Framebuffer::new_owned(rect.w, rect.h);
 
             if let Some(bg_color) = bg_color {
-                draw_rect(&mut tile_fb, &config.rect, *bg_color);
+                draw_rect(&mut tile_fb, &config.rect, *bg_color, false);
             }
             draw_str(&mut tile_fb, buffer.as_ref(), 0, 0, font, *color, None);
 
@@ -177,7 +177,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
                     w: 2,
                     h: font.char_h as u32,
                 };
-                draw_rect(&mut tile_fb, &cursor_rect, *color);
+                draw_rect(&mut tile_fb, &cursor_rect, *color, false);
             }
 
             tile_fb

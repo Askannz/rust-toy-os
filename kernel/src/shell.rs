@@ -30,11 +30,11 @@ pub fn pie_menu<F: FbViewMut>(
     const INNER_RADIUS: f32 = 50.0;
     const OUTER_RADIUS: f32 = 100.0;
     const DEADZONE_RADIUS: f32 = 25.0;
-    const COLOR_HOVER: Color = Color::rgba(0x88, 0x88, 0x88, 0xff);
     const GAP: f32 = 2.0;
     const OFFSET_HOVER: f32 = 10.0;
-    const ARC_PX_PER_PT: f32 = 50.0;
+    const ARC_PX_PER_PT: f32 = 20.0;
     const TEXT_OFFSET: f32 = 10.0;
+    const COLOR_HOVER_OVERLAY: Color = Color::rgba(255, 255, 255, 128);
 
     let pointer = &uitk_context.input_state.pointer;
 
@@ -65,14 +65,13 @@ pub fn pie_menu<F: FbViewMut>(
 
         let is_hover = v_cursor.cross(v0) < 0.0 && v_cursor.cross(v1) > 0.0 && center_dist > DEADZONE_RADIUS;
 
-        let (offset, color, text_visible) = match is_hover {
-            false => (0.0, entry.bg_color, false),
-            true => match uitk_context.input_state.pointer.left_clicked {
-                false => (OFFSET_HOVER, COLOR_HOVER, true),
-                true => {
+        let (offset, text_visible) = match is_hover {
+            false => (0.0, false),
+            true => {
+                if uitk_context.input_state.pointer.left_clicked {
                     selected_entry = Some(i);
-                    (OFFSET_HOVER, COLOR_HOVER, true)
-                },
+                }
+                (OFFSET_HOVER, true)
             }
         };
 
@@ -87,12 +86,17 @@ pub fn pie_menu<F: FbViewMut>(
             inner: (a0 + inner_angle_gap, a1 - inner_angle_gap),
             outer: (a0 + outer_angle_gap, a1 - outer_angle_gap),
         };
-        draw_arc(uitk_context.fb, p_arc, INNER_RADIUS, OUTER_RADIUS, arc_mode, ARC_PX_PER_PT, color);
+
+        draw_arc(uitk_context.fb, p_arc, INNER_RADIUS, OUTER_RADIUS, arc_mode, ARC_PX_PER_PT, entry.bg_color, false);
 
         let (icon_w, icon_h) = entry.icon.shape();
         let x0_icon = p_icon.x - (icon_w / 2) as i64;
         let y0_icon = p_icon.y - (icon_h / 2) as i64;
         uitk_context.fb.copy_from_fb(entry.icon, (x0_icon, y0_icon), true);
+
+        if is_hover {
+            draw_arc(uitk_context.fb, p_arc, INNER_RADIUS, OUTER_RADIUS, arc_mode, ARC_PX_PER_PT, COLOR_HOVER_OVERLAY, true);
+        }
 
         if text_visible {
             let p_text = center + (v_bisect * (OUTER_RADIUS + TEXT_OFFSET)).round_to_int() + v_offset;

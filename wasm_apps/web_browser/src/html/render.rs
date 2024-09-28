@@ -43,7 +43,7 @@ fn draw_node<F: FbViewMut>(dst_fb: &mut F, node: &LayoutNode, src_rect: &Rect) {
             children, bg_color, ..
         } => {
             if let &Some(bg_color) = bg_color {
-                draw_rect(dst_fb, &abs_rect, bg_color);
+                draw_rect(dst_fb, &abs_rect, bg_color, false);
             }
 
             for child in children.iter() {

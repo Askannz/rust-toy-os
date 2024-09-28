@@ -38,7 +38,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         let h: i64 = h.into();
         let x_padding: i64 = config.x_padding.into();
 
-        draw_rect(*fb, &config.rect, button_color);
+        draw_rect(*fb, &config.rect, button_color, false);
 
         let mut text_offset_x = 0;
         if let Some(icon) = config.icon {

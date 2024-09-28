@@ -8,7 +8,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         let UiContext { fb, .. } = self;
 
         let Rect { x0, y0, h, w } = config.rect;
-        draw_rect(*fb, &config.rect, config.bg_color);
+        draw_rect(*fb, &config.rect, config.bg_color, false);
 
         let p = config.bar_padding;
         let bar_w = (((w - 2 * p) as u64) * progress / config.max_val) as u32;
@@ -19,7 +19,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             w: bar_w,
         };
 
-        draw_rect(*fb, &bar_rect, config.bar_color);
+        draw_rect(*fb, &bar_rect, config.bar_color, false);
 
         let text_x_padding: i64 = config.text_x_padding.into();
         let &Font { char_h, .. } = config.font;

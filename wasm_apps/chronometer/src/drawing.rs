@@ -36,5 +36,5 @@ pub fn draw_chrono<F: FbViewMut>(fb: &mut F, time: f64) {
     let points = [p0.round_to_int(), p1.round_to_int(), p2.round_to_int()];
     let tri = Triangle2D::<i64> { points };
 
-    draw_triangle(fb, &tri, Color::WHITE);
+    draw_triangle(fb, &tri, Color::WHITE, false);
 }

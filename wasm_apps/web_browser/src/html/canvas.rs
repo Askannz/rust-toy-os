@@ -177,10 +177,10 @@ fn draw_tile_border<F: FbViewMut>(tile_fb: &mut F) {
         h,
     };
 
-    draw_rect(tile_fb, &r_top, COLOR);
-    draw_rect(tile_fb, &r_left, COLOR);
-    draw_rect(tile_fb, &r_bottom, COLOR);
-    draw_rect(tile_fb, &r_right, COLOR);
+    draw_rect(tile_fb, &r_top, COLOR, false);
+    draw_rect(tile_fb, &r_left, COLOR, false);
+    draw_rect(tile_fb, &r_bottom, COLOR, false);
+    draw_rect(tile_fb, &r_right, COLOR, false);
 }
 
 impl<'a> HtmlRenderer<'a> {

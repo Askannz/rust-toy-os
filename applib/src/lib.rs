@@ -75,6 +75,29 @@ impl Rect {
         (self.x0, self.y0)
     }
 
+    pub fn center(&self) -> (i64, i64) {
+        (
+            self.x0 + (self.w / 2) as i64,
+            self.y0 + (self.h / 2) as i64,
+        )
+    }
+
+    pub fn from_center(xc: i64, yc: i64, w: u32, h: u32) -> Self {
+
+        Self {
+            x0: xc - (w / 2) as i64,
+            y0: yc - (h / 2) as i64,
+            w,
+            h,
+        }
+    }
+
+    pub fn align_to_rect_vert(&self, other: &Rect) -> Rect {
+        let (x0c, _) = self.center();
+        let (_, y1c) = other.center();
+        Self::from_center(x0c, y1c, self.w, self.h)
+    }
+
     pub fn check_contains_point(&self, x: i64, y: i64) -> bool {
         let [x0, y0, x1, y1] = self.as_xyxy();
 

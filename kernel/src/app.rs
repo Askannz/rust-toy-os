@@ -80,6 +80,8 @@ pub fn run_apps<F: FbViewMut>(
     interaction_state: &mut AppsInteractionState,
 ) {
 
+    const PIE_DEFAULT_COLOR: Color = Color::rgb(0x44, 0x44, 0x44);
+
     let pointer = &input_state.pointer;
 
     //
@@ -206,9 +208,9 @@ pub fn run_apps<F: FbViewMut>(
 
         let entries: Vec<PieMenuEntry> = apps.values().map(|app| {
 
-            PieMenuEntry { 
+            PieMenuEntry::Button { 
                 icon: app.descriptor.icon,
-                bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff),
+                color: PIE_DEFAULT_COLOR,
                 text: app.descriptor.name.to_owned(),
                 text_color: Color::WHITE,
                 font: &HACK_15,
@@ -219,10 +221,9 @@ pub fn run_apps<F: FbViewMut>(
 
         let selected = pie_menu(uitk_context, &entries, anchor);
 
-        if let Some(i) = selected {
+        if let Some(app_name) = selected {
 
-            let app_name = &entries[i].text;
-            let app = apps.get_mut(app_name.as_str()).unwrap();
+            let app = apps.get_mut(app_name).unwrap();
 
             app.is_open = true;
             app.rect = Rect::from_center(
@@ -239,39 +240,30 @@ pub fn run_apps<F: FbViewMut>(
 
         if let Some(app) = apps.get_mut(app_name) {
 
-            let make_blank_entry = |weight| PieMenuEntry { 
-                icon: &resources::BLANK_ICON,
-                bg_color: Color::rgba(0x44, 0x44, 0x44, 0xff),
-                text: "".to_owned(),
-                text_color: Color::WHITE,
-                font: &HACK_15,
-                weight,
-            };
-
             let entries = [
-                PieMenuEntry { 
+                PieMenuEntry::Button { 
                     icon: &resources::CLOSE_ICON,
-                    bg_color: Color::rgb(180, 0, 0),
+                    color: Color::rgb(180, 0, 0),
                     text: "Close".to_owned(),
                     text_color: Color::WHITE,
                     font: &HACK_15,
                     weight: 1.0,
                 },
-                make_blank_entry(1.0),
-                PieMenuEntry { 
+                PieMenuEntry::Spacer { color: PIE_DEFAULT_COLOR, weight: 1.0 },
+                PieMenuEntry::Button { 
                     icon: &resources::RELOAD_ICON,
-                    bg_color: Color::rgb(180, 180, 0),
+                    color: Color::rgb(180, 180, 0),
                     text: "Reload".to_owned(),
                     text_color: Color::WHITE,
                     font: &HACK_15,
                     weight: 1.0,
                 },
-                make_blank_entry(3.0),
+                PieMenuEntry::Spacer { color: PIE_DEFAULT_COLOR, weight: 3.0 },
             ];
 
             let selected = pie_menu(uitk_context, &entries, anchor);
 
-            if selected == Some(0) {
+            if selected == Some("Close") {
                 app.is_open = false;
                 *interaction_state = AppsInteractionState::Idle;
             }

@@ -13,20 +13,42 @@ use applib::geometry::{Point2D, Vec2D, Triangle2D, Quad2D};
 use num_traits::Float;
 use crate::system::System;
 
-pub struct PieMenuEntry {
-    pub icon: &'static Framebuffer<OwnedPixels>,
-    pub bg_color: Color,
-    pub text: String,
-    pub text_color: Color,
-    pub font: &'static Font,
-    pub weight: f32,
+pub enum PieMenuEntry {
+    Button {
+        icon: &'static Framebuffer<OwnedPixels>,
+        color: Color,
+        text: String,
+        text_color: Color,
+        font: &'static Font,
+        weight: f32, 
+    },
+    Spacer {
+        color: Color,
+        weight: f32,
+    }
 }
 
-pub fn pie_menu<F: FbViewMut>(
+impl PieMenuEntry {
+    fn weight(&self) -> f32 {
+        match self {
+            PieMenuEntry::Button { weight, .. } => *weight,
+            PieMenuEntry::Spacer { weight, .. } => *weight,
+        }
+    }
+    fn color(&self) -> Color {
+        match self {
+            PieMenuEntry::Button { color, .. } => *color,
+            PieMenuEntry::Spacer { color, .. } => *color,
+        }
+    }
+}
+
+
+pub fn pie_menu<'a, F: FbViewMut>(
     uitk_context: &mut uitk::UiContext<F>,
-    entries: &[PieMenuEntry],
+    entries: &'a [PieMenuEntry],
     center: Point2D<i64>,
-) -> Option<usize> {
+) -> Option<&'a str> {
 
     const INNER_RADIUS: f32 = 50.0;
     const OUTER_RADIUS: f32 = 100.0;
@@ -43,14 +65,14 @@ pub fn pie_menu<F: FbViewMut>(
 
     let r_middle = (INNER_RADIUS + OUTER_RADIUS) * 0.5;
 
-    let total_weight: f32 = entries.iter().map(|entry| entry.weight).sum();
+    let total_weight: f32 = entries.iter().map(|entry| entry.weight()).sum();
 
     let mut selected_entry = None;
     let mut a0 = 0.0;
 
     for (i, entry) in entries.iter().enumerate() {
 
-        let delta_angle = 2.0 * PI * entry.weight / total_weight;
+        let delta_angle = 2.0 * PI * entry.weight() / total_weight;
         let a1 = a0 + delta_angle;
 
         let v0 = Vec2D::<f32> { x: f32::cos(a0), y: f32::sin(a0) };
@@ -63,19 +85,27 @@ pub fn pie_menu<F: FbViewMut>(
 
         let center_dist = v_cursor.norm();
 
-        let is_hover = v_cursor.cross(v0) < 0.0 && v_cursor.cross(v1) > 0.0 && center_dist > DEADZONE_RADIUS;
+        let is_hovered = match entry {
+            PieMenuEntry::Spacer { .. } => false,
+            PieMenuEntry::Button { text, .. } => {
 
-        let (offset, text_visible) = match is_hover {
-            false => (0.0, false),
-            true => {
-                if uitk_context.input_state.pointer.left_clicked {
-                    selected_entry = Some(i);
+                let is_hovered = 
+                    v_cursor.cross(v0) < 0.0 &&
+                    v_cursor.cross(v1) > 0.0 && 
+                    center_dist > DEADZONE_RADIUS;
+
+                if is_hovered && uitk_context.input_state.pointer.left_clicked {
+                    selected_entry = Some(text.as_str());
                 }
-                (OFFSET_HOVER, true)
+
+                is_hovered
             }
         };
 
-        let v_offset = (v_bisect * offset).round_to_int();
+        let v_offset = match is_hovered {
+            true => (v_bisect * OFFSET_HOVER).round_to_int(),
+            false => Vec2D::zero(),
+        };
 
         let p_icon = center + (v_bisect * r_middle).round_to_int() + v_offset;
         let p_arc = center + v_offset;
@@ -87,26 +117,27 @@ pub fn pie_menu<F: FbViewMut>(
             outer: (a0 + outer_angle_gap, a1 - outer_angle_gap),
         };
 
-        draw_arc(uitk_context.fb, p_arc, INNER_RADIUS, OUTER_RADIUS, arc_mode, ARC_PX_PER_PT, entry.bg_color, false);
+        draw_arc(uitk_context.fb, p_arc, INNER_RADIUS, OUTER_RADIUS, arc_mode, ARC_PX_PER_PT, entry.color(), false);
 
-        let (icon_w, icon_h) = entry.icon.shape();
-        let x0_icon = p_icon.x - (icon_w / 2) as i64;
-        let y0_icon = p_icon.y - (icon_h / 2) as i64;
-        uitk_context.fb.copy_from_fb(entry.icon, (x0_icon, y0_icon), true);
+        if let PieMenuEntry::Button { icon, text, text_color, font, .. } = entry {
 
-        if is_hover {
-            draw_arc(uitk_context.fb, p_arc, INNER_RADIUS, OUTER_RADIUS, arc_mode, ARC_PX_PER_PT, COLOR_HOVER_OVERLAY, true);
-        }
-
-        if text_visible {
-            let p_text = center + (v_bisect * (OUTER_RADIUS + TEXT_OFFSET)).round_to_int() + v_offset;
-            let (text_w, text_h) = compute_text_bbox(&entry.text, entry.font);
-            let x0_text = match v_bisect.x > 0.0 {
-                true => p_text.x,
-                false => p_text.x - text_w as i64,
-            };
-            let y0_text = p_text.y - (text_h / 2) as i64;
-            draw_str(uitk_context.fb, &entry.text, x0_text, y0_text, entry.font, entry.text_color, None);
+            let (icon_w, icon_h) = icon.shape();
+            let x0_icon = p_icon.x - (icon_w / 2) as i64;
+            let y0_icon = p_icon.y - (icon_h / 2) as i64;
+            uitk_context.fb.copy_from_fb(*icon, (x0_icon, y0_icon), true);
+    
+            if is_hovered {
+                draw_arc(uitk_context.fb, p_arc, INNER_RADIUS, OUTER_RADIUS, arc_mode, ARC_PX_PER_PT, COLOR_HOVER_OVERLAY, true);
+ 
+                let p_text = center + (v_bisect * (OUTER_RADIUS + TEXT_OFFSET)).round_to_int() + v_offset;
+                let (text_w, text_h) = compute_text_bbox(text, font);
+                let x0_text = match v_bisect.x > 0.0 {
+                    true => p_text.x,
+                    false => p_text.x - text_w as i64,
+                };
+                let y0_text = p_text.y - (text_h / 2) as i64;
+                draw_str(uitk_context.fb, text, x0_text, y0_text, font, *text_color, None);
+            }
         }
 
         a0 = a1;

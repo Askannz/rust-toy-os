@@ -12,9 +12,11 @@ pub mod input;
 pub mod uitk;
 pub mod geometry;
 
+use core::ops;
 use alloc::vec;
 use alloc::vec::Vec;
 use input::InputState;
+use geometry::Vec2D;
 
 #[derive(Clone, Copy, Hash)]
 #[repr(transparent)]
@@ -171,6 +173,18 @@ impl Rect {
         Rect {
             x0: 0,
             y0: 0,
+            w: self.w,
+            h: self.h,
+        }
+    }
+}
+
+impl ops::Add<Vec2D<i64>> for Rect {
+    type Output = Rect;
+    fn add(self, vec: Vec2D<i64>) -> Self::Output {
+        Self::Output {
+            x0: self.x0 + vec.x,
+            y0: self.y0 + vec.y,
             w: self.w,
             h: self.h,
         }

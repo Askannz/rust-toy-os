@@ -1,13 +1,11 @@
-* Web browser: incremental renderer
 * make it pretty (UI color palette)
 * convenience macros for wasm apps
 
-* Uxn/Varvara?
-* resizable windows
 (* Tiling windows?)
 * proper build system
 * system settings window
 * app audit window
 * file editor + "fake" filesystem?
 * better memory allocator
-* context wheel
+
+* Uxn/Varvara?

@@ -12,7 +12,7 @@ use core::cell::RefCell;
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
 
-use applib::geometry::Point2D;
+use applib::geometry::{Point2D, Vec2D};
 use applib::drawing::primitives::{blend_rect, draw_rect};
 use applib::drawing::text::{draw_str, Font, DEFAULT_FONT, HACK_15};
 use applib::uitk::{self, UiContext};
@@ -105,14 +105,16 @@ pub fn run_apps<F: FbViewMut>(
             (app, deco)
         })
         .find_map(|(app, deco)| {
-            if !app.is_open || !deco.window_hover {
+            if !app.is_open {
                 None
             } else if deco.titlebar_hover {
                 Some(Hover { app, kind: HoverKind::Titlebar })
             } else if deco.resize_hover {
                 Some(Hover { app, kind: HoverKind::Resize })
-            } else {
+            } else if deco.window_hover {
                 Some(Hover { app, kind: HoverKind::Window })
+            } else {
+                None
             }
         });
 
@@ -276,8 +278,9 @@ struct AppDecorations {
     content_rect: Rect,
     window_rect: Rect,
     titlebar_rect: Rect,
-    shadow_rect: Rect,
-    resize_handle_rect: Rect,
+    resize_zone_rect: Rect,
+    border_rects: [Rect; 3],
+    handle_rects: [Rect; 2],
     titlebar_font: &'static Font,
     titlebar_hover: bool,
     resize_hover: bool,
@@ -286,74 +289,110 @@ struct AppDecorations {
 
 fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
 
-    const DECO_PADDING: i64 = 5;
-    const RESIZE_HANDLE_W: u32 = 10;
-    const OFFSET_SHADOW: i64 = 10;
-
-    let titlebar_font = &DEFAULT_FONT;
-
-    let font_h = titlebar_font.char_h as u32;
-    let titlebar_h = 3 * DECO_PADDING as u32 + font_h;
+    const TITLEBAR_HEIGHT: u32 = 32;
+    const BORDER_THICKNESS: u32 = 8;
+    const RESIZE_HANDLE_LEN: u32 = 32;
+    const RESIZE_HANDLE_GAP: u32 = 2;
+    const RESIZE_ZONE_LEN: u32 = 32;
+    const RESIZE_HANDLE_OFFSET: u32 = 4;
+    let FONT: &'static Font = &DEFAULT_FONT;
 
     let window_rect = Rect {
-        x0: app.rect.x0 - DECO_PADDING,
-        y0: app.rect.y0 - font_h as i64 - 2 * DECO_PADDING,
-        w: app.rect.w + 2 * DECO_PADDING as u32,
-        h: app.rect.h + titlebar_h,
+        x0: app.rect.x0 - BORDER_THICKNESS as i64,
+        y0: app.rect.y0 - TITLEBAR_HEIGHT as i64,
+        w: app.rect.w + 2 * BORDER_THICKNESS,
+        h: app.rect.h + TITLEBAR_HEIGHT,
     };
 
     let titlebar_rect = Rect {
         x0: window_rect.x0,
         y0: window_rect.y0,
         w: window_rect.w,
-        h: titlebar_h,
+        h: TITLEBAR_HEIGHT,
     };
 
-    let resize_handle_rect = Rect {
-        x0: app.rect.x0 + (app.rect.w - RESIZE_HANDLE_W) as i64,
-        y0: app.rect.y0 + (app.rect.h - RESIZE_HANDLE_W) as i64,
-        w: RESIZE_HANDLE_W,
-        h: RESIZE_HANDLE_W,
+    let left_border_rect = Rect {
+        x0: window_rect.x0,
+        y0: window_rect.y0 + TITLEBAR_HEIGHT as i64,
+        w: BORDER_THICKNESS,
+        h: app.rect.h,
     };
 
-    let shadow_rect = Rect {
-        x0: window_rect.x0 + OFFSET_SHADOW,
-        y0: window_rect.y0 + OFFSET_SHADOW,
-        w: window_rect.w,
-        h: window_rect.h,
+    let bottom_border_rect = Rect {
+        x0: window_rect.x0,
+        y0: app.rect.y0 + app.rect.h as i64,
+        w:  window_rect.w - RESIZE_HANDLE_GAP - RESIZE_HANDLE_LEN,
+        h: BORDER_THICKNESS,
+    };
+
+    let right_border_rect = Rect {
+        x0: window_rect.x0 + BORDER_THICKNESS as i64 + app.rect.w as i64,
+        y0: window_rect.y0 + TITLEBAR_HEIGHT as i64,
+        w: BORDER_THICKNESS,
+        h: app.rect.h - RESIZE_HANDLE_GAP - RESIZE_HANDLE_LEN + BORDER_THICKNESS,
+    };
+
+    let resize_zone_rect = Rect::from_center(
+        app.rect.x0 + app.rect.w as i64,
+        app.rect.y0 + app.rect.h as i64,
+        RESIZE_ZONE_LEN, 
+        RESIZE_ZONE_LEN,
+    );
+
+    let mut handle_rect_1 = Rect {
+        x0: bottom_border_rect.x0 + bottom_border_rect.w as i64 + RESIZE_HANDLE_GAP as i64,
+        y0: bottom_border_rect.y0,
+        w: RESIZE_HANDLE_LEN,
+        h: BORDER_THICKNESS,
+    };
+
+    let mut handle_rect_2 = Rect {
+        x0: app.rect.x0 + app.rect.w as i64,
+        y0: right_border_rect.y0 + right_border_rect.h as i64 + RESIZE_HANDLE_GAP as i64,
+        w: BORDER_THICKNESS,
+        h: RESIZE_HANDLE_LEN - BORDER_THICKNESS,
     };
 
     let pointer = &input_state.pointer;
     let titlebar_hover = titlebar_rect.check_contains_point(pointer.x, pointer.y);
-    let resize_hover = resize_handle_rect.check_contains_point(pointer.x, pointer.y);
+    let resize_hover = resize_zone_rect.check_contains_point(pointer.x, pointer.y);
     let window_hover = window_rect.check_contains_point(pointer.x, pointer.y);
+
+    if resize_hover {
+        let offet_vec = Vec2D { x: 1, y: 1 } * RESIZE_HANDLE_OFFSET as i64;
+        handle_rect_1 = handle_rect_1 + offet_vec;
+        handle_rect_2 = handle_rect_2 + offet_vec;
+    }
 
     AppDecorations {
         content_rect: app.rect.clone(),
         window_rect,
         titlebar_rect,
-        shadow_rect,
-        resize_handle_rect,
-        titlebar_font,
+        titlebar_font: FONT,
         titlebar_hover,
         resize_hover,
         window_hover,
+        border_rects: [
+            left_border_rect,
+            right_border_rect,
+            bottom_border_rect,
+        ],
+        handle_rects: [handle_rect_1, handle_rect_2],
+        resize_zone_rect,
     }
 }
 
 
 fn draw_app<F: FbViewMut>(fb: &mut F, app_name: &str, app_fb: &Framebuffer<BorrowedPixels>, deco: &AppDecorations) {
 
-    const ALPHA_SHADOW: u8 = 100;
-
     const COLOR_IDLE: Color = Color::rgba(0x44, 0x44, 0x44, 0xff);
-    const COLOR_HOVER: Color = Color::rgba(0x88, 0x88, 0x88, 0xff);
-    const COLOR_SHADOW: Color = Color::rgba(0x0, 0x0, 0x0, ALPHA_SHADOW);
+    const COLOR_HANDLE: Color = Color::rgba(122, 0, 255, 0xff);
     const COLOR_TEXT: Color = Color::rgba(0xff, 0xff, 0xff, 0xff);
-    const COLOR_RESIZE_HANDLE: Color = Color::rgba(0xff, 0xff, 0xff, 0x80);
-
-    blend_rect(fb, &deco.shadow_rect, COLOR_SHADOW);
-    draw_rect(fb, &deco.window_rect, COLOR_IDLE, false);
+    
+    draw_rect(fb, &deco.titlebar_rect, COLOR_IDLE, false);
+    for rect in deco.border_rects.iter() {
+        draw_rect(fb, rect, COLOR_IDLE, false);
+    }
 
     let text_h = deco.titlebar_font.char_h as u32;
     let text_w = (deco.titlebar_font.char_w * app_name.len()) as u32;
@@ -378,5 +417,7 @@ fn draw_app<F: FbViewMut>(fb: &mut F, app_name: &str, app_fb: &Framebuffer<Borro
 
     fb.copy_from_fb(app_fb, deco.content_rect.origin(), false);
 
-    blend_rect(fb, &deco.resize_handle_rect, COLOR_RESIZE_HANDLE);
+    for rect in deco.handle_rects.iter() {
+        draw_rect(fb, rect, COLOR_HANDLE, false);
+    }
 }

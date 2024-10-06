@@ -267,8 +267,7 @@ impl<'a> FbLineMut<'a> {
         }
     }
 
-    // TODO: blending
-    fn copy_from(&mut self, other: &FbLine) {
+    fn copy_from_line(&mut self, other: &FbLine, blend: bool) {
 
         assert_eq!(self.line_w, other.line_w);
 
@@ -278,13 +277,23 @@ impl<'a> FbLineMut<'a> {
             other.x_data_start + other.data.len() as u32,
         );
 
-
         let copy_len = (new_x_data_end - new_x_data_start) as usize;
 
         let i1 = (new_x_data_start - self.x_data_start) as usize;
         let i2 = (new_x_data_start - other.x_data_start) as usize;
 
-        self.data[i1..i1+copy_len].copy_from_slice(&other.data[i2..i2+copy_len]);
+        if blend {
+
+            self.data[i1..i1+copy_len]
+                .iter_mut()
+                .zip(other.data[i2..i2+copy_len].iter())
+                .for_each(|(dst, src)| {
+                    *dst = blend_colors(Color(*src), Color(*dst)).0;
+                });
+
+        } else {
+            self.data[i1..i1+copy_len].copy_from_slice(&other.data[i2..i2+copy_len]);
+        }
     }
 }
 
@@ -309,7 +318,6 @@ pub trait FbViewMut: FbView {
     fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color, blend: bool);
     fn fill(&mut self, color: Color);
     fn copy_from_fb<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool);
-    fn copy_from_fb_2<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool);
     fn get_data_mut(&mut self) -> &mut [u32];
     fn get_line_mut<'b>(&'b mut self, x: i64, line_w: u32, y: i64) -> FbLineMut<'b>;
 }
@@ -535,7 +543,7 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
         }
     }
 
-    fn copy_from_fb_2<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool) {
+    fn copy_from_fb<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool) {
 
         let (x0, y0) = dst;
         let (src_w, src_h) = src.shape();
@@ -543,76 +551,7 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
         for y in 0..(src_h as i64) {
             let src_line = src.get_line(0, src_w, y);
             let mut dst_line = self.get_line_mut(x0, src_line.line_w, y0 + y);
-            dst_line.copy_from(&src_line);
-        }
-    }
-
-    fn copy_from_fb<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool) {
-        let src_rect = src.shape_as_rect();
-        let dst_rect = {
-            let mut r = self.shape_as_rect();
-            let (x, y) = dst;
-            r.x0 = x;
-            r.y0 = y;
-            r
-        };
-
-        let (rect_a, rect_b) = {
-            let ra = src_rect.intersection(&src.shape_as_rect());
-            let rb = dst_rect.intersection(&self.shape_as_rect());
-
-            match (ra, rb) {
-                (Some(ra), Some(rb)) => (ra, rb),
-                _ => return,
-            }
-        };
-
-        let w: i64 = u32::min(rect_a.w, rect_b.w).into();
-        let h: i64 = u32::min(rect_a.h, rect_b.h).into();
-
-        if w == 0 {
-            return;
-        }
-
-        for y in 0..h {
-            let xa0 = rect_a.x0;
-            let xa1 = rect_a.x0 + w - 1;
-            let ya = rect_a.y0 + y;
-
-            let ia1 = src.get_offset_region_coords(xa0, ya);
-            let ia2 = src.get_offset_region_coords(xa1, ya);
-
-            let (ia1, ia2) = match (ia1, ia2) {
-                (Some(ia1), Some(ia2)) => (ia1, ia2),
-                _ => continue,
-            };
-
-            let xb0 = rect_b.x0;
-            let xb1 = rect_b.x0 + w - 1;
-            let yb = rect_b.y0 + y;
-
-            let ib1 = self.get_offset_region_coords(xb0, yb);
-            let ib2 = self.get_offset_region_coords(xb1, yb);
-
-            let (ib1, ib2) = match (ib1, ib2) {
-                (Some(ib1), Some(ib2)) => (ib1, ib2),
-                _ => continue,
-            };
-
-            let src_data = src.get_data();
-            let dst_data = self.data.as_mut_slice();
-
-            if blend {
-                dst_data[ib1..=ib2]
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(i, v_dst)| {
-                        let v_src = Color(src_data[ia1 + i]);
-                        *v_dst = blend_colors(v_src, Color(*v_dst)).0;
-                    });
-            } else {
-                dst_data[ib1..=ib2].copy_from_slice(&src_data[ia1..=ia2]);
-            }
+            dst_line.copy_from_line(&src_line, blend);
         }
     }
 }

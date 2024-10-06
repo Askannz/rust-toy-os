@@ -7,6 +7,7 @@
 * apps can spawn with titlebar out of view
 * web browser: needs responsive layout
 * resize handle "jumps" to cursor when resizing
+* gpu crash after a while
 
 # Refactorings
 
@@ -16,6 +17,7 @@
 * make terminal use scrollable canvas
 * html layouting (proper tree structure?)
 * have tile caching automatically handled by dyn canvas
+* use "Color" in place of u32?
 
 # Features
 

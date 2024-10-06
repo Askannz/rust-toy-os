@@ -416,7 +416,7 @@ fn draw_app<F: FbViewMut>(fb: &mut F, app_name: &str, app_fb: &Framebuffer<Borro
         None,
     );
 
-    fb.copy_from_fb_2(app_fb, deco.content_rect.origin(), false);
+    fb.copy_from_fb(app_fb, deco.content_rect.origin(), false);
 
     for rect in deco.handle_rects.iter() {
         draw_rect(fb, rect, COLOR_HANDLE, false);

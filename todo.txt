@@ -1,13 +1,17 @@
 # Bugs
 
-* app buffer stuck to top/left edges of screen
 * crashes when resizing apps
 * cube goes blank after resize
 * moving windows not smooth
+* title can overflow when resizing windows
+* apps can spawn with titlebar out of view
+* web browser: needs responsive layout
 
 # Refactorings
 
 * integrate Rect with geometry module
+* tidy up applib
+* better names for applib/guestlib?
 
 
 # Features

@@ -16,7 +16,7 @@ struct AppState {
     ui_store: UiStore,
     uuid_provider: UuidProvider,
     scroll_offsets: (i64, i64),
-    dragging_sbar: bool,
+    dragging_sbar: (bool, bool),
     prev_pointer: Option<(i64, i64)>,
     scene: Scene,
 }
@@ -39,7 +39,7 @@ pub fn init() -> () {
         ui_store: UiStore::new(),
         uuid_provider: UuidProvider::new(),
         scroll_offsets: (0, 0),
-        dragging_sbar: false,
+        dragging_sbar: (false, false),
         prev_pointer: None,
         scene: load_scene(),
     };

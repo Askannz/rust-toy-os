@@ -31,7 +31,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         dst_rect: &Rect,
         renderer: &T,
         offsets: &mut (i64, i64),
-        dragging: &mut bool,
+        dragging: &mut (bool, bool),
     ) {
         let UiContext {
             fb: dst_fb,
@@ -43,7 +43,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         let (src_max_w, src_max_h) = renderer.shape();
         let (scroll_x0, scroll_y0) = offsets;
 
-        let x_scroll_enabled = false;
+        let x_scroll_enabled = src_max_w > dst_rect.w;
         let y_scroll_enabled = src_max_h > dst_rect.h;
 
         if x_scroll_enabled {
@@ -73,11 +73,24 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             tile_cache,
         });
 
+        let p_state = &input_state.pointer;
+        let (x_dragging, y_dragging) = dragging;
+
+        let get_sbar_color = |dragging, hover| {
+            if dragging {
+                SBAR_INNER_DRAGGING_COLOR
+            } else if hover {
+                SBAR_INNER_HOVER_COLOR
+            } else {
+                SBAR_INNER_IDLE_COLOR
+            }
+        };
+
         //
         // Vertical scrollbar
 
         if y_scroll_enabled {
-            if *dragging {
+            if *y_dragging {
                 *scroll_y0 +=
                     (src_max_h as i64) * input_state.pointer.delta_y / (dst_rect.h as i64);
             } else {
@@ -100,32 +113,63 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
                     + dst_rect.x0,
                 y0: (dst_rect.h as i64) * (*scroll_y0) / (src_max_h as i64) + dst_rect.y0,
                 w: SBAR_INNER_W,
-                h: dst_rect.h * dst_rect.h / src_max_h,
+                h: sbar_outer_rect.h * dst_rect.h / src_max_h,
             };
-
-            let p_state = &input_state.pointer;
 
             let sbar_hover = sbar_inner_rect.check_contains_point(p_state.x, p_state.y);
 
-            let sbar_color = {
-                if *dragging {
-                    SBAR_INNER_DRAGGING_COLOR
-                } else if sbar_hover {
-                    SBAR_INNER_HOVER_COLOR
-                } else {
-                    SBAR_INNER_IDLE_COLOR
-                }
-            };
+            let sbar_color = get_sbar_color(*y_dragging, sbar_hover);
 
             draw_rect(*dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR, false);
             draw_rect(*dst_fb, &sbar_inner_rect, sbar_color, false);
 
             if p_state.left_clicked {
                 if p_state.left_click_trigger && sbar_hover {
-                    *dragging = true;
+                    *y_dragging = true;
                 }
             } else {
-                *dragging = false;
+                *y_dragging = false;
+            }
+        }
+
+
+        //
+        // Horizontal scrollbar
+
+        if x_scroll_enabled {
+            if *x_dragging {
+                *scroll_x0 +=
+                    (src_max_w as i64) * input_state.pointer.delta_x / (dst_rect.w as i64);
+            }
+
+            let sbar_outer_rect = Rect {
+                x0: dst_rect.x0,
+                y0: dst_rect.y0 + (dst_rect.h - SBAR_OUTER_W) as i64,
+                w: dst_rect.w,
+                h: SBAR_OUTER_W,
+            };
+
+            let sbar_inner_rect = Rect {
+                y0: (dst_rect.h - SBAR_OUTER_W + (SBAR_OUTER_W - SBAR_INNER_W) / 2) as i64
+                    + dst_rect.y0,
+                x0: (dst_rect.w as i64) * (*scroll_x0) / (src_max_w as i64) + dst_rect.x0,
+                h: SBAR_INNER_W,
+                w: sbar_outer_rect.w * dst_rect.w / src_max_w,
+            };
+
+            let sbar_hover = sbar_inner_rect.check_contains_point(p_state.x, p_state.y);
+
+            let sbar_color = get_sbar_color(*x_dragging, sbar_hover);
+
+            draw_rect(*dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR, false);
+            draw_rect(*dst_fb, &sbar_inner_rect, sbar_color, false);
+
+            if p_state.left_clicked {
+                if p_state.left_click_trigger && sbar_hover {
+                    *x_dragging = true;
+                }
+            } else {
+                *x_dragging = false;
             }
         }
     }

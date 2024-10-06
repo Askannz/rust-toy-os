@@ -26,7 +26,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         dst_rect: &Rect,
         src_fb: &F1,
         offsets: &mut (i64, i64),
-        dragging: &mut bool,
+        dragging: &mut (bool, bool),
     ) {
         let renderer = BufferCopyRenderer { src_fb };
 

@@ -38,7 +38,7 @@ struct AppState {
     ui_store: UiStore,
     uuid_provider: uitk::UuidProvider,
     scroll_offsets: (i64, i64),
-    dragging: bool,
+    dragging: (bool, bool),
 
     python: python::Python,
     content_ids: Option<[ContentId; 2]>,
@@ -63,7 +63,7 @@ pub fn init() -> () {
         ui_store: uitk::UiStore::new(),
         uuid_provider: UuidProvider::new(),
         scroll_offsets: (0, 0),
-        dragging: false,
+        dragging: (false, false),
         python: python::Python::new(),
         content_ids: None,
     };

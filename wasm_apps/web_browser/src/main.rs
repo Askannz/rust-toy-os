@@ -49,7 +49,7 @@ struct AppState {
     ui_store: uitk::UiStore,
 
     webview_scroll_offsets: (i64, i64),
-    webview_scroll_dragging: bool,
+    webview_scroll_dragging: (bool, bool),
 
     request_state: RequestState,
 }
@@ -197,7 +197,7 @@ pub fn init() -> () {
         ui_store: uitk::UiStore::new(),
         uuid_provider: UuidProvider::new(),
         webview_scroll_offsets: (0, 0),
-        webview_scroll_dragging: false,
+        webview_scroll_dragging: (false, false),
         request_state: RequestState::Render {
             domain: None,
             html: format!(

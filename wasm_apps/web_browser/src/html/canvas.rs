@@ -12,7 +12,7 @@ pub fn html_canvas<'a, F: FbViewMut>(
     layout: &'a TrackedContent<LayoutNode>,
     dst_rect: &Rect,
     offsets: &mut (i64, i64),
-    dragging: &mut bool,
+    dragging: &mut (bool, bool),
 ) -> Option<&'a str> {
     uitk_context.dyn_scrollable_canvas(dst_rect, &HtmlRenderer { layout }, offsets, dragging);
 

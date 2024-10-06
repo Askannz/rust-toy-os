@@ -6,17 +6,24 @@
 * title can overflow when resizing windows
 * apps can spawn with titlebar out of view
 * web browser: needs responsive layout
+* resize handle "jumps" to cursor when resizing
 
 # Refactorings
 
 * integrate Rect with geometry module
 * tidy up applib
 * better names for applib/guestlib?
-
+* make terminal use scrollable canvas
+* html layouting (proper tree structure?)
+* have tile caching automatically handled by dyn canvas
 
 # Features
 
 * make it pretty (UI color palette)
+* web browser: improve compatibility (be able to load wikipedia for ex)
+* web browser: navigation controls (back/reload/home)
+* web browser: use proper fonts for HN
+* web browser: home page with example links
 * system taskbar
 * proper build system
 * system settings window

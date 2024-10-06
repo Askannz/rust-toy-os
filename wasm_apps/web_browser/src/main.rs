@@ -41,8 +41,6 @@ struct AppState {
     url_text: TrackedContent<String>,
     url_cursor: usize,
 
-    ui_layout: UiLayout,
-
     buffer: Vec<u8>,
 
     uuid_provider: UuidProvider,
@@ -144,8 +142,6 @@ const SCHEME: &str = "https://";
 const DNS_SERVER_IP: [u8; 4] = [1, 1, 1, 1];
 const BUFFER_SIZE: usize = 100_000;
 
-const BUTTON_W: u32 = 100;
-const BAR_H: u32 = 25;
 
 fn main() {}
 
@@ -165,33 +161,6 @@ pub fn init() -> () {
         pixel_data: PixelData::new(),
         url_text: TrackedContent::new(url_text, &mut uuid_provider),
         url_cursor: url_len,
-
-        ui_layout: UiLayout {
-            url_bar_rect: Rect {
-                x0: 0,
-                y0: 0,
-                w: win_rect.w - BUTTON_W,
-                h: BAR_H,
-            },
-            button_rect: Rect {
-                x0: (win_rect.w - BUTTON_W).into(),
-                y0: 0,
-                w: BUTTON_W,
-                h: BAR_H,
-            },
-            progress_bar_rect: Rect {
-                x0: 0,
-                y0: BAR_H.into(),
-                w: win_rect.w,
-                h: BAR_H,
-            },
-            canvas_rect: Rect {
-                x0: 0,
-                y0: (2 * BAR_H).into(),
-                w: win_rect.w,
-                h: win_rect.h - 2 * BAR_H,
-            },
-        },
 
         buffer: vec![0u8; BUFFER_SIZE],
         ui_store: uitk::UiStore::new(),
@@ -233,15 +202,17 @@ pub fn step() {
 
     let mut uitk_context = ui_store.get_context(&mut framebuffer, &win_input_state, uuid_provider);
 
+    let ui_layout = compute_ui_layout(&win_rect);
+
     let is_button_fired = uitk_context.button(&uitk::ButtonConfig {
-        rect: state.ui_layout.button_rect.clone(),
+        rect: ui_layout.button_rect.clone(),
         text: "GO".into(),
         ..Default::default()
     });
 
     uitk_context.editable_text(
         &uitk::EditableTextConfig {
-            rect: state.ui_layout.url_bar_rect.clone(),
+            rect: ui_layout.url_bar_rect.clone(),
             color: Color::WHITE,
             bg_color: Some(Color::rgb(128, 128, 128)),
             ..Default::default()
@@ -255,7 +226,7 @@ pub fn step() {
 
     uitk_context.progress_bar(
         &uitk::ProgressBarConfig {
-            rect: state.ui_layout.progress_bar_rect.clone(),
+            rect: ui_layout.progress_bar_rect.clone(),
             max_val: 8,
             bg_color: Color::rgb(128, 128, 128),
             bar_color: Color::rgb(128, 128, 255),
@@ -269,7 +240,7 @@ pub fn step() {
     let url_go = is_button_fired || check_enter_pressed(&win_input_state);
 
     let prev_state_debug = format!("{:?}", state.request_state);
-    try_update_request_state(state, url_go, &win_input_state);
+    try_update_request_state(state, url_go, &ui_layout, &win_input_state);
     let new_state_debug = format!("{:?}", state.request_state);
 
     if new_state_debug != prev_state_debug {
@@ -278,6 +249,39 @@ pub fn step() {
             prev_state_debug,
             new_state_debug
         );
+    }
+}
+
+fn compute_ui_layout(win_rect: &Rect) -> UiLayout {
+
+    const BUTTON_W: u32 = 100;
+    const BAR_H: u32 = 25;    
+
+    UiLayout {
+        url_bar_rect: Rect {
+            x0: 0,
+            y0: 0,
+            w: win_rect.w - BUTTON_W,
+            h: BAR_H,
+        },
+        button_rect: Rect {
+            x0: (win_rect.w - BUTTON_W).into(),
+            y0: 0,
+            w: BUTTON_W,
+            h: BAR_H,
+        },
+        progress_bar_rect: Rect {
+            x0: 0,
+            y0: BAR_H.into(),
+            w: win_rect.w,
+            h: BAR_H,
+        },
+        canvas_rect: Rect {
+            x0: 0,
+            y0: (2 * BAR_H).into(),
+            w: win_rect.w,
+            h: win_rect.h - 2 * BAR_H,
+        },
     }
 }
 
@@ -294,8 +298,8 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
     })
 }
 
-fn try_update_request_state(state: &mut AppState, url_go: bool, input_state: &InputState) {
-    match update_request_state(state, url_go, input_state) {
+fn try_update_request_state(state: &mut AppState, url_go: bool, ui_layout: &UiLayout, input_state: &InputState) {
+    match update_request_state(state, url_go, ui_layout, input_state) {
         Ok(_) => (),
         Err(err) => {
             log::error!("{}", err);
@@ -326,6 +330,7 @@ fn make_error_html(error: anyhow::Error) -> String {
 fn update_request_state(
     state: &mut AppState,
     url_go: bool,
+    ui_layout: &UiLayout,
     input_state: &InputState,
 ) -> anyhow::Result<()> {
     match &mut state.request_state {
@@ -342,7 +347,7 @@ fn update_request_state(
             let link_hover = html_canvas(
                 &mut uitk_context,
                 &layout,
-                &state.ui_layout.canvas_rect,
+                &ui_layout.canvas_rect,
                 &mut state.webview_scroll_offsets,
                 &mut state.webview_scroll_dragging,
             );

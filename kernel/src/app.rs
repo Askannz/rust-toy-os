@@ -38,8 +38,11 @@ pub enum AppsInteractionState {
     Idle,
     TitlebarHold { app_name: &'static str, anchor: Point2D<i64> },
     ResizeHold { app_name: &'static str },
-    PieDesktopMenu { anchor: Point2D<i64> },
-    PieAppMenu { app_name: &'static str, anchor: Point2D<i64> },
+    PieDesktopMenu { anchor: Point2D<i64>, first_frame: bool },
+    PieAppMenu { app_name: &'static str, anchor: Point2D<i64>, first_frame: bool },
+
+    // first_frame is to prevent the pie menus from capturing the mouse click
+    // triggers immediately and closing after one frame
 }
 
 pub struct App {
@@ -81,6 +84,7 @@ pub fn run_apps<F: FbViewMut>(
 ) {
 
     const PIE_DEFAULT_COLOR: Color = Color::rgb(0x44, 0x44, 0x44);
+    const MIN_APP_SIZE: u32 = 150;
 
     let pointer = &input_state.pointer;
 
@@ -146,12 +150,12 @@ pub fn run_apps<F: FbViewMut>(
 
             Some(Hover { app, .. }) => {
                 let anchor = Point2D { x: pointer.x, y: pointer.y };
-                AppsInteractionState::PieAppMenu { app_name: app.descriptor.name , anchor }
+                AppsInteractionState::PieAppMenu { app_name: app.descriptor.name, anchor, first_frame: true }
             },
 
             _ => {
                 let anchor = Point2D { x: pointer.x, y: pointer.y };
-                AppsInteractionState::PieDesktopMenu { anchor }
+                AppsInteractionState::PieDesktopMenu { anchor, first_frame: true }
             }
         },
 
@@ -180,8 +184,8 @@ pub fn run_apps<F: FbViewMut>(
 
         if let Some(app) = apps.get_mut(app_name).filter(|app| app.is_open) {
             let [x1, y1, _, _] = app.rect.as_xyxy();
-            let x2 = pointer.x;
-            let y2 = pointer.y;
+            let x2 = i64::max(x1 + MIN_APP_SIZE as i64, pointer.x);
+            let y2 = i64::max(y1 + MIN_APP_SIZE as i64, pointer.y);
             app.rect = Rect::from_xyxy([x1, y1, x2, y2]);
         }
     }
@@ -206,7 +210,7 @@ pub fn run_apps<F: FbViewMut>(
     //
     // Pie menus
 
-    if let AppsInteractionState::PieDesktopMenu { anchor } = *interaction_state {
+    if let AppsInteractionState::PieDesktopMenu { anchor, first_frame } = *interaction_state {
 
         let entries: Vec<PieMenuEntry> = apps.values().map(|app| {
 
@@ -223,22 +227,33 @@ pub fn run_apps<F: FbViewMut>(
 
         let selected = pie_menu(uitk_context, &entries, anchor);
 
-        if let Some(app_name) = selected {
+        match selected {
+            
+            Some(app_name) if pointer.left_click_trigger => {
 
-            let app = apps.get_mut(app_name).unwrap();
+                let app = apps.get_mut(app_name).unwrap();
+    
+                let deco = compute_decorations(app, input_state);
+                
+                let preferred_rect = Rect::from_center(
+                    pointer.x,
+                    pointer.y,
+                    app.rect.w,
+                    app.rect.h
+                );
 
-            app.is_open = true;
-            app.rect = Rect::from_center(
-                pointer.x,
-                pointer.y,
-                app.rect.w,
-                app.rect.h
-            );
+                app.is_open = true;
+                app.rect = position_window(&preferred_rect, uitk_context.fb.shape(), &deco);
+            },
 
-            *interaction_state = AppsInteractionState::Idle;
+            _ => (),
         }
 
-    } else if let AppsInteractionState::PieAppMenu { app_name, anchor } = *interaction_state {
+        if !first_frame && (pointer.right_click_trigger || pointer.left_click_trigger) {
+            *interaction_state = AppsInteractionState::Idle
+        }
+
+    } else if let AppsInteractionState::PieAppMenu { app_name, anchor, first_frame } = *interaction_state {
 
         if let Some(app) = apps.get_mut(app_name) {
 
@@ -265,12 +280,23 @@ pub fn run_apps<F: FbViewMut>(
 
             let selected = pie_menu(uitk_context, &entries, anchor);
 
-            if selected == Some("Close") {
-                app.is_open = false;
-                *interaction_state = AppsInteractionState::Idle;
+            match selected {
+                Some("Close") if pointer.left_click_trigger => app.is_open = false,
+                _ => (),
+            }
+
+            if !first_frame && (pointer.right_click_trigger || pointer.left_click_trigger) {
+                *interaction_state = AppsInteractionState::Idle
             }
         }
     }
+
+
+    match interaction_state {
+        AppsInteractionState::PieDesktopMenu { first_frame, .. } => *first_frame = false,
+        AppsInteractionState::PieAppMenu { first_frame, .. } => *first_frame = false,
+        _ => ()
+    };
 }
 
 
@@ -285,6 +311,19 @@ struct AppDecorations {
     titlebar_hover: bool,
     resize_hover: bool,
     window_hover: bool,
+}
+
+fn position_window(preferred_rect: &Rect, fb_shape: (u32, u32), deco: &AppDecorations) -> Rect {
+
+    let (fb_w, fb_h) = fb_shape;
+    let Rect { mut x0, mut y0, w, h } = *preferred_rect;
+
+    x0 = i64::max(0, x0);
+    y0 = i64::max(deco.titlebar_rect.h as i64, y0);
+    x0 = i64::min((fb_w - w - 1) as i64, x0);
+    y0 = i64::min((fb_h - h - 1) as i64, y0);
+
+    Rect { x0, y0, w, h }
 }
 
 fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
@@ -386,12 +425,18 @@ fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
 fn draw_app<F: FbViewMut>(fb: &mut F, app_name: &str, app_fb: &Framebuffer<BorrowedPixels>, deco: &AppDecorations) {
 
     const COLOR_IDLE: Color = Color::rgba(0x44, 0x44, 0x44, 0xff);
+    const COLOR_HOVER: Color = Color::rgba(0x66, 0x66, 0x66, 0xff);
     const COLOR_HANDLE: Color = Color::rgba(122, 0, 255, 0xff);
     const COLOR_TEXT: Color = Color::rgba(0xff, 0xff, 0xff, 0xff);
-    
-    draw_rect(fb, &deco.titlebar_rect, COLOR_IDLE, false);
+
+    let color_deco = match deco.titlebar_hover {
+        true => COLOR_HOVER,
+        false => COLOR_IDLE,
+    };
+
+    draw_rect(fb, &deco.titlebar_rect, color_deco, false);
     for rect in deco.border_rects.iter() {
-        draw_rect(fb, rect, COLOR_IDLE, false);
+        draw_rect(fb, rect, color_deco, false);
     }
 
     let text_h = deco.titlebar_font.char_h as u32;

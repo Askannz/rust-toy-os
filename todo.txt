@@ -1,11 +1,6 @@
 # Bugs
 
-* crashes when resizing apps
-* cube goes blank after resize
 * moving windows not smooth
-* title can overflow when resizing windows
-* apps can spawn with titlebar out of view
-* web browser: needs responsive layout
 * resize handle "jumps" to cursor when resizing
 * gpu crash after a while
 
@@ -21,6 +16,8 @@
 
 # Features
 
+* nested pie menus
+* apps z-order and focus
 * make it pretty (UI color palette)
 * web browser: improve compatibility (be able to load wikipedia for ex)
 * web browser: navigation controls (back/reload/home)
@@ -30,7 +27,8 @@
 * proper build system
 * system settings window
 * app audit window
-* file editor + "fake" filesystem?
+* file editor + "fake" filesystem
+* clock
 * better memory allocator
 
 * Tiling windows

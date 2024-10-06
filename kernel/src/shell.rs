@@ -52,7 +52,8 @@ pub fn pie_menu<'a, F: FbViewMut>(
 
     const INNER_RADIUS: f32 = 50.0;
     const OUTER_RADIUS: f32 = 100.0;
-    const DEADZONE_RADIUS: f32 = 25.0;
+    const DEADZONE_INNER_RADIUS: f32 = 25.0;
+    const DEADZONE_OUTER_RADIUS: f32 = 200.0;
     const GAP: f32 = 2.0;
     const OFFSET_HOVER: f32 = 10.0;
     const ARC_PX_PER_PT: f32 = 20.0;
@@ -70,7 +71,7 @@ pub fn pie_menu<'a, F: FbViewMut>(
     let mut selected_entry = None;
     let mut a0 = 0.0;
 
-    for (i, entry) in entries.iter().enumerate() {
+    for entry in entries.iter() {
 
         let delta_angle = 2.0 * PI * entry.weight() / total_weight;
         let a1 = a0 + delta_angle;
@@ -92,9 +93,10 @@ pub fn pie_menu<'a, F: FbViewMut>(
                 let is_hovered = 
                     v_cursor.cross(v0) < 0.0 &&
                     v_cursor.cross(v1) > 0.0 && 
-                    center_dist > DEADZONE_RADIUS;
+                    center_dist > DEADZONE_INNER_RADIUS &&
+                    center_dist < DEADZONE_OUTER_RADIUS;
 
-                if is_hovered && uitk_context.input_state.pointer.left_clicked {
+                if is_hovered {
                     selected_entry = Some(text.as_str());
                 }
 

@@ -445,12 +445,14 @@ impl<T: FbData> FbView for Framebuffer<T> {
 
         let (x, y) = self.to_data_coords(x, y);
 
+        let empty_line = FbLineCoords {
+            data_index: None,
+            data_len: 0,
+            x_data_start: line_w,
+        };
+
         if line_w == 0 || y < 0 || y >= self.data_h as i64 {
-            return FbLineCoords {
-                data_index: None,
-                data_len: 0,
-                x_data_start: line_w,
-            };
+            return empty_line;
         }
 
         let (x1, x2) = (x, x + line_w as i64 - 1);
@@ -463,8 +465,13 @@ impl<T: FbData> FbView for Framebuffer<T> {
         let x1 = i64::max(0, x1);
         let x2 = i64::min(self.data_w as i64 - 1, x2);
 
-        let i1 = self.get_offset_data_coords(x1, y).unwrap();
-        let i2 = self.get_offset_data_coords(x2, y).unwrap();
+        let i1 = self.get_offset_data_coords(x1, y);
+        let i2 = self.get_offset_data_coords(x2, y);
+
+        let (i1, i2) = match (i1, i2) {
+            (Some(i1), Some(i2)) => (i1, i2),
+            _ => return empty_line
+        };
 
         FbLineCoords {
             data_index: Some(i1),

@@ -4,6 +4,7 @@ use crate::alloc::string::ToString;
 use crate::app;
 use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::BTreeMap;
+use alloc::format;
 use alloc::string::String;
 use alloc::rc::Rc;
 use applib::BorrowedPixels;
@@ -394,19 +395,20 @@ fn draw_app<F: FbViewMut>(fb: &mut F, app_name: &str, app_fb: &Framebuffer<Borro
     }
 
     let text_h = deco.titlebar_font.char_h as u32;
-    let text_w = (deco.titlebar_font.char_w * app_name.len()) as u32;
 
     let padding = (deco.titlebar_rect.h - text_h) / 2;
     let text_rect = Rect { 
         x0: deco.titlebar_rect.x0 + padding as i64,
         y0: 0,
-        w: text_w,
+        w: deco.titlebar_rect.w - 2 * padding,
         h: text_h
     }.align_to_rect_vert(&deco.titlebar_rect);
 
+    let ellipsized_title = ellipsize_text(app_name, &deco.titlebar_font, text_rect.w);
+
     draw_str(
         fb,
-        app_name,
+        &ellipsized_title,
         text_rect.x0,
         text_rect.y0,
         &deco.titlebar_font,
@@ -420,3 +422,18 @@ fn draw_app<F: FbViewMut>(fb: &mut F, app_name: &str, app_fb: &Framebuffer<Borro
         draw_rect(fb, rect, COLOR_HANDLE, false);
     }
 }
+
+fn ellipsize_text(txt: &str, font: &Font, max_len: u32) -> String {
+
+    let max_chars = max_len as usize / font.char_w;
+
+    if txt.len() <= max_chars {
+        txt.to_owned()
+    } else if max_chars < 3 {
+        String::new()
+    } else {
+        let s = txt.chars().take(max_chars - 3).collect::<String>();
+        format!("{}...", s)
+    }
+}
+

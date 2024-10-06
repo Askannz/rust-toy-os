@@ -27,7 +27,6 @@ use crate::resources;
 #[derive(Clone)]
 pub struct AppDescriptor {
     pub data: &'static [u8],
-    pub launch_rect: Rect,
     pub name: &'static str,
     pub init_win_rect: Rect,
     pub icon: &'static Framebuffer<OwnedPixels>,

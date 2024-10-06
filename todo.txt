@@ -1,11 +1,25 @@
-* make it pretty (UI color palette)
-* convenience macros for wasm apps
+# Bugs
 
-(* Tiling windows?)
+* app buffer stuck to top/left edges of screen
+* crashes when resizing apps
+* cube goes blank after resize
+* moving windows not smooth
+
+# Refactorings
+
+* integrate Rect with geometry module
+
+
+# Features
+
+* make it pretty (UI color palette)
+* system taskbar
 * proper build system
 * system settings window
 * app audit window
 * file editor + "fake" filesystem?
 * better memory allocator
 
+* Tiling windows
+* convenience macros for wasm apps
 * Uxn/Varvara?

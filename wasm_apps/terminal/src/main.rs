@@ -34,6 +34,8 @@ struct AppState {
     input_buffer: TrackedContent<String>,
     console_buffer: TrackedContent<Vec<EvalResult>>,
 
+    text_formatter: ConsoleTextFormatter,
+
     ui_store: UiStore,
     uuid_provider: uitk::UuidProvider,
     scroll_offsets: (i64, i64),
@@ -58,6 +60,7 @@ pub fn init() -> () {
         pixel_data: PixelData::new(),
         input_buffer: TrackedContent::new(String::new(), &mut uuid_provider),
         console_buffer: TrackedContent::new(Vec::new(), &mut uuid_provider),
+        text_formatter: ConsoleTextFormatter { cached: None },
         ui_store: uitk::UiStore::new(),
         uuid_provider: UuidProvider::new(),
         scroll_offsets: (0, 0),
@@ -113,12 +116,9 @@ pub fn step() {
         h: win_h,
     };
 
-    let console_rich_text =
-        render_console(state.input_buffer.as_ref(), state.console_buffer.as_ref());
-    let formatted = format_rich_lines(&console_rich_text, win_w);
+    let formatted = state.text_formatter.format(&state.input_buffer, &state.console_buffer, (win_w, win_h));
 
-
-    let renderer = ConsoleRenderer { formatted: TrackedContent::new(formatted, &mut state.uuid_provider) };
+    let renderer = ConsoleCanvasRenderer { formatted };
 
     let time = guestlib::get_time();
 
@@ -155,18 +155,58 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
     })
 }
 
-struct ConsoleRenderer {
-    formatted: TrackedContent<FormattedRichText>,
+
+struct ConsoleTextFormatter {
+    cached: Option<(ContentId, FormattedRichText)>,
 }
 
-impl uitk::TileRenderer for ConsoleRenderer {
+impl ConsoleTextFormatter {
+
+    fn format(
+        &mut self,
+        input_buffer: &TrackedContent<String>,
+        console_buffer: &TrackedContent<Vec<EvalResult>>,
+        win_shape: (u32, u32)
+    ) -> TrackedContent<&FormattedRichText> {
+
+        let (win_w, _win_h) = win_shape;
+
+        let new_cid = ContentId::from_hash((
+            input_buffer.get_id(),
+            console_buffer.get_id(),
+            win_w,
+        ));
+
+        // Clearing cache if we get a new content ID
+        self.cached.take_if(|(cid, _)| *cid != new_cid);
+
+        let (_, formatted) = self.cached.get_or_insert_with(|| {
+            let console_rich_text = get_console_rich_text(input_buffer.as_ref(), console_buffer.as_ref());
+            let formatted = format_rich_lines(&console_rich_text, win_w);
+            (new_cid, formatted)
+        });
+
+        TrackedContent::new_with_id(formatted, new_cid)
+    }   
+
+}
+
+struct ConsoleCanvasRenderer<'a> {
+    formatted: TrackedContent<&'a FormattedRichText>,
+}
+
+
+impl<'a> uitk::TileRenderer for ConsoleCanvasRenderer<'a> {
     fn shape(&self) -> (u32, u32) {
-        let FormattedRichText { w, h, .. } = *self.formatted.as_ref();
+        let FormattedRichText { w, h, .. } = **self.formatted.as_ref();
         (w, h)
     }
 
     fn content_id(&self, src_rect: &Rect) -> ContentId {
-        ContentId(0)
+        ContentId::from_hash((
+            self.formatted.get_id(),
+            src_rect
+        ))
     }
 
     fn render<F: FbViewMut>(&self, dst_fb: &mut F, src_rect: &Rect) {
@@ -197,7 +237,7 @@ impl uitk::TileRenderer for ConsoleRenderer {
     }
 }
 
-fn render_console(input_buffer: &String, console_buffer: &Vec<EvalResult>) -> RichText {
+fn get_console_rich_text(input_buffer: &String, console_buffer: &Vec<EvalResult>) -> RichText {
     let font = &HACK_15;
 
     let mut console_rich_text = RichText::new();

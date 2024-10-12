@@ -4,15 +4,15 @@
 * resize handle "jumps" to cursor when resizing
 * gpu crash after a while
 * clicks go through scrollbars
+* scrollbars interfere with resize button
+* crash when resizing cube and terminal
 
 # Refactorings
 
 * integrate Rect with geometry module
 * tidy up applib
 * better names for applib/guestlib?
-* make terminal use scrollable canvas
 * html layouting (proper tree structure?)
-* have tile caching automatically handled by dyn canvas
 * use "Color" in place of u32?
 * better tile cache
 * sort out naming of scrollable_canvas/dyn_scrollable_canvas

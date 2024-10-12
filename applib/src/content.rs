@@ -24,6 +24,13 @@ impl<T> TrackedContent<T> {
         }
     }
 
+    pub fn new_with_id(inner: T, content_id: ContentId)-> Self {
+        Self {
+            inner,
+            content_id,
+        }
+    }
+
     pub fn mutate<'a>(&'a mut self, uuid_provider: &mut UuidProvider) -> &'a mut T {
         self.content_id = uuid_provider.make_id();
         &mut self.inner

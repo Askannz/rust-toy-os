@@ -3,42 +3,35 @@
 #![feature(alloc_error_handler)]
 #![feature(abi_x86_interrupt)]
 
-use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::format;
-use alloc::rc::Rc;
-use alloc::vec::Vec;
-use applib::geometry::Point2D;
-use rand::rngs::SmallRng;
-use core::cell::RefCell;
-use core::f32::consts::PI;
 use core::panic::PanicInfo;
+use num_traits::Float;
+use rand::rngs::SmallRng;
+use rand::SeedableRng;
 use uefi::prelude::{entry, Boot, Handle, Status, SystemTable};
 use uefi::table::boot::MemoryType;
-use rand::SeedableRng;
-use num_traits::Float;
 
-use applib::drawing::primitives::{draw_rect, draw_arc, ArcMode, draw_quad};
-use applib::drawing::text::{draw_str, DEFAULT_FONT, HACK_15};
-use applib::geometry::{Quad2D};
+use applib::drawing::primitives::draw_rect;
+use applib::drawing::text::{draw_str, DEFAULT_FONT};
 use applib::input::{InputEvent, InputState};
 use applib::uitk::{self};
 use applib::{BorrowedMutPixels, Color, FbViewMut, Framebuffer, Rect};
 
 extern crate alloc;
 
+mod app;
 mod logging;
 mod memory;
 mod network;
 mod pci;
+mod resources;
 mod serial;
+mod shell;
+mod system;
 mod time;
 mod virtio;
 mod wasm;
-mod app;
-mod system;
-mod resources;
-mod shell;
 
 use time::SystemClock;
 
@@ -46,11 +39,11 @@ use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
 use virtio::network::VirtioNetwork;
 
-use system::System;
+use app::{run_apps, App, AppsInteractionState};
 use applib::input::keymap::{EventType, Keycode};
+use resources::{APPLICATIONS, WALLPAPER};
+use system::System;
 use wasm::WasmEngine;
-use app::{App, run_apps, AppsInteractionState};
-use resources::{WALLPAPER, APPLICATIONS};
 
 const FPS_TARGET: f64 = 60.0;
 const LIMIT_FPS: bool = true;
@@ -113,10 +106,12 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut applications: BTreeMap<&'static str, App> = APPLICATIONS
         .iter()
-        .map(|app_desc| (
-            app_desc.name,
-            app_desc.instantiate(&mut system, &input_state, &wasm_engine,
-        )))
+        .map(|app_desc| {
+            (
+                app_desc.name,
+                app_desc.instantiate(&mut system, &input_state, &wasm_engine),
+            )
+        })
         .collect();
 
     log::info!("Applications loaded");
@@ -131,9 +126,10 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("Entering main loop");
 
     loop {
-
         {
-            let System { clock, tcp_stack, .. } = &mut system;
+            let System {
+                clock, tcp_stack, ..
+            } = &mut system;
             fps_manager.start_frame(clock);
             tcp_stack.poll_interface(clock);
         }
@@ -147,8 +143,15 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         //log::debug!("{:?}", system_state);
 
-        let mut uitk_context = ui_store.get_context(&mut framebuffer, &input_state, &mut uuid_provider);
-        run_apps(&mut uitk_context, &mut system, &mut applications, &input_state, &mut apps_interaction_state);
+        let mut uitk_context =
+            ui_store.get_context(&mut framebuffer, &input_state, &mut uuid_provider);
+        run_apps(
+            &mut uitk_context,
+            &mut system,
+            &mut applications,
+            &input_state,
+            &mut apps_interaction_state,
+        );
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
@@ -164,7 +167,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     //loop { x86_64::instructions::hlt(); }
 }
-
 
 fn draw_cursor<F: FbViewMut>(fb: &mut F, input_state: &InputState) {
     const SIZE: u32 = 5;

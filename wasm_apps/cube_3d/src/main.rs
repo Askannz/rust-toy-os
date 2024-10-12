@@ -1,4 +1,4 @@
-use applib::uitk::{UuidProvider, UiStore};
+use applib::uitk::{UiStore, UuidProvider};
 use applib::{Color, FbViewMut, Framebuffer, OwnedPixels};
 use core::cell::OnceCell;
 use guestlib::PixelData;

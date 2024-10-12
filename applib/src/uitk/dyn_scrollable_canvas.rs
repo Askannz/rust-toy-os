@@ -132,7 +132,6 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             }
         }
 
-
         //
         // Horizontal scrollbar
 

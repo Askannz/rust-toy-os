@@ -142,7 +142,6 @@ const SCHEME: &str = "https://";
 const DNS_SERVER_IP: [u8; 4] = [1, 1, 1, 1];
 const BUFFER_SIZE: usize = 100_000;
 
-
 fn main() {}
 
 #[no_mangle]
@@ -253,9 +252,8 @@ pub fn step() {
 }
 
 fn compute_ui_layout(win_rect: &Rect) -> UiLayout {
-
     const BUTTON_W: u32 = 100;
-    const BAR_H: u32 = 25;    
+    const BAR_H: u32 = 25;
 
     UiLayout {
         url_bar_rect: Rect {
@@ -298,7 +296,12 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
     })
 }
 
-fn try_update_request_state(state: &mut AppState, url_go: bool, ui_layout: &UiLayout, input_state: &InputState) {
+fn try_update_request_state(
+    state: &mut AppState,
+    url_go: bool,
+    ui_layout: &UiLayout,
+    input_state: &InputState,
+) {
     match update_request_state(state, url_go, ui_layout, input_state) {
         Ok(_) => (),
         Err(err) => {

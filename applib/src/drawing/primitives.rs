@@ -1,8 +1,7 @@
+use crate::geometry::{Point2D, Quad2D, Triangle2D, Vec2D};
+use crate::{blend_colors, Color, FbViewMut, Rect};
 use core::f32::consts::PI;
 use num::Float;
-use crate::{blend_colors, Color, FbViewMut, Rect};
-use crate::geometry::{Triangle2D, Quad2D, Point2D, Vec2D};
-
 
 pub fn draw_triangle<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color, blend: bool) {
     const WIREFRAME: bool = false;
@@ -12,7 +11,12 @@ pub fn draw_triangle<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Col
     }
 }
 
-fn internal_draw_triangle<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color, blend: bool) {
+fn internal_draw_triangle<F: FbViewMut>(
+    fb: &mut F,
+    tri: &Triangle2D<i64>,
+    color: Color,
+    blend: bool,
+) {
     let i = {
         if tri.points[0].y <= i64::min(tri.points[1].y, tri.points[2].y) {
             0
@@ -31,9 +35,9 @@ fn internal_draw_triangle<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color
     draw_half_triangle(fb, (p0, p1), (p0, p2), (p0.y, y_half), color, blend);
 
     if p1.y < p2.y {
-        draw_half_triangle(fb, (p1, p2), (p0, p2), (y_half+1, p2.y), color, blend);
+        draw_half_triangle(fb, (p1, p2), (p0, p2), (y_half + 1, p2.y), color, blend);
     } else {
-        draw_half_triangle(fb, (p0, p1), (p2, p1), (y_half+1, p1.y), color, blend);
+        draw_half_triangle(fb, (p0, p1), (p2, p1), (y_half + 1, p1.y), color, blend);
     }
 }
 
@@ -43,8 +47,12 @@ pub fn draw_quad<F: FbViewMut>(fb: &mut F, quad: &Quad2D<i64>, color: Color, ble
     draw_triangle(fb, &tri1, color, blend);
 }
 
-pub fn draw_triangle_with_wireframe<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i64>, color: Color, blend: bool) {
-
+pub fn draw_triangle_with_wireframe<F: FbViewMut>(
+    fb: &mut F,
+    tri: &Triangle2D<i64>,
+    color: Color,
+    blend: bool,
+) {
     const F: f32 = 0.1;
     const WIREFRAME_COLOR: Color = Color::BLUE;
 
@@ -59,7 +67,9 @@ pub fn draw_triangle_with_wireframe<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i
         let p1 = (p1 + (center - p1) * F).round_to_int();
         let p2 = (p2 + (center - p2) * F).round_to_int();
 
-        Triangle2D { points: [p0, p1, p2] }
+        Triangle2D {
+            points: [p0, p1, p2],
+        }
     };
 
     let tri_s = shrink_triangle(tri);
@@ -72,7 +82,10 @@ pub fn draw_triangle_with_wireframe<F: FbViewMut>(fb: &mut F, tri: &Triangle2D<i
 pub enum ArcMode {
     Full,
     AngleRange(f32, f32),
-    MultiAngleRange { inner: (f32, f32), outer: (f32, f32) }
+    MultiAngleRange {
+        inner: (f32, f32),
+        outer: (f32, f32),
+    },
 }
 
 pub fn draw_arc<F: FbViewMut>(
@@ -85,11 +98,13 @@ pub fn draw_arc<F: FbViewMut>(
     color: Color,
     blend: bool,
 ) {
-
     let (a_in_min, a_in_max, a_out_min, a_out_max) = match mode {
         ArcMode::Full => (0.0, 2.0 * PI, 0.0, 2.0 * PI),
         ArcMode::AngleRange(amin, amax) => (amin, amax, amin, amax),
-        ArcMode::MultiAngleRange { inner: (a_in_min, a_in_max), outer: (a_out_min, a_out_max) } => (a_in_min, a_in_max, a_out_min, a_out_max),
+        ArcMode::MultiAngleRange {
+            inner: (a_in_min, a_in_max),
+            outer: (a_out_min, a_out_max),
+        } => (a_in_min, a_in_max, a_out_min, a_out_max),
     };
 
     let outer_perimeter = 2.0 * PI * (r_outer as f32);
@@ -99,13 +114,16 @@ pub fn draw_arc<F: FbViewMut>(
     let n_outer_points = n_outer_edges + 1;
 
     let get_point = |i: usize, amin: f32, amax: f32, r: f32| {
-        let a = amin + (amax - amin) * ((i % n_outer_points) as f32) / ((n_outer_points - 1) as f32);
-        let v = Vec2D::<f32> { x: f32::cos(a), y: f32::sin(a) };
+        let a =
+            amin + (amax - amin) * ((i % n_outer_points) as f32) / ((n_outer_points - 1) as f32);
+        let v = Vec2D::<f32> {
+            x: f32::cos(a),
+            y: f32::sin(a),
+        };
         center + (v * r).round_to_int()
     };
 
     for i in 0..n_edge_pairs {
-
         let p_out_0 = get_point(2 * i, a_out_min, a_out_max, r_outer);
         let p_out_1 = get_point(2 * i + 1, a_out_min, a_out_max, r_outer);
         let p_out_2 = get_point(2 * i + 2, a_out_min, a_out_max, r_outer);
@@ -113,9 +131,15 @@ pub fn draw_arc<F: FbViewMut>(
         let p_in_0 = get_point(2 * i, a_in_min, a_in_max, r_inner);
         let p_in_2 = get_point(2 * i + 2, a_in_min, a_in_max, r_inner);
 
-        let tri_a = Triangle2D::<i64> {  points: [p_in_0, p_out_0, p_out_1] };
-        let tri_b = Triangle2D::<i64> {  points: [p_in_0, p_out_1, p_in_2] };
-        let tri_c = Triangle2D::<i64> {  points: [p_in_2, p_out_1, p_out_2] };
+        let tri_a = Triangle2D::<i64> {
+            points: [p_in_0, p_out_0, p_out_1],
+        };
+        let tri_b = Triangle2D::<i64> {
+            points: [p_in_0, p_out_1, p_in_2],
+        };
+        let tri_c = Triangle2D::<i64> {
+            points: [p_in_2, p_out_1, p_out_2],
+        };
 
         draw_triangle(fb, &tri_a, color, blend);
         draw_triangle(fb, &tri_b, color, blend);
@@ -144,7 +168,7 @@ fn draw_half_triangle<F: FbViewMut>(
 
     for y in y_min..=y_max {
         let x_min = ((y - pl0.y) as f32 * f_left) as i64 + pl0.x;
-        let x_max = ((y - pr0.y) as f32 * f_right) as i64 + pr0.x - 1;  // -1 to avoid overlap on adjacent triangles
+        let x_max = ((y - pr0.y) as f32 * f_right) as i64 + pr0.x - 1; // -1 to avoid overlap on adjacent triangles
         if x_min <= x_max {
             let line_w = x_max - x_min + 1;
             fb.fill_line(x_min, line_w as u32, y, color, blend);

@@ -1,13 +1,13 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::Framebuffer;
-use crate::content::{TrackedContent};
+use crate::content::TrackedContent;
 use crate::drawing::primitives::draw_rect;
 use crate::drawing::text::{draw_rich_slice, draw_str, Font, FormattedRichText, HACK_15};
 use crate::input::{InputEvent, InputState};
 use crate::input::{Keycode, CHARMAP};
-use crate::uitk::{UiContext, ContentId};
+use crate::uitk::{ContentId, UiContext};
+use crate::Framebuffer;
 use crate::{Color, FbViewMut, Rect};
 
 use super::UuidProvider;
@@ -142,14 +142,9 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         let time_sec = (time as u64) / 1000;
         let cursor_visible = time_sec % 2 == 0;
 
-        let tile_content_id = ContentId::from_hash((
-            config,
-            cursor_visible,
-            buffer.get_id()
-        ));
+        let tile_content_id = ContentId::from_hash((config, cursor_visible, buffer.get_id()));
 
         let tile_fb = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
-
             //
             // Draw text
 

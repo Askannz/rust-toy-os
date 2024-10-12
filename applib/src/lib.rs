@@ -2,21 +2,20 @@
 
 extern crate alloc;
 
-use geometry::Point2D;
 use zune_png::PngDecoder;
 
 pub mod content;
 pub mod drawing;
+pub mod geometry;
 pub mod hash;
 pub mod input;
 pub mod uitk;
-pub mod geometry;
 
-use core::ops;
 use alloc::vec;
 use alloc::vec::Vec;
-use input::InputState;
+use core::ops;
 use geometry::Vec2D;
+use input::InputState;
 
 #[derive(Clone, Copy, Hash)]
 #[repr(transparent)]
@@ -70,7 +69,6 @@ pub struct Rect {
 }
 
 impl Rect {
-
     // TODO: use Point2D everywhere
 
     pub fn origin(&self) -> (i64, i64) {
@@ -78,14 +76,10 @@ impl Rect {
     }
 
     pub fn center(&self) -> (i64, i64) {
-        (
-            self.x0 + (self.w / 2) as i64,
-            self.y0 + (self.h / 2) as i64,
-        )
+        (self.x0 + (self.w / 2) as i64, self.y0 + (self.h / 2) as i64)
     }
 
     pub fn from_center(xc: i64, yc: i64, w: u32, h: u32) -> Self {
-
         Self {
             x0: xc - (w / 2) as i64,
             y0: yc - (h / 2) as i64,
@@ -256,7 +250,6 @@ pub struct FbLineCoords {
 }
 
 impl<'a> FbLineMut<'a> {
-
     fn fill(&mut self, color: Color, blend: bool) {
         if blend {
             self.data.iter_mut().for_each(|pixel| {
@@ -268,7 +261,6 @@ impl<'a> FbLineMut<'a> {
     }
 
     fn copy_from_line(&mut self, other: &FbLine, blend: bool) {
-
         assert_eq!(self.line_w, other.line_w);
 
         let new_x_data_start = u32::max(self.x_data_start, other.x_data_start);
@@ -283,16 +275,14 @@ impl<'a> FbLineMut<'a> {
         let i2 = (new_x_data_start - other.x_data_start) as usize;
 
         if blend {
-
-            self.data[i1..i1+copy_len]
+            self.data[i1..i1 + copy_len]
                 .iter_mut()
-                .zip(other.data[i2..i2+copy_len].iter())
+                .zip(other.data[i2..i2 + copy_len].iter())
                 .for_each(|(dst, src)| {
                     *dst = blend_colors(Color(*src), Color(*dst)).0;
                 });
-
         } else {
-            self.data[i1..i1+copy_len].copy_from_slice(&other.data[i2..i2+copy_len]);
+            self.data[i1..i1 + copy_len].copy_from_slice(&other.data[i2..i2 + copy_len]);
         }
     }
 }
@@ -442,7 +432,6 @@ impl<T: FbData> FbView for Framebuffer<T> {
     }
 
     fn get_line_coords(&self, x: i64, line_w: u32, y: i64) -> FbLineCoords {
-
         let (x, y) = self.to_data_coords(x, y);
 
         let empty_line = FbLineCoords {
@@ -470,7 +459,7 @@ impl<T: FbData> FbView for Framebuffer<T> {
 
         let (i1, i2) = match (i1, i2) {
             (Some(i1), Some(i2)) => (i1, i2),
-            _ => return empty_line
+            _ => return empty_line,
         };
 
         FbLineCoords {
@@ -481,14 +470,18 @@ impl<T: FbData> FbView for Framebuffer<T> {
     }
 
     fn get_line<'b>(&'b self, x: i64, line_w: u32, y: i64) -> FbLine<'b> {
-
-        let FbLineCoords { data_index, data_len, x_data_start, .. } = self.get_line_coords(x, line_w, y);
+        let FbLineCoords {
+            data_index,
+            data_len,
+            x_data_start,
+            ..
+        } = self.get_line_coords(x, line_w, y);
 
         let data = self.data.as_slice();
 
         let line_slice = match data_index {
-            Some(i) => &data[i..i+ data_len],
-            None => &[]
+            Some(i) => &data[i..i + data_len],
+            None => &[],
         };
 
         FbLine {
@@ -534,13 +527,18 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
     }
 
     fn get_line_mut<'b>(&'b mut self, x: i64, line_w: u32, y: i64) -> FbLineMut<'b> {
-        let FbLineCoords { data_index, data_len, x_data_start, .. } = self.get_line_coords(x, line_w, y);
+        let FbLineCoords {
+            data_index,
+            data_len,
+            x_data_start,
+            ..
+        } = self.get_line_coords(x, line_w, y);
 
         let data = self.data.as_mut_slice();
 
         let line_slice = match data_index {
-            Some(i) => &mut data[i..i+ data_len],
-            None => &mut []
+            Some(i) => &mut data[i..i + data_len],
+            None => &mut [],
         };
 
         FbLineMut {
@@ -551,7 +549,6 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
     }
 
     fn copy_from_fb<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool) {
-
         let (x0, y0) = dst;
         let (src_w, src_h) = src.shape();
 

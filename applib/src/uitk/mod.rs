@@ -13,7 +13,7 @@ pub use scrollable_canvas::set_autoscroll;
 pub use text::{render_rich_text, string_input, EditableTextConfig, ScrollableTextConfig};
 
 pub use crate::content::{ContentId, UuidProvider};
-use crate::{InputState};
+use crate::InputState;
 use crate::{FbViewMut, Framebuffer, OwnedPixels};
 
 pub struct TileCache {

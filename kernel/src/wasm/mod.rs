@@ -1,13 +1,8 @@
 use alloc::collections::BTreeMap;
-use alloc::format;
-use alloc::rc::Rc;
 use alloc::string::ToString;
 use alloc::vec;
-use alloc::vec::Vec;
 use alloc::{borrow::ToOwned, string::String};
 use applib::BorrowedPixels;
-use core::borrow::BorrowMut;
-use core::cell::RefCell;
 use core::mem::size_of;
 use smoltcp::iface::SocketHandle;
 
@@ -18,9 +13,9 @@ use wasmi::{
     TypedFunc,
 };
 
-use applib::{FbViewMut, Framebuffer, Rect, input::InputState};
+use applib::{input::InputState, FbViewMut, Framebuffer, Rect};
 
-use crate::system::{System};
+use crate::system::System;
 
 pub struct WasmEngine {
     engine: Engine,
@@ -60,15 +55,12 @@ impl WasmEngine {
 
         let mut store_wrapper = StoreWrapper { store };
 
-        store_wrapper.with_context(
-            system, input_state, init_rect,
-            |store| {
-                log::info!("Initializing {}", app_name);
-                wasm_init
-                    .call(store, ())
-                    .expect("Failed to initialize WASM app");
-            }
-        );
+        store_wrapper.with_context(system, input_state, init_rect, |store| {
+            log::info!("Initializing {}", app_name);
+            wasm_init
+                .call(store, ())
+                .expect("Failed to initialize WASM app");
+        });
 
         WasmApp {
             store_wrapper,
@@ -159,15 +151,18 @@ struct StoreWrapper {
 }
 
 impl StoreWrapper {
-
-    fn with_context<F>(&mut self, system: &mut System, input_state: &InputState, win_rect: &Rect, mut func: F)
-        where F: FnMut(&mut Store<StoreData>)
+    fn with_context<F>(
+        &mut self,
+        system: &mut System,
+        input_state: &InputState,
+        win_rect: &Rect,
+        mut func: F,
+    ) where
+        F: FnMut(&mut Store<StoreData>),
     {
-
         self.store.set_fuel(STEP_FUEL).unwrap();
 
         self.store.as_context_mut().data_mut().step_context = Some(StepContext {
-
             // reference -> raw pointer conversions here
             system,
             input_state,
@@ -182,8 +177,13 @@ impl StoreWrapper {
     }
 
     fn get_framebuffer(&mut self, instance: &Instance) -> Framebuffer<BorrowedPixels> {
-
-        let wasm_fb_def = self.store.as_context().data().framebuffer.clone().expect("No WASM framebuffer");
+        let wasm_fb_def = self
+            .store
+            .as_context()
+            .data()
+            .framebuffer
+            .clone()
+            .expect("No WASM framebuffer");
 
         let mem = instance.get_memory(&self.store, "memory").unwrap();
         let ctx = self.store.as_context_mut();
@@ -196,7 +196,6 @@ impl StoreWrapper {
             Framebuffer::<BorrowedPixels>::new(fb_data, w, h)
         };
 
-        
         wasm_fb
     }
 }
@@ -223,10 +222,7 @@ struct StepContextView<'a> {
 }
 
 impl StoreData {
-
-    fn new(
-        app_name: &str,
-    ) -> Self {
+    fn new(app_name: &str) -> Self {
         StoreData {
             app_name: app_name.to_owned(),
             framebuffer: None,
@@ -236,18 +232,18 @@ impl StoreData {
     }
 
     fn with_step_context<F, T>(&mut self, mut func: F) -> T
-     where F: FnMut(StepContextView) -> T {
-
+    where
+        F: FnMut(StepContextView) -> T,
+    {
         let step_context = self.step_context.as_mut().expect("No StepContext set");
 
         let step_context_view = StepContextView {
-
             // Safety: thanks to the StoreDataWrapper scope, those pointers should always be valid
             system: unsafe { step_context.system.as_mut().unwrap() },
             input_state: unsafe { step_context.input_state.as_ref().unwrap() },
 
             win_rect: &step_context.win_rect,
-            timings: &mut step_context.timings
+            timings: &mut step_context.timings,
         };
 
         func(step_context_view)
@@ -267,16 +263,12 @@ impl WasmApp {
         input_state: &InputState,
         win_rect: &Rect,
     ) -> Framebuffer<BorrowedPixels> {
-
-        self.store_wrapper.with_context(
-            system, input_state, win_rect,
-            |mut store| {
-
+        self.store_wrapper
+            .with_context(system, input_state, win_rect, |mut store| {
                 self.wasm_step
                     .call(&mut store, ())
                     .expect("Failed to step WASM app");
-            }
-        );
+            });
 
         let wasm_fb = self.store_wrapper.get_framebuffer(&self.instance);
 
@@ -551,7 +543,6 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                                  addr: i32,
                                  len: i32,
                                  level| {
-
         let mem_slice = get_wasm_mem_slice(&caller, addr, len);
 
         let s = core::str::from_utf8(mem_slice)
@@ -571,10 +562,9 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         m,
         "host_get_input_state",
         |mut caller: Caller<StoreData>, addr: i32| {
-
-            let system_state = caller.data_mut().with_step_context(|step_context| {
-                step_context.input_state.clone()
-            });
+            let system_state = caller
+                .data_mut()
+                .with_step_context(|step_context| step_context.input_state.clone());
 
             write_to_wasm_mem(&mut caller, addr, &system_state);
         }
@@ -584,9 +574,9 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         m,
         "host_get_win_rect",
         |mut caller: Caller<StoreData>, addr: i32| {
-            let win_rect = caller.data_mut().with_step_context(|step_context| {
-                step_context.win_rect.clone()
-            });
+            let win_rect = caller
+                .data_mut()
+                .with_step_context(|step_context| step_context.win_rect.clone());
             write_to_wasm_mem(&mut caller, addr, &win_rect);
         }
     );
@@ -607,14 +597,15 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                                          ip_addr: i32,
                                          port: i32|
      -> i32 {
-
         let mut try_connect = || -> anyhow::Result<i32> {
-
             let ip_bytes = ip_addr.to_le_bytes();
             let port: u16 = port.try_into().expect("Invalid port value");
 
             let socket_handle = caller.data_mut().with_step_context(|step_context| {
-                step_context.system.tcp_stack.connect(Ipv4Address(ip_bytes), port)
+                step_context
+                    .system
+                    .tcp_stack
+                    .connect(Ipv4Address(ip_bytes), port)
             })?;
 
             let handle_id = caller.data_mut().sockets_store.add_handle(socket_handle);
@@ -633,8 +624,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
     linker_impl!(m, "host_tcp_may_send", |mut caller: Caller<StoreData>,
                                           handle_id: i32|
      -> i32 {
-
-        let socket_handle = caller.data_mut()
+        let socket_handle = caller
+            .data_mut()
             .sockets_store
             .get_handle(handle_id)
             .expect("No TCP connection");
@@ -649,8 +640,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
     linker_impl!(m, "host_tcp_may_recv", |mut caller: Caller<StoreData>,
                                           handle_id: i32|
      -> i32 {
-
-        let socket_handle = caller.data_mut()
+        let socket_handle = caller
+            .data_mut()
             .sockets_store
             .get_handle(handle_id)
             .expect("No TCP connection");
@@ -670,7 +661,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         let mut try_write = || -> anyhow::Result<i32> {
             let buf = get_wasm_mem_slice(&mut caller, addr, len).to_vec();
 
-            let socket_handle = caller.data_mut()
+            let socket_handle = caller
+                .data_mut()
                 .sockets_store
                 .get_handle(handle_id)
                 .expect("No TCP connection");
@@ -678,7 +670,7 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
             let written_len = caller.data_mut().with_step_context(|step_context| {
                 step_context.system.tcp_stack.write(socket_handle, &buf)
             })?;
-    
+
             let written_len: i32 = written_len.try_into().map_err(anyhow::Error::msg)?;
 
             Ok(written_len)
@@ -699,14 +691,14 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                                       handle_id: i32|
      -> i32 {
         let mut try_read = || -> anyhow::Result<i32> {
-
             let len = len as usize;
             let addr = addr as usize;
 
             let mut buf = vec![0u8; len];
 
             let read_len: usize = {
-                let socket_handle = caller.data_mut()
+                let socket_handle = caller
+                    .data_mut()
                     .sockets_store
                     .get_handle(handle_id)
                     .expect("No TCP connection");
@@ -738,8 +730,8 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         m,
         "host_tcp_close",
         |mut caller: Caller<StoreData>, handle_id: i32| {
-
-            let socket_handle = caller.data_mut()
+            let socket_handle = caller
+                .data_mut()
                 .sockets_store
                 .get_handle(handle_id)
                 .expect("No TCP connection");
@@ -756,9 +748,9 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         |mut caller: Caller<StoreData>, buf: i32| {
             let buf = buf as usize;
 
-            let t = caller.data_mut().with_step_context(|step_context| {
-                step_context.system.clock.time()
-            });
+            let t = caller
+                .data_mut()
+                .with_step_context(|step_context| step_context.system.clock.time());
 
             let mem = get_linear_memory(&caller);
             let mem_data = mem.data_mut(&mut caller);

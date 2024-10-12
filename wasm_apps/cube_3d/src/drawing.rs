@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use applib::drawing::primitives::{draw_quad};
+use applib::drawing::primitives::draw_quad;
 use applib::geometry::{Point2D, Quad2D};
 use applib::{Color, FbView, FbViewMut};
 use num_traits::Float;
@@ -147,10 +147,7 @@ fn geometry_to_screen_space(w: f32, h: f32, quads: &[Quad; NB_QUADS]) -> [Quad2D
 }
 
 fn quad_to_screen_space(w: f32, h: f32, quad: &Quad) -> Quad2D<i64> {
-
-    let points: [Point2D<i64>; 4] = core::array::from_fn(|i| {
-        point_to_screen_space(w, h, &quad[i])
-    });
+    let points: [Point2D<i64>; 4] = core::array::from_fn(|i| point_to_screen_space(w, h, &quad[i]));
 
     Quad2D { points }
 }
@@ -158,10 +155,7 @@ fn quad_to_screen_space(w: f32, h: f32, quad: &Quad) -> Quad2D<i64> {
 fn point_to_screen_space(w: f32, h: f32, p: &Point) -> Point2D<i64> {
     let y_px = (h - 1.0) * (ZOOM * p.y + 1.0) / 2.0;
     let x_px = (h - 1.0) * (ZOOM * p.x + 1.0) / 2.0 + (w - h) / 2.0;
-    let point = Point2D::<f32> {
-        x: x_px,
-        y: y_px,
-    };
+    let point = Point2D::<f32> { x: x_px, y: y_px };
     point.round_to_int()
 }
 

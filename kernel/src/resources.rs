@@ -1,7 +1,7 @@
-use alloc::vec::Vec;
-use lazy_static::lazy_static;
 use crate::app::AppDescriptor;
+use alloc::vec::Vec;
 use applib::{decode_png, Framebuffer, OwnedPixels, Rect};
+use lazy_static::lazy_static;
 
 lazy_static! {
 

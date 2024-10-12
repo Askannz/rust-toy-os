@@ -4,7 +4,7 @@ extern crate alloc;
 use alloc::format;
 use alloc::vec;
 use alloc::vec::Vec;
-use applib::{BorrowedMutPixels, Framebuffer, Rect, input::InputState};
+use applib::{input::InputState, BorrowedMutPixels, Framebuffer, Rect};
 use core::fmt::Debug;
 use core::mem::size_of;
 use log::{Log, Metadata, Record};
@@ -42,22 +42,13 @@ struct FramebufferHandle {
 }
 
 impl FramebufferHandle {
-
     fn new(w: u32, h: u32) -> Self {
         let ptr = vec![0u32; (w * h) as usize].leak().as_mut_ptr();
-        Self {
-            ptr,
-            w,
-            h,
-        }
+        Self { ptr, w, h }
     }
 
     fn as_framebuffer(&mut self) -> Framebuffer<BorrowedMutPixels> {
-        let FramebufferHandle {
-            ptr,
-            w,
-            h,
-        } = *self;
+        let FramebufferHandle { ptr, w, h } = *self;
 
         let fb_data = unsafe { core::slice::from_raw_parts_mut(ptr, (w * h) as usize) };
 
@@ -101,11 +92,10 @@ pub fn get_win_rect() -> Rect {
 }
 
 pub struct PixelData {
-    fb_handle: FramebufferHandle
+    fb_handle: FramebufferHandle,
 }
 
 impl PixelData {
-
     pub fn new() -> Self {
         let Rect { w, h, .. } = get_win_rect();
         let fb_handle = FramebufferHandle::new(w, h);
@@ -114,7 +104,6 @@ impl PixelData {
     }
 
     pub fn get_framebuffer(&mut self) -> Framebuffer<BorrowedMutPixels> {
-
         let Rect { w, h, .. } = get_win_rect();
 
         let fb_w = self.fb_handle.w;
@@ -137,8 +126,6 @@ fn register_framebuffer_data(data: Vec<u32>, w: u32, h: u32) -> *mut u32 {
     unsafe { host_set_framebuffer(ptr as i32, w as i32, h as i32) };
     ptr
 }
-
-
 
 pub fn tcp_connect(ip_addr: [u8; 4], port: u16) -> anyhow::Result<i32> {
     let ip_addr: i32 = i32::from_le_bytes(ip_addr);

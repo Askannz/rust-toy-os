@@ -1,5 +1,5 @@
-use rand::rngs::SmallRng;
 use crate::{network::TcpStack, time::SystemClock};
+use rand::rngs::SmallRng;
 
 pub struct System {
     pub clock: SystemClock,

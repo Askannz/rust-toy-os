@@ -11,10 +11,10 @@ use applib::drawing::text::{
 };
 use applib::input::InputEvent;
 use applib::input::{InputState, Keycode};
-use applib::uitk::{self, UuidProvider, UiStore};
+use applib::uitk::{self, UiStore, UuidProvider};
 use applib::{Color, FbViewMut, Rect};
 use core::cell::OnceCell;
-use guestlib::{PixelData};
+use guestlib::PixelData;
 use guestlib::WasmLogger;
 
 mod python;
@@ -29,7 +29,6 @@ static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState {
-
     pixel_data: PixelData,
 
     input_buffer: TrackedContent<String>,

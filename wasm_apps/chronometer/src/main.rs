@@ -19,8 +19,8 @@ fn main() {}
 
 #[no_mangle]
 pub fn init() -> () {
-    let state = AppState { 
-        pixel_data: PixelData::new()
+    let state = AppState {
+        pixel_data: PixelData::new(),
     };
     unsafe {
         APP_STATE

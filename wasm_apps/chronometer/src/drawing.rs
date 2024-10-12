@@ -1,6 +1,6 @@
-use applib::drawing::primitives::{draw_triangle};
+use applib::drawing::primitives::draw_triangle;
+use applib::geometry::{Point2D, Triangle2D};
 use applib::{Color, FbViewMut};
-use applib::geometry::{Triangle2D, Point2D};
 use num_traits::Float;
 
 const PI: f32 = 3.14159265359;

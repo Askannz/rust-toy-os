@@ -4,8 +4,6 @@ use uefi::table::boot::{MemoryMap, MemoryType};
 use x86_64::structures::paging::{mapper::TranslateResult, OffsetPageTable, PageTable, Translate};
 use x86_64::{PhysAddr, VirtAddr};
 
-const HEAP_SIZE: usize = 50000 * 4 * 1024;
-
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
@@ -17,18 +15,18 @@ pub fn init_allocator(memory_map: &MemoryMap) {
     let desc = memory_map
         .entries()
         .filter(|desc| desc.ty == MemoryType::CONVENTIONAL)
-        .filter(|desc| (desc.page_count * 4000) as usize >= HEAP_SIZE)
         .max_by_key(|desc| desc.page_count)
         .expect("Cannot find suitable memory region for heap");
 
     log::debug!(
-        "Found suitable memory region for heap at {:#x} ({} pages)",
+        "Found suitable memory region for heap at {:#x} ({} pages, {}MB)",
         desc.phys_start,
-        desc.page_count
+        desc.page_count,
+        desc.page_count * 4096 / 1_000_000,
     );
 
     unsafe {
-        ALLOCATOR.lock().init(desc.phys_start as usize, HEAP_SIZE);
+        ALLOCATOR.lock().init(desc.phys_start as usize, 4096 * desc.page_count as usize);
     }
 }
 

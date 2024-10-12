@@ -84,8 +84,6 @@ pub fn step() {
         draw_scene(render_fb, &state.scene, xf, yf);
     }
 
-    framebuffer.fill(Color::BLACK);
-
     let mut uitk_context = state.ui_store.get_context(
         &mut framebuffer,
         &input_state_local,

@@ -4,7 +4,6 @@
 * resize handle "jumps" to cursor when resizing
 * gpu crash after a while
 * clicks go through scrollbars
-* web browser is resource-hungry even when idle
 
 # Refactorings
 

@@ -516,9 +516,14 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
     }
 
     fn fill(&mut self, color: Color) {
+
         let (w, h) = self.shape();
-        for y in 0..h {
-            self.fill_line(0, w, y.into(), color, false)
+        if w == self.data_w && h == self.data_h {
+            self.data.as_mut_slice().fill(color.0);
+        } else {
+            for y in 0..h {
+                self.fill_line(0, w, y.into(), color, false)
+            }
         }
     }
 

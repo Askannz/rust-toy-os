@@ -199,7 +199,6 @@ pub fn step() {
     let time = guestlib::get_time();
 
     let mut framebuffer = state.pixel_data.get_framebuffer();
-    framebuffer.fill(Color::BLACK);
 
     let mut uitk_context = ui_store.get_context(&mut framebuffer, &win_input_state, uuid_provider, time);
 

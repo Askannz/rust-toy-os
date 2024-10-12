@@ -120,8 +120,6 @@ pub fn step() {
 
     let renderer = ConsoleRenderer { formatted: TrackedContent::new(formatted, &mut state.uuid_provider) };
 
-    framebuffer.fill(Color::BLACK);
-
     let time = guestlib::get_time();
 
     let mut uitk_context =

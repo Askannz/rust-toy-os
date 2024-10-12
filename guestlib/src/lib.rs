@@ -219,6 +219,19 @@ macro_rules! measure_fuel {
     }};
 }
 
+#[macro_export]
+macro_rules! measure_time {
+    ($key:expr, $block:expr) => {{
+        let t0 = guestlib::get_time();
+        let retval = { $block };
+        let t1 = guestlib::get_time();
+
+        let elapsed = t1 - t0;
+        guestlib::print_console(&format!("{}: {:.2}ms", $key, elapsed));
+        retval
+    }};
+}
+
 pub fn save_timing(key: &str, consumed: u64) {
     let key_buf = key.as_bytes();
     let key_addr = key_buf.as_ptr() as i32;

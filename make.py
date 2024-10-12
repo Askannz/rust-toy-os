@@ -54,7 +54,8 @@ def _build():
         wasm_bin_path = _build_crate(
             crate_path=f"wasm_apps/{app}/",
             binary_name=f"{app}.wasm",
-            target="wasm32-wasi"
+            target="wasm32-wasi",
+            dep_paths=["applib/", "guestlib/"],
         )
 
         _copy_if_new(wasm_bin_path, Path("kernel/wasm") / wasm_bin_path.name)
@@ -63,9 +64,10 @@ def _build():
     # Building kernel
 
     kernel_bin_path = _build_crate(
-        crate_path="kernel/", 
+        crate_path="kernel/",
         binary_name="kernel.efi",
-        target="x86_64-unknown-uefi"
+        target="x86_64-unknown-uefi",
+        dep_paths=["applib/"],
     )
 
     _copy_if_new(kernel_bin_path, Path("esp/efi/boot/") / "bootx64.efi")
@@ -122,18 +124,27 @@ def _build_crate(
     binary_name,
     target,
     mode="release",
+    dep_paths=None,
 ):
 
     crate_path = Path(crate_path)
 
     binary_path = crate_path / "target" / target / mode / binary_name
+    if binary_path.exists():
 
-    if (
-        binary_path.exists() and
-        not _check_source_changed(crate_path, binary_path.lstat().st_mtime)
-    ):
-        print(f"Skipping build for {crate_path} (up-to-date)")
-        return binary_path
+        binary_mtime = binary_path.lstat().st_mtime
+        needs_build = _check_source_changed(crate_path, binary_mtime)
+
+        if dep_paths is not None:
+            needs_build = needs_build or any(
+                _check_source_changed(path, binary_mtime)
+                for path in dep_paths
+            )
+
+        if not needs_build:
+            print(f"Skipping build for {crate_path} (up-to-date)")
+            return binary_path
+
 
     print(f"Building {binary_path}")
     try:
@@ -146,6 +157,8 @@ def _build_crate(
 
 
 def _check_source_changed(crate_path, binary_mtime):
+
+    crate_path = Path(crate_path)
 
     files_list = []
     for dirpath, _, filenames in os.walk(crate_path):

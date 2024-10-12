@@ -81,7 +81,7 @@ def _run():
             "-enable-kvm",
             "-m 4G",
             "-rtc base=utc",
-            "-display gtk,zoom-to-fit=off",
+            "-display sdl",
 
             # UEFI boot
             "-drive if=pflash,format=raw,readonly=on,file=uefi_firmware/code.fd",

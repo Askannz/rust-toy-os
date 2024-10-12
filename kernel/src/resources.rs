@@ -31,7 +31,7 @@ lazy_static! {
 
     pub static ref APPLICATIONS: [AppDescriptor; 4] = [
         AppDescriptor {
-            data: include_bytes!("../../embedded_data/cube_3d.wasm"),
+            data: include_bytes!("../wasm/cube_3d.wasm"),
             name: "3D Cube",
             init_win_rect: Rect {
                 x0: 200,
@@ -42,7 +42,7 @@ lazy_static! {
             icon: &CUBE_ICON,
         },
         AppDescriptor {
-            data: include_bytes!("../../embedded_data/chronometer.wasm"),
+            data: include_bytes!("../wasm/chronometer.wasm"),
             name: "Chronometer",
             init_win_rect: Rect {
                 x0: 600,
@@ -53,7 +53,7 @@ lazy_static! {
             icon: &CHRONO_ICON,
         },
         AppDescriptor {
-            data: include_bytes!("../../embedded_data/terminal.wasm"),
+            data: include_bytes!("../wasm/terminal.wasm"),
             name: "Terminal",
             init_win_rect: Rect {
                 x0: 400,
@@ -64,7 +64,7 @@ lazy_static! {
             icon: &TERMINAL_ICON,
         },
         AppDescriptor {
-            data: include_bytes!("../../embedded_data/web_browser.wasm"),
+            data: include_bytes!("../wasm/web_browser.wasm"),
             name: "Web Browser",
             init_win_rect: Rect {
                 x0: 400,

@@ -136,7 +136,7 @@ pub fn step() {
 
     if autoscroll {
         let max_h = renderer.formatted.h;
-        uitk::set_autoscroll(&rect_console, max_h, &mut state.scroll_offsets);
+        //uitk::set_autoscroll(&rect_console, max_h, &mut state.scroll_offsets);
     }
 
     state.content_ids = Some([state.input_buffer.get_id(), state.console_buffer.get_id()]);
@@ -163,6 +163,10 @@ impl uitk::TileRenderer for ConsoleRenderer {
     fn shape(&self) -> (u32, u32) {
         let FormattedRichText { w, h, .. } = self.formatted;
         (w, h)
+    }
+
+    fn content_id(&self, src_rect: &Rect) -> ContentId {
+        ContentId(0)
     }
 
     fn render(&self, context: &mut uitk::TileRenderContext) {

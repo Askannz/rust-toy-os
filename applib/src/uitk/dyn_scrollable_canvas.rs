@@ -1,8 +1,11 @@
+use alloc::vec::Vec;
+
 use crate::drawing::primitives::draw_rect;
 use crate::input::InputEvent;
+use crate::content::{ContentId, TrackedContent};
 use crate::Color;
 use crate::Rect;
-use crate::{BorrowedMutPixels, FbViewMut, Framebuffer};
+use crate::{BorrowedMutPixels, FbViewMut, FbView, Framebuffer};
 
 use crate::uitk::{TileCache, UiContext};
 
@@ -16,13 +19,13 @@ const SBAR_INNER_DRAGGING_COLOR: Color = Color::AQUA;
 
 pub trait TileRenderer {
     fn shape(&self) -> (u32, u32);
+    fn content_id(&self, src_rect: &Rect) -> ContentId;
     fn render(&self, context: &mut TileRenderContext);
 }
 
 pub struct TileRenderContext<'a> {
     pub dst_fb: &'a mut Framebuffer<BorrowedMutPixels<'a>>,
     pub src_rect: &'a Rect,
-    pub tile_cache: &'a mut TileCache,
 }
 
 impl<'a, F: FbViewMut> UiContext<'a, F> {
@@ -67,11 +70,14 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             h: dst_rect.h,
         };
 
-        renderer.render(&mut TileRenderContext {
-            dst_fb: &mut dst_fb.subregion_mut(dst_rect),
-            src_rect,
+        draw_tile(
+            renderer,
+            &mut TileRenderContext {
+                dst_fb: &mut dst_fb.subregion_mut(dst_rect),
+                src_rect,
+            },
             tile_cache,
-        });
+        );
 
         let p_state = &input_state.pointer;
         let (x_dragging, y_dragging) = dragging;
@@ -172,4 +178,121 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             }
         }
     }
+}
+
+
+fn draw_tile<T: TileRenderer>(renderer: &T, current_tile_context: &mut TileRenderContext, tile_cache: &mut TileCache,) {
+
+    let TileRenderContext {
+        dst_fb,
+        src_rect,
+    } = current_tile_context;
+
+
+    let src_shape = renderer.shape();
+    let tile_shape = (src_rect.w, src_rect.h);
+
+    let tiles_rects = get_tiles(src_shape, tile_shape);
+
+    let regions = select_tile_regions(&tiles_rects, src_rect);
+
+    //log::debug!("{} tiles in cache", tile_cache.tiles.len());
+
+    for tile_region in regions.iter() {
+
+        let tile_content_id = renderer.content_id(&tile_region.tile_rect);
+
+        let tile_fb = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
+            let mut tile_fb =
+                Framebuffer::new_owned(tile_region.tile_rect.w, tile_region.tile_rect.h);
+
+            renderer.render(&mut TileRenderContext {
+                dst_fb: &mut tile_fb.subregion_mut(&tile_fb.shape_as_rect()),
+                src_rect: &tile_region.tile_rect,
+            });
+
+            tile_fb
+        });
+
+        let Rect {
+            x0: tile_x0,
+            y0: tile_y0,
+            ..
+        } = tile_region.tile_rect;
+        let Rect {
+            x0: reg_x0,
+            y0: reg_y0,
+            w: reg_w,
+            h: reg_h,
+        } = tile_region.region_rect;
+
+        let tile_src_rect = Rect {
+            x0: reg_x0 - tile_x0,
+            y0: reg_y0 - tile_y0,
+            w: reg_w,
+            h: reg_h,
+        };
+
+        let (dst_x0, dst_y0) = (reg_x0 - src_rect.x0, reg_y0 - src_rect.y0);
+
+        dst_fb.copy_from_fb(&tile_fb.subregion(&tile_src_rect), (dst_x0, dst_y0), false);
+    }
+}
+
+
+fn select_tile_regions(tiles_rects: &Vec<Rect>, src_rect: &Rect) -> Vec<TileRegion> {
+    let mut regions = Vec::new();
+    for tile_rect in tiles_rects {
+        match tile_rect.intersection(src_rect) {
+            None => (),
+            Some(region_rect) => regions.push(TileRegion {
+                tile_rect: tile_rect.clone(),
+                region_rect: region_rect.clone(),
+            }),
+        }
+    }
+
+    regions
+}
+
+#[derive(Debug)]
+struct TileRegion {
+    tile_rect: Rect,
+    region_rect: Rect,
+}
+
+fn get_tiles(src_shape: (u32, u32), tile_shape: (u32, u32)) -> Vec<Rect> {
+
+    let (cw, ch) = src_shape;
+    let (tile_w, tile_h) = tile_shape;
+
+    let cw: i64 = cw.into();
+    let ch: i64 = ch.into();
+    let tile_w: i64 = tile_w.into();
+    let tile_h: i64 = tile_h.into();
+
+    let mut tile_bounds_x = Vec::new();
+    let mut x = 0;
+    while x < cw {
+        let new_x = i64::min(x + tile_w, cw);
+        tile_bounds_x.push((x, new_x));
+        x = new_x;
+    }
+
+    let mut tile_bounds_y = Vec::new();
+    let mut y = 0;
+    while y < ch {
+        let new_y = i64::min(y + tile_h, ch);
+        tile_bounds_y.push((y, new_y));
+        y = new_y;
+    }
+
+    let mut tiles_rects = Vec::new();
+    for (x0, x1) in tile_bounds_x.iter() {
+        for (y0, y1) in tile_bounds_y.iter() {
+            tiles_rects.push(Rect::from_xyxy([*x0, *y0, *x1 - 1, *y1 - 1]))
+        }
+    }
+
+    tiles_rects
 }

@@ -3,13 +3,13 @@ use alloc::collections::BTreeMap;
 mod button;
 mod dyn_scrollable_canvas;
 mod progress_bar;
-mod scrollable_canvas;
+//mod scrollable_canvas;
 mod text;
 
 pub use button::ButtonConfig;
 pub use dyn_scrollable_canvas::{TileRenderContext, TileRenderer};
 pub use progress_bar::ProgressBarConfig;
-pub use scrollable_canvas::set_autoscroll;
+//pub use scrollable_canvas::set_autoscroll;
 pub use text::{render_rich_text, string_input, EditableTextConfig, ScrollableTextConfig};
 
 pub use crate::content::{ContentId, UuidProvider};

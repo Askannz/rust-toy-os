@@ -72,58 +72,20 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
         (w, h)
     }
 
+    fn content_id(&self, src_rect: &Rect) -> ContentId {
+        ContentId::from_hash((
+            src_rect,
+            self.layout.get_id()
+        ))
+    }
+
     fn render(&self, context: &mut uitk::TileRenderContext) {
         let uitk::TileRenderContext {
             dst_fb,
             src_rect,
-            tile_cache,
-            ..
         } = context;
 
-        let tile_w = src_rect.w;
-        let tile_h = src_rect.h;
-
-        let tiles_rects = self.get_tiles((tile_w, tile_h));
-
-        let regions = select_tile_regions(&tiles_rects, src_rect);
-
-        //log::debug!("{} tiles in cache", tile_cache.tiles.len());
-
-        for tile_region in regions.iter() {
-            let tile_content_id =
-                ContentId::from_hash((&tile_region.tile_rect, self.layout.get_id()));
-
-            let tile_fb = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
-                let mut tile_fb =
-                    Framebuffer::new_owned(tile_region.tile_rect.w, tile_region.tile_rect.h);
-                render_html(&mut tile_fb, self.layout.as_ref(), &tile_region.tile_rect);
-                //draw_tile_border(&mut tile_fb);
-                tile_fb
-            });
-
-            let Rect {
-                x0: tile_x0,
-                y0: tile_y0,
-                ..
-            } = tile_region.tile_rect;
-            let Rect {
-                x0: reg_x0,
-                y0: reg_y0,
-                w: reg_w,
-                h: reg_h,
-            } = tile_region.region_rect;
-
-            let tile_src_rect = Rect {
-                x0: reg_x0 - tile_x0,
-                y0: reg_y0 - tile_y0,
-                w: reg_w,
-                h: reg_h,
-            };
-
-            let (dst_x0, dst_y0) = (reg_x0 - src_rect.x0, reg_y0 - src_rect.y0);
-
-            dst_fb.copy_from_fb(&tile_fb.subregion(&tile_src_rect), (dst_x0, dst_y0), false);
-        }
+        render_html(*dst_fb, self.layout.as_ref(), src_rect);
     }
 }
 

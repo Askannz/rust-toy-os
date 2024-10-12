@@ -85,10 +85,10 @@ pub fn step() {
         &mut state.uuid_provider,
     );
 
-    uitk_context.scrollable_canvas(
-        &win_rect.zero_origin(),
-        &state.render_fb,
-        &mut state.scroll_offsets,
-        &mut state.dragging_sbar,
-    );
+    // uitk_context.scrollable_canvas(
+    //     &win_rect.zero_origin(),
+    //     &state.render_fb,
+    //     &mut state.scroll_offsets,
+    //     &mut state.dragging_sbar,
+    // );
 }

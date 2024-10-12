@@ -134,6 +134,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             tcp_stack.poll_interface(clock);
         }
 
+        let time = system.clock.time();
+
         update_input_state(&mut input_state, (w, h), &mut virtio_inputs);
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
@@ -144,7 +146,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         //log::debug!("{:?}", system_state);
 
         let mut uitk_context =
-            ui_store.get_context(&mut framebuffer, &input_state, &mut uuid_provider);
+            ui_store.get_context(&mut framebuffer, &input_state, &mut uuid_provider, time);
         run_apps(
             &mut uitk_context,
             &mut system,

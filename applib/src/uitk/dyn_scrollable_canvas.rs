@@ -7,7 +7,7 @@ use crate::Color;
 use crate::Rect;
 use crate::{BorrowedMutPixels, FbViewMut, FbView, Framebuffer};
 
-use crate::uitk::{TileCache, UiContext};
+use crate::uitk::{CachedTile, TileCache, UiContext};
 
 const SCROLL_SPEED: u32 = 10;
 const SBAR_OUTER_W: u32 = 16;
@@ -20,12 +20,7 @@ const SBAR_INNER_DRAGGING_COLOR: Color = Color::AQUA;
 pub trait TileRenderer {
     fn shape(&self) -> (u32, u32);
     fn content_id(&self, src_rect: &Rect) -> ContentId;
-    fn render(&self, context: &mut TileRenderContext);
-}
-
-pub struct TileRenderContext<'a> {
-    pub dst_fb: &'a mut Framebuffer<BorrowedMutPixels<'a>>,
-    pub src_rect: &'a Rect,
+    fn render<F: FbViewMut>(&self, dst_fb: &mut F, src_rect: &Rect);
 }
 
 impl<'a, F: FbViewMut> UiContext<'a, F> {
@@ -72,10 +67,9 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
         draw_tile(
             renderer,
-            &mut TileRenderContext {
-                dst_fb: &mut dst_fb.subregion_mut(dst_rect),
-                src_rect,
-            },
+            &mut dst_fb.subregion_mut(dst_rect),
+            src_rect,
+            self.time,
             tile_cache,
         );
 
@@ -181,13 +175,13 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 }
 
 
-fn draw_tile<T: TileRenderer>(renderer: &T, current_tile_context: &mut TileRenderContext, tile_cache: &mut TileCache,) {
-
-    let TileRenderContext {
-        dst_fb,
-        src_rect,
-    } = current_tile_context;
-
+fn draw_tile<F: FbViewMut, T: TileRenderer>(
+    renderer: &T,
+    dst_fb: &mut F,
+    src_rect: &Rect,
+    time: f64,
+    tile_cache: &mut TileCache
+) {
 
     let src_shape = renderer.shape();
     let tile_shape = (src_rect.w, src_rect.h);
@@ -196,22 +190,21 @@ fn draw_tile<T: TileRenderer>(renderer: &T, current_tile_context: &mut TileRende
 
     let regions = select_tile_regions(&tiles_rects, src_rect);
 
-    //log::debug!("{} tiles in cache", tile_cache.tiles.len());
-
     for tile_region in regions.iter() {
 
         let tile_content_id = renderer.content_id(&tile_region.tile_rect);
 
-        let tile_fb = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
+        let cached_tile = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
+
             let mut tile_fb =
                 Framebuffer::new_owned(tile_region.tile_rect.w, tile_region.tile_rect.h);
 
-            renderer.render(&mut TileRenderContext {
-                dst_fb: &mut tile_fb.subregion_mut(&tile_fb.shape_as_rect()),
-                src_rect: &tile_region.tile_rect,
-            });
+            let mut dst_fb = tile_fb.subregion_mut(&tile_fb.shape_as_rect());
+            renderer.render(&mut dst_fb, &tile_region.tile_rect);
 
-            tile_fb
+            //draw_tile_border(&mut dst_fb);
+
+            CachedTile { fb: tile_fb, time }
         });
 
         let Rect {
@@ -235,7 +228,7 @@ fn draw_tile<T: TileRenderer>(renderer: &T, current_tile_context: &mut TileRende
 
         let (dst_x0, dst_y0) = (reg_x0 - src_rect.x0, reg_y0 - src_rect.y0);
 
-        dst_fb.copy_from_fb(&tile_fb.subregion(&tile_src_rect), (dst_x0, dst_y0), false);
+        dst_fb.copy_from_fb(&cached_tile.fb.subregion(&tile_src_rect), (dst_x0, dst_y0), false);
     }
 }
 
@@ -295,4 +288,41 @@ fn get_tiles(src_shape: (u32, u32), tile_shape: (u32, u32)) -> Vec<Rect> {
     }
 
     tiles_rects
+}
+
+fn draw_tile_border<F: FbViewMut>(tile_fb: &mut F) {
+    const THICKNESS: u32 = 1;
+    const COLOR: Color = Color::RED;
+
+    let (w, h) = tile_fb.shape();
+
+    let r_top = Rect {
+        x0: 0,
+        y0: 0,
+        w,
+        h: THICKNESS,
+    };
+    let r_left = Rect {
+        x0: 0,
+        y0: 0,
+        w: THICKNESS,
+        h,
+    };
+    let r_bottom = Rect {
+        x0: 0,
+        y0: (h - THICKNESS).into(),
+        w,
+        h: THICKNESS,
+    };
+    let r_right = Rect {
+        x0: (w - THICKNESS).into(),
+        y0: 0,
+        w: THICKNESS,
+        h,
+    };
+
+    draw_rect(tile_fb, &r_top, COLOR, false);
+    draw_rect(tile_fb, &r_left, COLOR, false);
+    draw_rect(tile_fb, &r_bottom, COLOR, false);
+    draw_rect(tile_fb, &r_right, COLOR, false);
 }

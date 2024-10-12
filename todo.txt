@@ -3,6 +3,8 @@
 * moving windows not smooth
 * resize handle "jumps" to cursor when resizing
 * gpu crash after a while
+* clicks go through scrollbars
+* web browser is resource-hungry even when idle
 
 # Refactorings
 
@@ -13,6 +15,8 @@
 * html layouting (proper tree structure?)
 * have tile caching automatically handled by dyn canvas
 * use "Color" in place of u32?
+* better tile cache
+* sort out naming of scrollable_canvas/dyn_scrollable_canvas
 
 # Features
 

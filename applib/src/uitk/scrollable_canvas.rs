@@ -1,22 +1,29 @@
 use crate::uitk::UiContext;
 use crate::Rect;
 use crate::{FbView, FbViewMut};
+use crate::content::{TrackedContent, ContentId};
 
-use super::{TileRenderContext, TileRenderer};
+use super::{TileRenderer};
 
 struct BufferCopyRenderer<'a, F: FbView> {
-    src_fb: &'a F,
+    src_fb: &'a TrackedContent<F>,
 }
 
 impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
     fn shape(&self) -> (u32, u32) {
-        self.src_fb.shape()
+        self.src_fb.as_ref().shape()
     }
 
-    fn render(&self, context: &mut TileRenderContext) {
-        context
-            .dst_fb
-            .copy_from_fb(&self.src_fb.subregion(&context.src_rect), (0, 0), false);
+    fn content_id(&self, src_rect: &Rect) -> ContentId {
+        ContentId::from_hash((
+            self.src_fb.get_id(),
+            src_rect,
+        ))
+    }
+
+    fn render<F: FbViewMut>(&self, dst_fb: &mut F, src_rect: &Rect) {
+        let src_fb = self.src_fb.as_ref().subregion(src_rect);
+        dst_fb.copy_from_fb(&src_fb, (0, 0), false);
     }
 }
 
@@ -24,7 +31,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
     pub fn scrollable_canvas<F1: FbView>(
         &mut self,
         dst_rect: &Rect,
-        src_fb: &F1,
+        src_fb: &TrackedContent<F1>,
         offsets: &mut (i64, i64),
         dragging: &mut (bool, bool),
     ) {

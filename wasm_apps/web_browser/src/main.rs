@@ -196,10 +196,12 @@ pub fn step() {
         ..
     } = state;
 
+    let time = guestlib::get_time();
+
     let mut framebuffer = state.pixel_data.get_framebuffer();
     framebuffer.fill(Color::BLACK);
 
-    let mut uitk_context = ui_store.get_context(&mut framebuffer, &win_input_state, uuid_provider);
+    let mut uitk_context = ui_store.get_context(&mut framebuffer, &win_input_state, uuid_provider, time);
 
     let ui_layout = compute_ui_layout(&win_rect);
 
@@ -218,7 +220,6 @@ pub fn step() {
         },
         &mut state.url_text,
         &mut state.url_cursor,
-        guestlib::get_time(),
     );
 
     let (progress_val, progress_str) = get_progress_repr(&state.request_state);
@@ -239,7 +240,7 @@ pub fn step() {
     let url_go = is_button_fired || check_enter_pressed(&win_input_state);
 
     let prev_state_debug = format!("{:?}", state.request_state);
-    try_update_request_state(state, url_go, &ui_layout, &win_input_state);
+    try_update_request_state(state, url_go, &ui_layout, &win_input_state, time);
     let new_state_debug = format!("{:?}", state.request_state);
 
     if new_state_debug != prev_state_debug {
@@ -301,8 +302,9 @@ fn try_update_request_state(
     url_go: bool,
     ui_layout: &UiLayout,
     input_state: &InputState,
+    time: f64,
 ) {
-    match update_request_state(state, url_go, ui_layout, input_state) {
+    match update_request_state(state, url_go, ui_layout, input_state, time) {
         Ok(_) => (),
         Err(err) => {
             log::error!("{}", err);
@@ -335,6 +337,7 @@ fn update_request_state(
     url_go: bool,
     ui_layout: &UiLayout,
     input_state: &InputState,
+    time: f64,
 ) -> anyhow::Result<()> {
     match &mut state.request_state {
         RequestState::Idle {
@@ -345,7 +348,7 @@ fn update_request_state(
             let mut uitk_context =
                 state
                     .ui_store
-                    .get_context(&mut framebuffer, input_state, &mut state.uuid_provider);
+                    .get_context(&mut framebuffer, input_state, &mut state.uuid_provider, time);
 
             let link_hover = html_canvas(
                 &mut uitk_context,

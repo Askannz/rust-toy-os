@@ -1,5 +1,6 @@
 use applib::uitk::{UiStore, UuidProvider};
 use applib::{Color, FbViewMut, Framebuffer, OwnedPixels};
+use applib::content::TrackedContent;
 use core::cell::OnceCell;
 use guestlib::PixelData;
 use guestlib::WasmLogger;
@@ -12,7 +13,7 @@ const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState {
     pixel_data: PixelData,
-    render_fb: Framebuffer<OwnedPixels>,
+    render_fb: TrackedContent<Framebuffer<OwnedPixels>>,
     ui_store: UiStore,
     uuid_provider: UuidProvider,
     scroll_offsets: (i64, i64),
@@ -33,11 +34,14 @@ pub fn init() -> () {
     log::set_max_level(LOGGING_LEVEL);
     log::set_logger(&LOGGER).unwrap();
 
+    let mut uuid_provider = UuidProvider::new();
+    let render_fb = Framebuffer::new_owned(W as u32, H as u32);
+
     let state = AppState {
         pixel_data: PixelData::new(),
-        render_fb: Framebuffer::new_owned(W as u32, H as u32),
+        render_fb: TrackedContent::new(render_fb, &mut uuid_provider),
         ui_store: UiStore::new(),
-        uuid_provider: UuidProvider::new(),
+        uuid_provider,
         scroll_offsets: (0, 0),
         dragging_sbar: (false, false),
         prev_pointer: None,
@@ -57,6 +61,8 @@ pub fn step() {
     let win_rect = guestlib::get_win_rect();
     let input_state = guestlib::get_input_state();
 
+    let time = guestlib::get_time();
+
     let mut framebuffer = state.pixel_data.get_framebuffer();
 
     let input_state_local = input_state.change_origin(&win_rect);
@@ -73,8 +79,9 @@ pub fn step() {
     if redraw {
         let xf = (pointer.x as f32) / ((W - 1) as f32);
         let yf = (pointer.y as f32) / ((H - 1) as f32);
-        state.render_fb.fill(Color::WHITE);
-        draw_scene(&mut state.render_fb, &state.scene, xf, yf);
+        let render_fb = state.render_fb.mutate(&mut state.uuid_provider);
+        render_fb.fill(Color::WHITE);
+        draw_scene(render_fb, &state.scene, xf, yf);
     }
 
     framebuffer.fill(Color::BLACK);
@@ -83,12 +90,13 @@ pub fn step() {
         &mut framebuffer,
         &input_state_local,
         &mut state.uuid_provider,
+        time,
     );
 
-    // uitk_context.scrollable_canvas(
-    //     &win_rect.zero_origin(),
-    //     &state.render_fb,
-    //     &mut state.scroll_offsets,
-    //     &mut state.dragging_sbar,
-    // );
+    uitk_context.scrollable_canvas(
+        &win_rect.zero_origin(),
+        &state.render_fb,
+        &mut state.scroll_offsets,
+        &mut state.dragging_sbar,
+    );
 }

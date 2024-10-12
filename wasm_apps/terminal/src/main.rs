@@ -52,7 +52,6 @@ pub fn init() -> () {
     log::set_max_level(LOGGING_LEVEL);
     log::set_logger(&LOGGER).unwrap();
 
-    let win_rect = guestlib::get_win_rect();
     let mut uuid_provider = uitk::UuidProvider::new();
 
     let state = AppState {
@@ -118,14 +117,17 @@ pub fn step() {
         render_console(state.input_buffer.as_ref(), state.console_buffer.as_ref());
     let formatted = format_rich_lines(&console_rich_text, win_w);
 
-    let renderer = ConsoleRenderer { formatted };
+
+    let renderer = ConsoleRenderer { formatted: TrackedContent::new(formatted, &mut state.uuid_provider) };
 
     framebuffer.fill(Color::BLACK);
+
+    let time = guestlib::get_time();
 
     let mut uitk_context =
         state
             .ui_store
-            .get_context(&mut framebuffer, &input_state, &mut state.uuid_provider);
+            .get_context(&mut framebuffer, &input_state, &mut state.uuid_provider, time);
 
     uitk_context.dyn_scrollable_canvas(
         &rect_console,
@@ -135,8 +137,8 @@ pub fn step() {
     );
 
     if autoscroll {
-        let max_h = renderer.formatted.h;
-        //uitk::set_autoscroll(&rect_console, max_h, &mut state.scroll_offsets);
+        let max_h = renderer.formatted.as_ref().h;
+        uitk::set_autoscroll(&rect_console, max_h, &mut state.scroll_offsets);
     }
 
     state.content_ids = Some([state.input_buffer.get_id(), state.console_buffer.get_id()]);
@@ -156,12 +158,12 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
 }
 
 struct ConsoleRenderer {
-    formatted: FormattedRichText,
+    formatted: TrackedContent<FormattedRichText>,
 }
 
 impl uitk::TileRenderer for ConsoleRenderer {
     fn shape(&self) -> (u32, u32) {
-        let FormattedRichText { w, h, .. } = self.formatted;
+        let FormattedRichText { w, h, .. } = *self.formatted.as_ref();
         (w, h)
     }
 
@@ -169,20 +171,17 @@ impl uitk::TileRenderer for ConsoleRenderer {
         ContentId(0)
     }
 
-    fn render(&self, context: &mut uitk::TileRenderContext) {
-        let uitk::TileRenderContext {
-            dst_fb, src_rect, ..
-        } = context;
+    fn render<F: FbViewMut>(&self, dst_fb: &mut F, src_rect: &Rect) {
 
         let Rect { x0: ox, y0: oy, .. } = *src_rect;
 
         // TODO
-        if *ox != 0 {
+        if ox != 0 {
             unimplemented!()
         }
 
         let mut y = 0;
-        for line in self.formatted.lines.iter() {
+        for line in self.formatted.as_ref().lines.iter() {
             // Bounding box of line in source
             let line_rect = Rect {
                 x0: 0,
@@ -192,7 +191,7 @@ impl uitk::TileRenderer for ConsoleRenderer {
             };
 
             if src_rect.intersection(&line_rect).is_some() {
-                draw_rich_slice(*dst_fb, &line.chars, 0, y - oy);
+                draw_rich_slice(dst_fb, &line.chars, 0, y - oy);
             }
 
             y += line.h as i64;

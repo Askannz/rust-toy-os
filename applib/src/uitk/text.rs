@@ -6,7 +6,7 @@ use crate::drawing::primitives::draw_rect;
 use crate::drawing::text::{draw_rich_slice, draw_str, Font, FormattedRichText, HACK_15};
 use crate::input::{InputEvent, InputState};
 use crate::input::{Keycode, CHARMAP};
-use crate::uitk::{ContentId, UiContext};
+use crate::uitk::{ContentId, UiContext, CachedTile};
 use crate::Framebuffer;
 use crate::{Color, FbViewMut, Rect};
 
@@ -127,7 +127,6 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         config: &EditableTextConfig,
         buffer: &mut TrackedContent<String>,
         cursor: &mut usize,
-        time: f64,
     ) {
         let UiContext {
             fb,
@@ -139,12 +138,12 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
         string_input(buffer, input_state, false, cursor, *uuid_provider);
 
-        let time_sec = (time as u64) / 1000;
+        let time_sec = (self.time as u64) / 1000;
         let cursor_visible = time_sec % 2 == 0;
 
         let tile_content_id = ContentId::from_hash((config, cursor_visible, buffer.get_id()));
 
-        let tile_fb = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
+        let cached_tile = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
             //
             // Draw text
 
@@ -175,11 +174,11 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
                 draw_rect(&mut tile_fb, &cursor_rect, *color, false);
             }
 
-            tile_fb
+            CachedTile { fb: tile_fb, time: self.time }
         });
 
         let Rect { x0, y0, .. } = config.rect;
-        fb.copy_from_fb(tile_fb, (x0, y0), false);
+        fb.copy_from_fb(&cached_tile.fb, (x0, y0), false);
     }
 }
 

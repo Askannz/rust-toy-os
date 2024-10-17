@@ -156,8 +156,8 @@ impl Rect {
 
     pub fn from_xyxy(xyxy: [i64; 4]) -> Self {
         let [x0, y0, x1, y1] = xyxy;
-        assert!(x0 < x1);
-        assert!(y0 < y1);
+        assert!(x0 <= x1);
+        assert!(y0 <= y1);
         let w = (x1 - x0 + 1) as u32;
         let h = (y1 - y0 + 1) as u32;
         Self { x0, y0, w, h }

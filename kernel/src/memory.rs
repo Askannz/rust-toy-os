@@ -1,15 +1,19 @@
-use core::cell::OnceCell;
-use linked_list_allocator::LockedHeap;
+use core::alloc::{GlobalAlloc, Layout};
+use core::cell::{OnceCell, UnsafeCell};
 use uefi::table::boot::{MemoryMap, MemoryType};
 use x86_64::structures::paging::{mapper::TranslateResult, OffsetPageTable, PageTable, Translate};
 use x86_64::{PhysAddr, VirtAddr};
+use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+
+use super::allocator::{SimpleAllocator};
 
 #[global_allocator]
-static ALLOCATOR: LockedHeap = LockedHeap::empty();
+static ALLOCATOR: SimpleAllocator = SimpleAllocator::new();
 
 pub static mut MAPPER: OnceCell<MemoryMapper> = OnceCell::new();
 
 pub fn init_allocator(memory_map: &MemoryMap) {
+
     log::info!("Initializing heap allocator");
 
     let desc = memory_map
@@ -19,16 +23,21 @@ pub fn init_allocator(memory_map: &MemoryMap) {
         .expect("Cannot find suitable memory region for heap");
 
     log::debug!(
-        "Found suitable memory region for heap at {:#x} ({} pages, {}MB)",
+        "Found suitable memory region for heap at {:#x} ({} pages, {}B)",
         desc.phys_start,
         desc.page_count,
-        desc.page_count * 4096 / 1_000_000,
+        desc.page_count * 4096,
     );
 
-    unsafe {
-        ALLOCATOR.lock().init(desc.phys_start as usize, 4096 * desc.page_count as usize);
-    }
+    // let mapper = get_mapper();
+
+    // let ptr_start = PhysAddr::new(desc.phys_start);
+
+    // unsafe {
+    //     ALLOCATOR.init(desc.phys_start as usize, 4096 * desc.page_count as usize);
+    // }
 }
+
 
 #[derive(Debug)]
 pub struct MemoryMapper {

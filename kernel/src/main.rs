@@ -33,6 +33,7 @@ mod time;
 mod virtio;
 mod wasm;
 mod topbar;
+mod allocator;
 
 use time::SystemClock;
 

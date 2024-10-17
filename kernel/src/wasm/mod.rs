@@ -289,6 +289,11 @@ impl WasmApp {
             })
             .map_err(|wasm_err| anyhow::format_err!(wasm_err))?;
 
+
+        // let mem = self.instance.get_memory(&store, "memory").unwrap();
+        // let mem_size = mem.size(store.as_context()) * 65_536;
+        // log::debug!("{}: {}MB", store.data().app_name, mem_size / 1_000_000);
+
         Ok(())
     }
 

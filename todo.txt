@@ -1,11 +1,9 @@
 # Bugs
 
-* moving windows not smooth
 * resize handle "jumps" to cursor when resizing
 * gpu crash after a while
 * clicks go through scrollbars
 * scrollbars interfere with resize button
-* crash when resizing cube and terminal
 
 # Refactorings
 

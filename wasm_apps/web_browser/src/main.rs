@@ -54,30 +54,35 @@ struct AppState {
 
 struct UiLayout {
     url_bar_rect: Rect,
-    button_rect: Rect,
+    go_button_rect: Rect,
+    reload_button_rect: Rect,
     progress_bar_rect: Rect,
     canvas_rect: Rect,
 }
 
+#[derive(Debug, Clone)]
+struct HttpTarget {
+    host: String,
+    path: String,
+}
+
 enum RequestState {
     Idle {
-        domain: Option<String>,
+        http_target: Option<HttpTarget>,
         layout: TrackedContent<LayoutNode>,
     },
     Dns {
-        domain: String,
-        path: String,
+        http_target: HttpTarget,
         dns_socket: Socket,
         dns_state: DnsState,
     },
     Https {
-        domain: String,
-        path: String,
+        http_target: HttpTarget,
         tls_client: TlsClient,
         https_state: HttpsState,
     },
     Render {
-        domain: Option<String>,
+        http_target: Option<HttpTarget>,
         html: String,
     },
 }
@@ -102,8 +107,8 @@ impl Debug for RequestState {
         match self {
             RequestState::Idle { .. } => write!(f, "Idle"),
             RequestState::Dns {
-                domain, dns_state, ..
-            } => write!(f, "DNS {} {:?}", domain, dns_state),
+                http_target, dns_state, ..
+            } => write!(f, "DNS {:?} {:?}", http_target, dns_state),
             RequestState::Https { https_state, .. } => write!(f, "HTTPS {:?}", https_state),
             RequestState::Render { .. } => write!(f, "Render"),
         }
@@ -167,7 +172,7 @@ pub fn init() -> () {
         webview_scroll_offsets: (0, 0),
         webview_scroll_dragging: (false, false),
         request_state: RequestState::Render {
-            domain: None,
+            http_target: None,
             html: format!(
                 "<html>\n\
                 <p bgcolor=\"#0000ff\">WELCOME</p>\n\
@@ -204,9 +209,15 @@ pub fn step() {
 
     let ui_layout = compute_ui_layout(&win_rect);
 
-    let is_button_fired = uitk_context.button(&uitk::ButtonConfig {
-        rect: ui_layout.button_rect.clone(),
+    let is_go_button_fired = uitk_context.button(&uitk::ButtonConfig {
+        rect: ui_layout.go_button_rect.clone(),
         text: "GO".into(),
+        ..Default::default()
+    });
+
+    let is_reload_button_fired = uitk_context.button(&uitk::ButtonConfig {
+        rect: ui_layout.reload_button_rect.clone(),
+        text: "Reload".into(),
         ..Default::default()
     });
 
@@ -236,10 +247,10 @@ pub fn step() {
         &progress_str,
     );
 
-    let url_go = is_button_fired || check_enter_pressed(&win_input_state);
+    let url_go = is_go_button_fired || check_enter_pressed(&win_input_state);
 
     let prev_state_debug = format!("{:?}", state.request_state);
-    try_update_request_state(state, url_go, &ui_layout, &win_input_state, time);
+    try_update_request_state(state, url_go, is_reload_button_fired, &ui_layout, &win_input_state, time);
     let new_state_debug = format!("{:?}", state.request_state);
 
     if new_state_debug != prev_state_debug {
@@ -259,10 +270,16 @@ fn compute_ui_layout(win_rect: &Rect) -> UiLayout {
         url_bar_rect: Rect {
             x0: 0,
             y0: 0,
-            w: win_rect.w - BUTTON_W,
+            w: win_rect.w - 2 * BUTTON_W,
             h: BAR_H,
         },
-        button_rect: Rect {
+        go_button_rect: Rect {
+            x0: (win_rect.w - 2 * BUTTON_W).into(),
+            y0: 0,
+            w: BUTTON_W,
+            h: BAR_H,
+        },
+        reload_button_rect: Rect {
             x0: (win_rect.w - BUTTON_W).into(),
             y0: 0,
             w: BUTTON_W,
@@ -299,16 +316,17 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
 fn try_update_request_state(
     state: &mut AppState,
     url_go: bool,
+    is_reload_button_fired: bool,
     ui_layout: &UiLayout,
     input_state: &InputState,
     time: f64,
 ) {
-    match update_request_state(state, url_go, ui_layout, input_state, time) {
+    match update_request_state(state, url_go, is_reload_button_fired, ui_layout, input_state, time) {
         Ok(_) => (),
         Err(err) => {
             log::error!("{}", err);
             state.request_state = RequestState::Render {
-                domain: None,
+                http_target: None,
                 html: make_error_html(err),
             }
         }
@@ -334,13 +352,14 @@ fn make_error_html(error: anyhow::Error) -> String {
 fn update_request_state(
     state: &mut AppState,
     url_go: bool,
+    is_reload_button_fired: bool,
     ui_layout: &UiLayout,
     input_state: &InputState,
     time: f64,
 ) -> anyhow::Result<()> {
     match &mut state.request_state {
         RequestState::Idle {
-            domain: current_domain,
+            http_target,
             layout,
         } => {
             let mut framebuffer = state.pixel_data.get_framebuffer();
@@ -357,29 +376,38 @@ fn update_request_state(
                 &mut state.webview_scroll_dragging,
             );
 
-            let mut url_data: Option<(String, String)> = None;
+            let new_http_target = {
+                if url_go {
+                    let new_http_target = parse_url(state.url_text.as_ref())?;
+                    Some(new_http_target)
+                } else if is_reload_button_fired {
+                    http_target.clone()
+                } else if input_state.pointer.left_click_trigger {
 
-            if url_go {
-                let (domain, path) = parse_url(state.url_text.as_ref())?;
-                url_data = Some((domain.to_string(), path.to_string()));
-            } else if input_state.pointer.left_click_trigger {
-                if let Some(href) = link_hover {
-                    if let Some(current_domain) = current_domain {
-                        if !href.starts_with(SCHEME) {
-                            let path = format!("/{}", href);
-                            url_data = Some((current_domain.clone(), path));
+                    let mut new_http_target = None;
+                    if let Some(href) = link_hover {
+                        if let Some(http_target) = http_target {
+                            if !href.starts_with(SCHEME) {
+                                new_http_target = Some(HttpTarget { 
+                                    host:  http_target.host.clone(),
+                                    path: format!("/{}", href),
+                                });
+                            }
                         }
                     }
-                }
-            }
 
-            if let Some((domain, path)) = url_data {
+                    new_http_target
+                } else  {
+                    None
+                }
+            };
+
+            if let Some(new_http_target) = new_http_target {
                 let s_ref = state.url_text.mutate(&mut state.uuid_provider);
-                let _ = core::mem::replace(s_ref, format!("{}{}{}", SCHEME, domain, path));
+                let _ = core::mem::replace(s_ref, format!("{}{}{}", SCHEME, new_http_target.host, new_http_target.path));
                 let dns_socket = Socket::new(DNS_SERVER_IP, 53)?;
                 state.request_state = RequestState::Dns {
-                    domain,
-                    path,
+                    http_target: new_http_target,
                     dns_socket,
                     dns_state: DnsState::Connecting,
                 };
@@ -387,15 +415,14 @@ fn update_request_state(
         }
 
         RequestState::Dns {
-            domain,
-            path,
+            http_target,
             dns_state,
             dns_socket,
         } => match dns_state {
             DnsState::Connecting => {
                 let socket_ready = dns_socket.may_send() && dns_socket.may_recv();
                 if socket_ready {
-                    let tcp_bytes = dns::make_tcp_dns_request(domain);
+                    let tcp_bytes = dns::make_tcp_dns_request(&http_target.host);
                     state.buffer.clear();
                     state.buffer.write(&tcp_bytes)?;
                     *dns_state = DnsState::Sending { out_count: 0 };
@@ -445,9 +472,8 @@ fn update_request_state(
 
                     let https_socket = Socket::new(ip_addr, 443)?;
                     state.request_state = RequestState::Https {
-                        domain: domain.clone(),
-                        path: path.clone(),
-                        tls_client: TlsClient::new(https_socket, domain),
+                        http_target: http_target.clone(),
+                        tls_client: TlsClient::new(https_socket, &http_target.host),
                         https_state: HttpsState::Connecting,
                     }
                 }
@@ -455,8 +481,7 @@ fn update_request_state(
         },
 
         RequestState::Https {
-            domain,
-            path,
+            http_target,
             tls_client,
             https_state,
         } => match https_state {
@@ -470,7 +495,7 @@ fn update_request_state(
                         Connection: close\r\n\
                         Accept-Encoding: identity\r\n\
                         \r\n",
-                        path, domain
+                        http_target.path, http_target.host,
                     )?;
                     *https_state = HttpsState::Sending { out_count: 0 };
                 }
@@ -501,20 +526,20 @@ fn update_request_state(
                     let (_header, body) = parse_http(http_string)?;
                     //guestlib::qemu_dump(body.as_bytes());
                     state.request_state = RequestState::Render {
-                        domain: Some(domain.clone()),
+                        http_target: Some(http_target.clone()),
                         html: body,
                     };
                 }
             }
         },
 
-        RequestState::Render { domain, html } => {
+        RequestState::Render { http_target, html } => {
             let html_tree = parse_html(html)?;
             let layout = compute_layout(&html_tree)?;
 
             //log::debug!("Layout: {:?}", layout.rect);
             state.request_state = RequestState::Idle {
-                domain: domain.clone(),
+                http_target: http_target.clone(),
                 layout: TrackedContent::new(layout, &mut state.uuid_provider),
             };
         }
@@ -586,17 +611,17 @@ fn parse_header(http_response: &str) -> anyhow::Result<(HttpHeader, &str)> {
     Ok((header, body))
 }
 
-fn parse_url(url: &str) -> anyhow::Result<(&str, &str)> {
+fn parse_url(url: &str) -> anyhow::Result<HttpTarget> {
     if !url.starts_with(SCHEME) {
         return Err(anyhow::anyhow!("Invalid URL (no https://)"));
     }
 
     let (_scheme, s) = url.split_at(SCHEME.len());
 
-    let (domain, path) = match s.find("/") {
+    let (host, path) = match s.find("/") {
         Some(i) => s.split_at(i),
         None => (s, "/"),
     };
 
-    Ok((domain, path))
+    Ok(HttpTarget { host: host.to_owned(), path: path.to_owned() })
 }

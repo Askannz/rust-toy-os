@@ -4,6 +4,8 @@
 * gpu crash after a while
 * clicks go through scrollbars
 * scrollbars interfere with resize button
+* memory alloc failure when resizing windows rapidly
+* web browser: previous buffer contents still visible when going to a smaller page
 
 # Refactorings
 
@@ -17,9 +19,12 @@
 
 # Features
 
+* RUST_BACKTRACE env var passed to WASM
+* resumable tile rendering
 * nested pie menus
 * apps z-order and focus
-* make it pretty (UI color palette)
+* choose proper style for UI (color, fonts, etc)
+* color palette
 * web browser: improve compatibility (be able to load wikipedia for ex)
 * web browser: navigation controls (back/reload/home)
 * web browser: use proper fonts for HN

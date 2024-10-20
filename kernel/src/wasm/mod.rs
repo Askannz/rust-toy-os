@@ -309,6 +309,10 @@ impl WasmApp {
 // }
 
 fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData>) {
+
+    // This works but is sadly not enough to display a backtrace, not sure why
+    const ENV_VARS: [&str; 1] = ["RUST_BACKTRACE=full"];
+
     macro_rules! linker_impl {
         ($module:expr, $name:expr, $func:expr) => {
             linker
@@ -367,7 +371,6 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
     linker_stub!(m, "path_unlink_file", [i32, i32, i32], i32);
     linker_stub!(m, "poll_oneoff", [i32, i32, i32, i32], i32);
     linker_stub!(m, "sched_yield", [], i32);
-    linker_stub!(m, "environ_get", [i32, i32], i32);
     linker_stub!(m, "fd_close", [i32], i32);
     linker_stub!(m, "fd_filestat_get", [i32, i32], i32);
     linker_stub!(m, "fd_prestat_dir_name", [i32, i32, i32], i32);
@@ -464,8 +467,43 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         let environ_count = environ_count as usize;
         let environ_buf_size = environ_buf_size as usize;
 
-        mem_data[environ_count..environ_count + 4].fill(0x00);
-        mem_data[environ_buf_size..environ_buf_size + 4].fill(0x00);
+        let n_env_vars = ENV_VARS.len() as u32;
+        let string_data_size: u32 = ENV_VARS.iter().map(|s| s.len() as u32 + 1).sum();
+
+        mem_data[environ_count..environ_count + 4].copy_from_slice(&u32::to_le_bytes(n_env_vars));
+        mem_data[environ_buf_size..environ_buf_size + 4].copy_from_slice(&u32::to_le_bytes(string_data_size));
+
+        0
+    });
+
+    linker_impl!(m, "environ_get", |mut caller: Caller<StoreData>,
+                                          environ: i32,
+                                          environ_buf: i32|
+     -> i32 {
+        log::debug!(
+            "Function environ_get() called (dest buffers {:#x} {:#x})",
+            environ,
+            environ_buf
+        );
+
+        let mem = get_linear_memory(&caller);
+        let mem_data = mem.data_mut(&mut caller);
+
+        let mut p_addr = environ as usize;
+        let mut str_addr = environ_buf as usize;
+
+        for env_str in ENV_VARS.iter() {
+
+            let p_bytes = &u32::to_le_bytes(str_addr as u32);
+            mem_data[p_addr..p_addr+p_bytes.len()].copy_from_slice(p_bytes);
+            p_addr += p_bytes.len();
+
+            let s_bytes = env_str.as_bytes();
+            mem_data[str_addr..str_addr+s_bytes.len()].copy_from_slice(s_bytes);
+            str_addr += s_bytes.len();
+            mem_data[str_addr] = 0;
+            str_addr += 1;
+        }
 
         0
     });

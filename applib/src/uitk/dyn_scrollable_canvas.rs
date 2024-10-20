@@ -19,8 +19,8 @@ const SBAR_INNER_DRAGGING_COLOR: Color = Color::AQUA;
 
 pub trait TileRenderer {
     fn shape(&self) -> (u32, u32);
-    fn content_id(&self, src_rect: &Rect) -> ContentId;
-    fn render<F: FbViewMut>(&self, dst_fb: &mut F, src_rect: &Rect);
+    fn content_id(&self, viewport_rect: &Rect) -> ContentId;
+    fn render<F: FbViewMut>(&self, dst_fb: &mut F, viewport_rect: &Rect);
 }
 
 impl<'a, F: FbViewMut> UiContext<'a, F> {
@@ -58,17 +58,19 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             *scroll_y0 = 0;
         }
 
-        let src_rect = &Rect {
+        let viewport_rect = &Rect {
             x0: *scroll_x0,
             y0: *scroll_y0,
             w: dst_rect.w,
             h: dst_rect.h,
         };
 
-        draw_tile(
+        let mut dst_subregion = dst_fb.subregion_mut(dst_rect);
+
+        draw_tiles(
             renderer,
-            &mut dst_fb.subregion_mut(dst_rect),
-            src_rect,
+            &mut dst_subregion,
+            viewport_rect,
             self.time,
             tile_cache,
         );
@@ -175,20 +177,20 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 }
 
 
-fn draw_tile<F: FbViewMut, T: TileRenderer>(
+fn draw_tiles<F: FbViewMut, T: TileRenderer>(
     renderer: &T,
     dst_fb: &mut F,
-    src_rect: &Rect,
+    viewport_rect: &Rect,  // Shape of current viewport in the src canvas
     time: f64,
     tile_cache: &mut TileCache
 ) {
 
-    let src_shape = renderer.shape();
-    let tile_shape = (src_rect.w, src_rect.h);
+    let src_canvas_shape = renderer.shape();  // Shape of the full src canvas
+    let max_tile_shape = (viewport_rect.w, viewport_rect.h); // Maximum shape of individual tiles
 
-    let tiles_rects = get_tiles(src_shape, tile_shape);
+    let tiles_rects = get_tiles(src_canvas_shape, max_tile_shape);
 
-    let regions = select_tile_regions(&tiles_rects, src_rect);
+    let regions = select_tile_regions(&tiles_rects, viewport_rect);
 
     for tile_region in regions.iter() {
 
@@ -226,17 +228,17 @@ fn draw_tile<F: FbViewMut, T: TileRenderer>(
             h: reg_h,
         };
 
-        let (dst_x0, dst_y0) = (reg_x0 - src_rect.x0, reg_y0 - src_rect.y0);
+        let (dst_x0, dst_y0) = (reg_x0 - viewport_rect.x0, reg_y0 - viewport_rect.y0);
 
         dst_fb.copy_from_fb(&cached_tile.fb.subregion(&tile_src_rect), (dst_x0, dst_y0), false);
     }
 }
 
 
-fn select_tile_regions(tiles_rects: &Vec<Rect>, src_rect: &Rect) -> Vec<TileRegion> {
+fn select_tile_regions(tiles_rects: &Vec<Rect>, viewport_rect: &Rect) -> Vec<TileRegion> {
     let mut regions = Vec::new();
     for tile_rect in tiles_rects {
-        match tile_rect.intersection(src_rect) {
+        match tile_rect.intersection(viewport_rect) {
             None => (),
             Some(region_rect) => regions.push(TileRegion {
                 tile_rect: tile_rect.clone(),
@@ -254,10 +256,10 @@ struct TileRegion {
     region_rect: Rect,
 }
 
-fn get_tiles(src_shape: (u32, u32), tile_shape: (u32, u32)) -> Vec<Rect> {
+fn get_tiles(src_canvas_shape: (u32, u32), max_tile_shape: (u32, u32)) -> Vec<Rect> {
 
-    let (cw, ch) = src_shape;
-    let (tile_w, tile_h) = tile_shape;
+    let (cw, ch) = src_canvas_shape;
+    let (tile_w, tile_h) = max_tile_shape;
 
     let cw: i64 = cw.into();
     let ch: i64 = ch.into();

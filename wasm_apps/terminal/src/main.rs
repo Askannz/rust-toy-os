@@ -202,16 +202,16 @@ impl<'a> uitk::TileRenderer for ConsoleCanvasRenderer<'a> {
         (w, h)
     }
 
-    fn content_id(&self, src_rect: &Rect) -> ContentId {
+    fn content_id(&self, viewport_rect: &Rect) -> ContentId {
         ContentId::from_hash((
             self.formatted.get_id(),
-            src_rect
+            viewport_rect
         ))
     }
 
-    fn render<F: FbViewMut>(&self, dst_fb: &mut F, src_rect: &Rect) {
+    fn render<F: FbViewMut>(&self, dst_fb: &mut F, viewport_rect: &Rect) {
 
-        let Rect { x0: ox, y0: oy, .. } = *src_rect;
+        let Rect { x0: ox, y0: oy, .. } = *viewport_rect;
 
         // TODO
         if ox != 0 {
@@ -228,7 +228,7 @@ impl<'a> uitk::TileRenderer for ConsoleCanvasRenderer<'a> {
                 h: line.h,
             };
 
-            if src_rect.intersection(&line_rect).is_some() {
+            if viewport_rect.intersection(&line_rect).is_some() {
                 draw_rich_slice(dst_fb, &line.chars, 0, y - oy);
             }
 

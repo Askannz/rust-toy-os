@@ -14,15 +14,15 @@ impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
         self.src_fb.as_ref().shape()
     }
 
-    fn content_id(&self, src_rect: &Rect) -> ContentId {
+    fn content_id(&self, viewport_rect: &Rect) -> ContentId {
         ContentId::from_hash((
             self.src_fb.get_id(),
-            src_rect,
+            viewport_rect,
         ))
     }
 
-    fn render<F: FbViewMut>(&self, dst_fb: &mut F, src_rect: &Rect) {
-        let src_fb = self.src_fb.as_ref().subregion(src_rect);
+    fn render<F: FbViewMut>(&self, dst_fb: &mut F, viewport_rect: &Rect) {
+        let src_fb = self.src_fb.as_ref().subregion(viewport_rect);
         dst_fb.copy_from_fb(&src_fb, (0, 0), false);
     }
 }

@@ -145,10 +145,11 @@ def _build_crate(
             print(f"Skipping build for {crate_path} (up-to-date)")
             return binary_path
 
+    mode_arg = "" if mode == "debug" else "--release"
 
     print(f"Building {binary_path}")
     try:
-        subprocess.check_call(f"cargo build --{mode}", cwd=crate_path, shell=True)
+        subprocess.check_call(f"cargo build {mode_arg}", cwd=crate_path, shell=True)
     except (KeyboardInterrupt, subprocess.CalledProcessError):
         print("Build failed.")
         sys.exit(1)

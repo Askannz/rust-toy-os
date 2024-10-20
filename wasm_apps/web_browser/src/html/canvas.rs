@@ -72,6 +72,11 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
         (w, h)
     }
 
+    fn max_tile_shape(&self, _viewport_rect: &Rect) -> (u32, u32) {
+        let Rect { w, .. } = self.layout.as_ref().rect;
+        (w, 300)
+    }
+
     fn content_id(&self, src_rect: &Rect) -> ContentId {
         ContentId::from_hash((
             src_rect,

@@ -202,6 +202,13 @@ impl<'a> uitk::TileRenderer for ConsoleCanvasRenderer<'a> {
         (w, h)
     }
 
+    fn max_tile_shape(&self, viewport_rect: &Rect) -> (u32, u32) {
+        (
+            viewport_rect.w,
+            100
+        )
+    }
+
     fn content_id(&self, viewport_rect: &Rect) -> ContentId {
         ContentId::from_hash((
             self.formatted.get_id(),

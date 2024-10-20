@@ -5,7 +5,6 @@
 * clicks go through scrollbars
 * scrollbars interfere with resize button
 * memory alloc failure when resizing windows rapidly
-* web browser: previous buffer contents still visible when going to a smaller page
 
 # Refactorings
 
@@ -19,6 +18,7 @@
 
 # Features
 
+* rethink tile cleanup
 * RUST_BACKTRACE env var passed to WASM
 * resumable tile rendering
 * nested pie menus

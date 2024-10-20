@@ -19,6 +19,7 @@ const SBAR_INNER_DRAGGING_COLOR: Color = Color::AQUA;
 
 pub trait TileRenderer {
     fn shape(&self) -> (u32, u32);
+    fn max_tile_shape(&self, viewport_rect: &Rect) -> (u32, u32);
     fn content_id(&self, viewport_rect: &Rect) -> ContentId;
     fn render<F: FbViewMut>(&self, dst_fb: &mut F, viewport_rect: &Rect);
 }
@@ -186,9 +187,9 @@ fn draw_tiles<F: FbViewMut, T: TileRenderer>(
 ) {
 
     let src_canvas_shape = renderer.shape();  // Shape of the full src canvas
-    let max_tile_shape = (viewport_rect.w, viewport_rect.h); // Maximum shape of individual tiles
+    let max_tile_shape = renderer.max_tile_shape(viewport_rect); // Maximum shape of individual tiles
 
-    let tiles_rects = get_tiles(src_canvas_shape, max_tile_shape);
+    let tiles_rects = get_tiles(src_canvas_shape, viewport_rect, max_tile_shape);
 
     let regions = select_tile_regions(&tiles_rects, viewport_rect);
 
@@ -256,28 +257,30 @@ struct TileRegion {
     region_rect: Rect,
 }
 
-fn get_tiles(src_canvas_shape: (u32, u32), max_tile_shape: (u32, u32)) -> Vec<Rect> {
+fn get_tiles(src_canvas_shape: (u32, u32), viewport_rect: &Rect, max_tile_shape: (u32, u32)) -> Vec<Rect> {
 
     let (cw, ch) = src_canvas_shape;
+    let (vw, vh) = (viewport_rect.w, viewport_rect.h);
     let (tile_w, tile_h) = max_tile_shape;
 
-    let cw: i64 = cw.into();
-    let ch: i64 = ch.into();
+    let cov_w: i64 = u32::max(cw, vw).into();
+    let cov_h: i64 = u32::max(ch, vh).into();
+
     let tile_w: i64 = tile_w.into();
     let tile_h: i64 = tile_h.into();
 
     let mut tile_bounds_x = Vec::new();
     let mut x = 0;
-    while x < cw {
-        let new_x = i64::min(x + tile_w, cw);
+    while x < cov_w {
+        let new_x = i64::min(x + tile_w, cov_w);
         tile_bounds_x.push((x, new_x));
         x = new_x;
     }
 
     let mut tile_bounds_y = Vec::new();
     let mut y = 0;
-    while y < ch {
-        let new_y = i64::min(y + tile_h, ch);
+    while y < cov_h {
+        let new_y = i64::min(y + tile_h, cov_h);
         tile_bounds_y.push((y, new_y));
         y = new_y;
     }

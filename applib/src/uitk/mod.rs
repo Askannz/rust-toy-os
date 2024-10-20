@@ -62,7 +62,7 @@ impl UiStore {
     ) -> UiContext<'a, F> {
 
         // TODO: need to rethink this
-        self.cleanup_tile_cache();
+        //self.cleanup_tile_cache();
 
         UiContext {
             fb,

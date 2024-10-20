@@ -72,19 +72,30 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
         (w, h)
     }
 
-    fn max_tile_shape(&self, _viewport_rect: &Rect) -> (u32, u32) {
+    fn tile_shape(&self) -> (u32, u32) {
         let Rect { w, .. } = self.layout.as_ref().rect;
-        (w, 300)
+        (
+            u32::max(w, 300),
+            300
+        )
     }
 
-    fn content_id(&self, src_rect: &Rect) -> ContentId {
-        ContentId::from_hash((
-            src_rect,
-            self.layout.get_id()
-        ))
+    fn content_id(&self, tile_rect: &Rect) -> ContentId {
+
+        let layout_rect = &self.layout.as_ref().rect;
+
+        if tile_rect.intersection(layout_rect).is_none() {
+            ContentId::from_hash((tile_rect.w, tile_rect.h))
+        } else {
+            ContentId::from_hash((
+                tile_rect,
+                self.layout.get_id()
+            ))
+        }
     }
 
-    fn render<F: FbViewMut>(&self, dst_fb: &mut F, src_rect: &Rect) {
-        render_html(dst_fb, self.layout.as_ref(), src_rect);
+    fn render<F: FbViewMut>(&self, dst_fb: &mut F, tile_rect: &Rect) {
+        //log::debug!("Rendering HTML tile");
+        render_html(dst_fb, self.layout.as_ref(), tile_rect);
     }
 }

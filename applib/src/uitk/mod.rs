@@ -17,9 +17,9 @@ pub use crate::content::{ContentId, UuidProvider};
 use crate::InputState;
 use crate::{FbViewMut, Framebuffer, OwnedPixels};
 
-pub struct CachedTile {
+struct CachedTile {
     fb: Framebuffer<OwnedPixels>,
-    time: f64,
+    last_used_time: f64,
 }
 
 pub struct TileCache {
@@ -27,10 +27,26 @@ pub struct TileCache {
 }
 
 impl TileCache {
+
     fn new() -> Self {
         Self {
             tiles: BTreeMap::new(),
         }
+    }
+
+    fn fetch_or_create<F>(&mut self, content_id: ContentId, time: f64, create_func: F) -> &Framebuffer<OwnedPixels> 
+        where F: FnOnce() -> Framebuffer<OwnedPixels>
+    
+    {
+
+        let cached_tile = self.tiles.entry(content_id).or_insert_with(|| {
+            let tile_fb = create_func();
+            CachedTile { fb: tile_fb, last_used_time: time }
+        });
+
+        cached_tile.last_used_time = time;
+
+        &cached_tile.fb
     }
 }
 
@@ -84,7 +100,9 @@ impl UiStore {
             pairs.push((key, tile));
         }
 
-        pairs.sort_unstable_by(|(_, tile_1), (_, tile_2)| tile_2.time.partial_cmp(&tile_1.time).unwrap());
+        pairs.sort_unstable_by(|(_, tile_1), (_, tile_2)| {
+            tile_2.last_used_time.partial_cmp(&tile_1.last_used_time).unwrap()
+        });
 
         for (key, tile) in pairs.into_iter().take(TO_KEEP) {
             tiles.insert(key, tile);

@@ -143,7 +143,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
         let tile_content_id = ContentId::from_hash((config, cursor_visible, buffer.get_id()));
 
-        let cached_tile = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
+        let tile_fb = tile_cache.fetch_or_create(tile_content_id, self.time, || {
             //
             // Draw text
 
@@ -174,11 +174,11 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
                 draw_rect(&mut tile_fb, &cursor_rect, *color, false);
             }
 
-            CachedTile { fb: tile_fb, time: self.time }
+            tile_fb
         });
 
         let Rect { x0, y0, .. } = config.rect;
-        fb.copy_from_fb(&cached_tile.fb, (x0, y0), false);
+        fb.copy_from_fb(tile_fb, (x0, y0), false);
     }
 }
 

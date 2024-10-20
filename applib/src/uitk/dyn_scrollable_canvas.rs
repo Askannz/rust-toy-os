@@ -19,7 +19,7 @@ const SBAR_INNER_DRAGGING_COLOR: Color = Color::AQUA;
 
 pub trait TileRenderer {
     fn shape(&self) -> (u32, u32);
-    fn max_tile_shape(&self, viewport_rect: &Rect) -> (u32, u32);
+    fn tile_shape(&self) -> (u32, u32);
     fn content_id(&self, viewport_rect: &Rect) -> ContentId;
     fn render<F: FbViewMut>(&self, dst_fb: &mut F, viewport_rect: &Rect);
 }
@@ -187,9 +187,10 @@ fn draw_tiles<F: FbViewMut, T: TileRenderer>(
 ) {
 
     let src_canvas_shape = renderer.shape();  // Shape of the full src canvas
-    let max_tile_shape = renderer.max_tile_shape(viewport_rect); // Maximum shape of individual tiles
+    let tile_shape = renderer.tile_shape(); // Shape of individual tiles
 
-    let tiles_rects = get_tiles(src_canvas_shape, viewport_rect, max_tile_shape);
+    let (vw, vh) = (viewport_rect.w, viewport_rect.h);
+    let tiles_rects = get_tiles(src_canvas_shape, (vw, vh), tile_shape);
 
     let regions = select_tile_regions(&tiles_rects, viewport_rect);
 
@@ -197,17 +198,16 @@ fn draw_tiles<F: FbViewMut, T: TileRenderer>(
 
         let tile_content_id = renderer.content_id(&tile_region.tile_rect);
 
-        let cached_tile = tile_cache.tiles.entry(tile_content_id).or_insert_with(|| {
-
+        let tile_fb = tile_cache.fetch_or_create(tile_content_id, time, || {
             let mut tile_fb =
                 Framebuffer::new_owned(tile_region.tile_rect.w, tile_region.tile_rect.h);
 
             let mut dst_fb = tile_fb.subregion_mut(&tile_fb.shape_as_rect());
-            renderer.render(&mut dst_fb, &tile_region.tile_rect);
+            renderer.render(&mut dst_fb, &tile_region.tile_rect); 
 
-            //draw_tile_border(&mut dst_fb);
+            draw_tile_border(&mut tile_fb);
 
-            CachedTile { fb: tile_fb, time }
+            tile_fb
         });
 
         let Rect {
@@ -231,7 +231,7 @@ fn draw_tiles<F: FbViewMut, T: TileRenderer>(
 
         let (dst_x0, dst_y0) = (reg_x0 - viewport_rect.x0, reg_y0 - viewport_rect.y0);
 
-        dst_fb.copy_from_fb(&cached_tile.fb.subregion(&tile_src_rect), (dst_x0, dst_y0), false);
+        dst_fb.copy_from_fb(&tile_fb.subregion(&tile_src_rect), (dst_x0, dst_y0), false);
     }
 }
 
@@ -257,38 +257,37 @@ struct TileRegion {
     region_rect: Rect,
 }
 
-fn get_tiles(src_canvas_shape: (u32, u32), viewport_rect: &Rect, max_tile_shape: (u32, u32)) -> Vec<Rect> {
+fn get_tiles(src_canvas_shape: (u32, u32), viewport_shape: (u32, u32), tile_shape: (u32, u32)) -> Vec<Rect> {
 
     let (cw, ch) = src_canvas_shape;
-    let (vw, vh) = (viewport_rect.w, viewport_rect.h);
-    let (tile_w, tile_h) = max_tile_shape;
+    let (vw, vh) = viewport_shape;
+    let (tile_w, tile_h) = tile_shape;
 
-    let cov_w: i64 = u32::max(cw, vw).into();
-    let cov_h: i64 = u32::max(ch, vh).into();
+    let cov_w = u32::max(cw, vw);
+    let cov_h = u32::max(ch, vh);
 
-    let tile_w: i64 = tile_w.into();
-    let tile_h: i64 = tile_h.into();
+    let n_tiles_x = if cov_w % tile_w == 0 {
+        cov_w / tile_w
+    } else {
+        cov_w / tile_w + 1
+    };
 
-    let mut tile_bounds_x = Vec::new();
-    let mut x = 0;
-    while x < cov_w {
-        let new_x = i64::min(x + tile_w, cov_w);
-        tile_bounds_x.push((x, new_x));
-        x = new_x;
-    }
-
-    let mut tile_bounds_y = Vec::new();
-    let mut y = 0;
-    while y < cov_h {
-        let new_y = i64::min(y + tile_h, cov_h);
-        tile_bounds_y.push((y, new_y));
-        y = new_y;
-    }
+    let n_tiles_y = if cov_h % tile_h == 0 {
+        cov_h / tile_h
+    } else {
+        cov_h / tile_h + 1
+    };
 
     let mut tiles_rects = Vec::new();
-    for (x0, x1) in tile_bounds_x.iter() {
-        for (y0, y1) in tile_bounds_y.iter() {
-            tiles_rects.push(Rect::from_xyxy([*x0, *y0, *x1 - 1, *y1 - 1]))
+    for ix in 0..n_tiles_x {
+        for iy in 0..n_tiles_y {
+
+            let x1 = ix * tile_w;
+            let x2 = (ix + 1) * tile_w - 1;
+            let y1 = iy * tile_h;
+            let y2 = (iy + 1) * tile_h - 1;
+
+            tiles_rects.push(Rect::from_xyxy([x1.into(), y1.into(), x2.into(), y2.into()]))
         }
     }
 

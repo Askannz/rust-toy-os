@@ -34,8 +34,6 @@ struct AppState {
     input_buffer: TrackedContent<String>,
     console_buffer: TrackedContent<Vec<EvalResult>>,
 
-    text_formatter: ConsoleTextFormatter,
-
     ui_store: UiStore,
     uuid_provider: uitk::UuidProvider,
     scroll_offsets: (i64, i64),
@@ -60,7 +58,6 @@ pub fn init() -> () {
         pixel_data: PixelData::new(),
         input_buffer: TrackedContent::new(String::new(), &mut uuid_provider),
         console_buffer: TrackedContent::new(Vec::new(), &mut uuid_provider),
-        text_formatter: ConsoleTextFormatter { cached: None },
         ui_store: uitk::UiStore::new(),
         uuid_provider: UuidProvider::new(),
         scroll_offsets: (0, 0),
@@ -116,7 +113,7 @@ pub fn step() {
         h: win_h,
     };
 
-    let formatted = state.text_formatter.format(&state.input_buffer, &state.console_buffer, (win_w, win_h));
+    let formatted = get_formatted_text(&state.input_buffer, &state.console_buffer, (win_w, win_h));
 
     let renderer = ConsoleCanvasRenderer { formatted };
 
@@ -156,73 +153,68 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
 }
 
 
-struct ConsoleTextFormatter {
-    cached: Option<(ContentId, FormattedRichText)>,
+fn get_formatted_text(
+    input_buffer: &TrackedContent<String>,
+    console_buffer: &TrackedContent<Vec<EvalResult>>,
+    win_shape: (u32, u32)
+) -> TrackedContent<FormattedRichText> {
+
+    let (win_w, _win_h) = win_shape;
+
+    let console_rich_text = get_console_rich_text(input_buffer.as_ref(), console_buffer.as_ref());
+    let formatted = format_rich_lines(&console_rich_text, win_w);
+
+    let new_cid = ContentId::from_hash((
+        input_buffer.get_id(),
+        console_buffer.get_id(),
+        formatted.w,
+    ));
+
+    TrackedContent::new_with_id(formatted, new_cid)
 }
 
-impl ConsoleTextFormatter {
-
-    fn format(
-        &mut self,
-        input_buffer: &TrackedContent<String>,
-        console_buffer: &TrackedContent<Vec<EvalResult>>,
-        win_shape: (u32, u32)
-    ) -> TrackedContent<&FormattedRichText> {
-
-        let (win_w, _win_h) = win_shape;
-
-        let new_cid = ContentId::from_hash((
-            input_buffer.get_id(),
-            console_buffer.get_id(),
-            win_w,
-        ));
-
-        // Clearing cache if we get a new content ID
-        self.cached.take_if(|(cid, _)| *cid != new_cid);
-
-        let (_, formatted) = self.cached.get_or_insert_with(|| {
-            let console_rich_text = get_console_rich_text(input_buffer.as_ref(), console_buffer.as_ref());
-            let formatted = format_rich_lines(&console_rich_text, win_w);
-            (new_cid, formatted)
-        });
-
-        TrackedContent::new_with_id(formatted, new_cid)
-    }   
-
-}
-
-struct ConsoleCanvasRenderer<'a> {
-    formatted: TrackedContent<&'a FormattedRichText>,
+struct ConsoleCanvasRenderer {
+    formatted: TrackedContent<FormattedRichText>,
 }
 
 
-impl<'a> uitk::TileRenderer for ConsoleCanvasRenderer<'a> {
+impl uitk::TileRenderer for ConsoleCanvasRenderer {
     fn shape(&self) -> (u32, u32) {
-        let FormattedRichText { w, h, .. } = **self.formatted.as_ref();
+        let FormattedRichText { w, h, .. } = *self.formatted.as_ref();
         (w, h)
     }
 
-    fn max_tile_shape(&self, viewport_rect: &Rect) -> (u32, u32) {
+    fn tile_shape(&self) -> (u32, u32) {
+        let FormattedRichText { w, .. } = *self.formatted.as_ref();
         (
-            viewport_rect.w,
-            100
+            u32::max(w, 200),
+            200
         )
     }
 
-    fn content_id(&self, viewport_rect: &Rect) -> ContentId {
-        ContentId::from_hash((
-            self.formatted.get_id(),
-            viewport_rect
-        ))
+    fn content_id(&self, tile_rect: &Rect) -> ContentId {
+
+        let FormattedRichText { w, h, .. } = *self.formatted.as_ref();
+        let text_rect = Rect { x0: 0, y0: 0, w, h};
+
+        if tile_rect.intersection(&text_rect).is_none() {
+            ContentId::from_hash((tile_rect.w, tile_rect.h))
+        } else {
+            ContentId::from_hash((
+                tile_rect,
+                self.formatted.get_id()
+            ))
+        }
     }
 
-    fn render<F: FbViewMut>(&self, dst_fb: &mut F, viewport_rect: &Rect) {
+    fn render<F: FbViewMut>(&self, dst_fb: &mut F, tile_rect: &Rect) {
 
-        let Rect { x0: ox, y0: oy, .. } = *viewport_rect;
+        //log::debug!("Rendering terminal tile");
 
-        // TODO
+        let Rect { x0: ox, y0: oy, .. } = *tile_rect;
+
         if ox != 0 {
-            unimplemented!()
+            return;
         }
 
         let mut y = 0;
@@ -235,7 +227,7 @@ impl<'a> uitk::TileRenderer for ConsoleCanvasRenderer<'a> {
                 h: line.h,
             };
 
-            if viewport_rect.intersection(&line_rect).is_some() {
+            if tile_rect.intersection(&line_rect).is_some() {
                 draw_rich_slice(dst_fb, &line.chars, 0, y - oy);
             }
 

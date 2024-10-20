@@ -14,8 +14,8 @@ impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
         self.src_fb.as_ref().shape()
     }
 
-    fn max_tile_shape(&self, viewport_rect: &Rect) -> (u32, u32) {
-        (viewport_rect.w, viewport_rect.h)
+    fn tile_shape(&self) -> (u32, u32) {
+        self.shape()
     }
 
     fn content_id(&self, viewport_rect: &Rect) -> ContentId {

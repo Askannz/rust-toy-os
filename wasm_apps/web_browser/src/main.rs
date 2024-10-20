@@ -154,8 +154,6 @@ pub fn init() -> () {
     log::set_max_level(LOGGING_LEVEL);
     log::set_logger(&LOGGER).unwrap();
 
-    let win_rect = guestlib::get_win_rect();
-
     let url_text = String::from("https://news.ycombinator.com/");
     let url_len = url_text.len();
 
@@ -212,12 +210,14 @@ pub fn step() {
     let is_go_button_fired = uitk_context.button(&uitk::ButtonConfig {
         rect: ui_layout.go_button_rect.clone(),
         text: "GO".into(),
+        idle_color: Color::rgb(0, 180, 0),
         ..Default::default()
     });
 
     let is_reload_button_fired = uitk_context.button(&uitk::ButtonConfig {
         rect: ui_layout.reload_button_rect.clone(),
         text: "Reload".into(),
+        idle_color: Color::rgb(180, 180, 0),
         ..Default::default()
     });
 
@@ -263,26 +263,27 @@ pub fn step() {
 }
 
 fn compute_ui_layout(win_rect: &Rect) -> UiLayout {
-    const BUTTON_W: u32 = 100;
+    const RELOAD_BUTTON_W: u32 = 100;
+    const GO_BUTTON_W: u32 = 40;
     const BAR_H: u32 = 25;
 
     UiLayout {
         url_bar_rect: Rect {
             x0: 0,
             y0: 0,
-            w: win_rect.w - 2 * BUTTON_W,
+            w: win_rect.w - GO_BUTTON_W - RELOAD_BUTTON_W,
             h: BAR_H,
         },
         go_button_rect: Rect {
-            x0: (win_rect.w - 2 * BUTTON_W).into(),
+            x0: (win_rect.w - GO_BUTTON_W - RELOAD_BUTTON_W).into(),
             y0: 0,
-            w: BUTTON_W,
+            w: GO_BUTTON_W,
             h: BAR_H,
         },
         reload_button_rect: Rect {
-            x0: (win_rect.w - BUTTON_W).into(),
+            x0: (win_rect.w - RELOAD_BUTTON_W).into(),
             y0: 0,
-            w: BUTTON_W,
+            w: RELOAD_BUTTON_W,
             h: BAR_H,
         },
         progress_bar_rect: Rect {

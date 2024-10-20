@@ -86,7 +86,7 @@ pub fn run_apps<F: FbViewMut>(
     interaction_state: &mut AppsInteractionState,
 ) {
     const PIE_DEFAULT_COLOR: Color = Color::rgb(0x44, 0x44, 0x44);
-    const MIN_APP_SIZE: u32 = 150;
+    const MIN_APP_SIZE: u32 = 200;
 
     let pointer = &input_state.pointer;
 

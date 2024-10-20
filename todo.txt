@@ -19,7 +19,6 @@
 # Features
 
 * rethink tile cleanup
-* RUST_BACKTRACE env var passed to WASM
 * resumable tile rendering
 * nested pie menus
 * apps z-order and focus

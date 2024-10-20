@@ -192,6 +192,8 @@ fn draw_tiles<F: FbViewMut, T: TileRenderer>(
     let (vw, vh) = (viewport_rect.w, viewport_rect.h);
     let tiles_rects = get_tiles(src_canvas_shape, (vw, vh), tile_shape);
 
+    log::debug!("{} tiles in cache", tile_cache.tiles.len());
+
     let regions = select_tile_regions(&tiles_rects, viewport_rect);
 
     for tile_region in regions.iter() {

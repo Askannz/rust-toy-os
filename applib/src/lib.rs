@@ -374,6 +374,10 @@ impl Framebuffer<OwnedPixels> {
             rect,
         }
     }
+
+    pub fn size_bytes(&self) -> usize {
+        self.data.as_slice().len() * 4
+    }
 }
 
 impl<T: FbData> FbView for Framebuffer<T> {

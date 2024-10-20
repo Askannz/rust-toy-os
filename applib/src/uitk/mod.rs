@@ -17,13 +17,16 @@ pub use crate::content::{ContentId, UuidProvider};
 use crate::InputState;
 use crate::{FbViewMut, Framebuffer, OwnedPixels};
 
+
+const TILE_CACHE_MAX_SIZE: usize = 10_000_000; // in bytes
+
 struct CachedTile {
     fb: Framebuffer<OwnedPixels>,
     last_used_time: f64,
 }
 
 pub struct TileCache {
-    pub tiles: BTreeMap<ContentId, CachedTile>,
+    tiles: BTreeMap<ContentId, CachedTile>,
 }
 
 impl TileCache {
@@ -38,7 +41,6 @@ impl TileCache {
         where F: FnOnce() -> Framebuffer<OwnedPixels>
     
     {
-
         let cached_tile = self.tiles.entry(content_id).or_insert_with(|| {
             let tile_fb = create_func();
             CachedTile { fb: tile_fb, last_used_time: time }
@@ -47,6 +49,41 @@ impl TileCache {
         cached_tile.last_used_time = time;
 
         &cached_tile.fb
+    }
+
+    fn cleanup(&mut self) {
+
+        let mut pairs = Vec::with_capacity(self.tiles.len());
+        while let Some((key, tile)) = self.tiles.pop_last() {
+            pairs.push((key, tile));
+        }
+
+        pairs.sort_unstable_by(|(_, tile_1), (_, tile_2)| {
+            tile_2.last_used_time.partial_cmp(&tile_1.last_used_time).unwrap()
+        });
+
+        let mut current_size = 0;
+        let mut evicted_count = 0;
+        let mut evicted_size = 0;
+        for (key, tile) in pairs.into_iter() {
+            if current_size < TILE_CACHE_MAX_SIZE {
+                current_size += tile.fb.size_bytes();
+                self.tiles.insert(key, tile);
+            } else {
+                evicted_count += 1;
+                evicted_size += tile.fb.size_bytes();
+            }
+        }
+
+        if evicted_count > 0 {
+            log::debug!(
+                "Evicted {} tiles from cache ({:.2} MB), {} remaining ({:.2} MB)",
+                evicted_count,
+                evicted_size as f64 / 1_000_000.0,
+                self.tiles.len(),
+                self.tiles.values().map(|tile| tile.fb.size_bytes()).sum::<usize>() as f64 / 1_000_000.0,
+            );
+        }
     }
 }
 
@@ -77,8 +114,7 @@ impl UiStore {
         time: f64,
     ) -> UiContext<'a, F> {
 
-        // TODO: need to rethink this
-        //self.cleanup_tile_cache();
+        self.tile_cache.cleanup();
 
         UiContext {
             fb,
@@ -86,26 +122,6 @@ impl UiStore {
             input_state,
             uuid_provider,
             time,
-        }
-    }
-
-    fn cleanup_tile_cache(&mut self) {
-
-        const TO_KEEP: usize = 8;
-
-        let tiles = &mut self.tile_cache.tiles;
-
-        let mut pairs = Vec::with_capacity(tiles.len());
-        while let Some((key, tile)) = tiles.pop_last() {
-            pairs.push((key, tile));
-        }
-
-        pairs.sort_unstable_by(|(_, tile_1), (_, tile_2)| {
-            tile_2.last_used_time.partial_cmp(&tile_1.last_used_time).unwrap()
-        });
-
-        for (key, tile) in pairs.into_iter().take(TO_KEEP) {
-            tiles.insert(key, tile);
         }
     }
 }

@@ -3,7 +3,7 @@ use applib::drawing::primitives::{draw_arc, ArcMode};
 use applib::drawing::text::{draw_str, Font};
 use applib::geometry::{Point2D, Vec2D};
 use applib::uitk::{self};
-use applib::{Color, FbView, FbViewMut, Framebuffer, OwnedPixels};
+use applib::{Color, FbView, FbViewMut, Framebuffer, OwnedPixels, StyleSheet};
 use core::f32;
 use core::f32::consts::PI;
 use num_traits::Float;
@@ -51,9 +51,9 @@ pub fn pie_menu<'a, F: FbViewMut>(
     const OFFSET_HOVER: f32 = 10.0;
     const ARC_PX_PER_PT: f32 = 20.0;
     const TEXT_OFFSET: f32 = 10.0;
-    const COLOR_HOVER_OVERLAY: Color = Color::rgba(255, 255, 255, 128);
 
     let pointer = &uitk_context.input_state.pointer;
+    let stylesheet = &uitk_context.stylesheet;
 
     let pointer = Point2D::<i64> {
         x: pointer.x,
@@ -155,7 +155,7 @@ pub fn pie_menu<'a, F: FbViewMut>(
                     OUTER_RADIUS,
                     arc_mode,
                     ARC_PX_PER_PT,
-                    COLOR_HOVER_OVERLAY,
+                    stylesheet.colors.hover_overlay,
                     true,
                 );
 

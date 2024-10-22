@@ -60,6 +60,7 @@ pub fn step() {
 
     let win_rect = guestlib::get_win_rect();
     let input_state = guestlib::get_input_state();
+    let stylesheet = guestlib::get_stylesheet();
 
     let time = guestlib::get_time();
 
@@ -80,12 +81,13 @@ pub fn step() {
         let xf = (pointer.x as f32) / ((W - 1) as f32);
         let yf = (pointer.y as f32) / ((H - 1) as f32);
         let render_fb = state.render_fb.mutate(&mut state.uuid_provider);
-        render_fb.fill(Color::WHITE);
+        render_fb.fill(stylesheet.colors.background);
         draw_scene(render_fb, &state.scene, xf, yf);
     }
 
     let mut uitk_context = state.ui_store.get_context(
         &mut framebuffer,
+        &stylesheet,
         &input_state_local,
         &mut state.uuid_provider,
         time,

@@ -4,6 +4,7 @@ extern crate alloc;
 use alloc::format;
 use alloc::vec;
 use alloc::vec::Vec;
+use applib::StyleSheet;
 use applib::{input::InputState, BorrowedMutPixels, Framebuffer, Rect};
 use core::fmt::Debug;
 use core::mem::size_of;
@@ -27,6 +28,7 @@ extern "C" {
     fn host_tcp_read(addr: i32, len: i32, handle_id: i32) -> i32;
     fn host_tcp_close(handle_id: i32);
     fn host_get_time(buf: i32);
+    fn host_get_stylesheet(buf: i32);
 
     fn host_get_consumed_fuel(addr: i32);
     fn host_save_timing(key_addr: i32, key_len: i32, consumed_addr: i32);
@@ -192,6 +194,15 @@ pub fn get_time() -> f64 {
     let s: &[u8; 8] = unsafe { core::slice::from_raw_parts(ptr, 8).try_into().unwrap() };
 
     f64::from_le_bytes(*s)
+}
+
+pub fn get_stylesheet() -> StyleSheet {
+    let mut buf = [0u8; size_of::<StyleSheet>()];
+    let addr = buf.as_mut_ptr() as i32;
+    unsafe {
+        host_get_stylesheet(addr);
+        core::mem::transmute(buf)
+    }
 }
 
 pub fn get_consumed_fuel() -> u64 {

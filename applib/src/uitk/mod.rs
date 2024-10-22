@@ -14,7 +14,7 @@ pub use scrollable_canvas::set_autoscroll;
 pub use text::{render_rich_text, string_input, EditableTextConfig, ScrollableTextConfig};
 
 pub use crate::content::{ContentId, UuidProvider};
-use crate::InputState;
+use crate::{InputState, StyleSheet};
 use crate::{FbViewMut, Framebuffer, OwnedPixels};
 
 
@@ -75,20 +75,21 @@ impl TileCache {
             }
         }
 
-        if evicted_count > 0 {
-            log::debug!(
-                "Evicted {} tiles from cache ({:.2} MB), {} remaining ({:.2} MB)",
-                evicted_count,
-                evicted_size as f64 / 1_000_000.0,
-                self.tiles.len(),
-                self.tiles.values().map(|tile| tile.fb.size_bytes()).sum::<usize>() as f64 / 1_000_000.0,
-            );
-        }
+        // if evicted_count > 0 {
+        //     log::debug!(
+        //         "Evicted {} tiles from cache ({:.2} MB), {} remaining ({:.2} MB)",
+        //         evicted_count,
+        //         evicted_size as f64 / 1_000_000.0,
+        //         self.tiles.len(),
+        //         self.tiles.values().map(|tile| tile.fb.size_bytes()).sum::<usize>() as f64 / 1_000_000.0,
+        //     );
+        // }
     }
 }
 
 pub struct UiContext<'a, F: FbViewMut> {
     pub fb: &'a mut F,
+    pub stylesheet: &'a StyleSheet,
     pub tile_cache: &'a mut TileCache,
     pub input_state: &'a InputState,
     pub uuid_provider: &'a mut UuidProvider,
@@ -109,6 +110,7 @@ impl UiStore {
     pub fn get_context<'a, F: FbViewMut>(
         &'a mut self,
         fb: &'a mut F,
+        stylesheet: &'a StyleSheet,
         input_state: &'a InputState,
         uuid_provider: &'a mut UuidProvider,
         time: f64,
@@ -118,6 +120,7 @@ impl UiStore {
 
         UiContext {
             fb,
+            stylesheet,
             tile_cache: &mut self.tile_cache,
             input_state,
             uuid_provider,

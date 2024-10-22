@@ -12,10 +12,6 @@ use crate::uitk::{CachedTile, TileCache, UiContext};
 const SCROLL_SPEED: u32 = 10;
 const SBAR_OUTER_W: u32 = 16;
 const SBAR_INNER_W: u32 = 12;
-const SBAR_OUTER_COLOR: Color = Color::BLACK;
-const SBAR_INNER_IDLE_COLOR: Color = Color::RED;
-const SBAR_INNER_HOVER_COLOR: Color = Color::YELLOW;
-const SBAR_INNER_DRAGGING_COLOR: Color = Color::AQUA;
 
 pub trait TileRenderer {
     fn shape(&self) -> (u32, u32);
@@ -36,6 +32,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             fb: dst_fb,
             tile_cache,
             input_state,
+            stylesheet,
             ..
         } = self;
 
@@ -81,11 +78,11 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
         let get_sbar_color = |dragging, hover| {
             if dragging {
-                SBAR_INNER_DRAGGING_COLOR
+                stylesheet.colors.selected_overlay
             } else if hover {
-                SBAR_INNER_HOVER_COLOR
+                stylesheet.colors.hover_overlay
             } else {
-                SBAR_INNER_IDLE_COLOR
+                stylesheet.colors.accent
             }
         };
 
@@ -123,7 +120,6 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
             let sbar_color = get_sbar_color(*y_dragging, sbar_hover);
 
-            draw_rect(*dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR, false);
             draw_rect(*dst_fb, &sbar_inner_rect, sbar_color, false);
 
             if p_state.left_clicked {
@@ -163,7 +159,6 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
             let sbar_color = get_sbar_color(*x_dragging, sbar_hover);
 
-            draw_rect(*dst_fb, &sbar_outer_rect, SBAR_OUTER_COLOR, false);
             draw_rect(*dst_fb, &sbar_inner_rect, sbar_color, false);
 
             if p_state.left_clicked {
@@ -192,7 +187,7 @@ fn draw_tiles<F: FbViewMut, T: TileRenderer>(
     let (vw, vh) = (viewport_rect.w, viewport_rect.h);
     let tiles_rects = get_tiles(src_canvas_shape, (vw, vh), tile_shape);
 
-    log::debug!("{} tiles in cache", tile_cache.tiles.len());
+    //log::debug!("{} tiles in cache", tile_cache.tiles.len());
 
     let regions = select_tile_regions(&tiles_rects, viewport_rect);
 

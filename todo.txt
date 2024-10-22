@@ -18,7 +18,6 @@
 
 # Features
 
-* rethink tile cleanup
 * resumable tile rendering
 * nested pie menus
 * apps z-order and focus

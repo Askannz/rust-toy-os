@@ -41,7 +41,7 @@ use virtio::network::VirtioNetwork;
 
 use app::{run_apps, App, AppsInteractionState};
 use applib::input::keymap::{EventType, Keycode};
-use resources::{APPLICATIONS, WALLPAPER};
+use resources::{APPLICATIONS, WALLPAPER, STYLESHEET};
 use system::System;
 use wasm::WasmEngine;
 
@@ -102,6 +102,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         clock,
         tcp_stack,
         rng: SmallRng::seed_from_u64(0),
+        stylesheet: &STYLESHEET,
     };
 
     let mut applications: BTreeMap<&'static str, App> = APPLICATIONS
@@ -145,8 +146,14 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         //log::debug!("{:?}", system_state);
 
-        let mut uitk_context =
-            ui_store.get_context(&mut framebuffer, &input_state, &mut uuid_provider, time);
+        let mut uitk_context = ui_store.get_context(
+            &mut framebuffer,
+            &system.stylesheet,
+            &input_state,
+            &mut uuid_provider,
+            time
+        );
+
         run_apps(
             &mut uitk_context,
             &mut system,

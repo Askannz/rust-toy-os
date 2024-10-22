@@ -12,7 +12,7 @@ use applib::drawing::text::{
 use applib::input::InputEvent;
 use applib::input::{InputState, Keycode};
 use applib::uitk::{self, UiStore, UuidProvider};
-use applib::{Color, FbViewMut, Rect};
+use applib::{Color, FbViewMut, Rect, StyleSheet};
 use core::cell::OnceCell;
 use guestlib::PixelData;
 use guestlib::WasmLogger;
@@ -80,6 +80,7 @@ pub fn step() {
     let mut framebuffer = state.pixel_data.get_framebuffer();
 
     let win_rect = guestlib::get_win_rect();
+    let stylesheet = guestlib::get_stylesheet();
     let input_state = input_state.change_origin(&win_rect);
 
     let mut cursor = state.input_buffer.as_ref().len();
@@ -113,16 +114,19 @@ pub fn step() {
         h: win_h,
     };
 
-    let formatted = get_formatted_text(&state.input_buffer, &state.console_buffer, (win_w, win_h));
+    let formatted = get_formatted_text(&stylesheet, &state.input_buffer, &state.console_buffer, (win_w, win_h));
 
     let renderer = ConsoleCanvasRenderer { formatted };
 
     let time = guestlib::get_time();
 
-    let mut uitk_context =
-        state
-            .ui_store
-            .get_context(&mut framebuffer, &input_state, &mut state.uuid_provider, time);
+    let mut uitk_context = state.ui_store.get_context(
+        &mut framebuffer,
+        &stylesheet,
+        &input_state,
+        &mut state.uuid_provider,
+        time
+    );
 
     uitk_context.dyn_scrollable_canvas(
         &rect_console,
@@ -154,6 +158,7 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
 
 
 fn get_formatted_text(
+    stylesheet: &StyleSheet,
     input_buffer: &TrackedContent<String>,
     console_buffer: &TrackedContent<Vec<EvalResult>>,
     win_shape: (u32, u32)
@@ -161,7 +166,7 @@ fn get_formatted_text(
 
     let (win_w, _win_h) = win_shape;
 
-    let console_rich_text = get_console_rich_text(input_buffer.as_ref(), console_buffer.as_ref());
+    let console_rich_text = get_console_rich_text(stylesheet, input_buffer.as_ref(), console_buffer.as_ref());
     let formatted = format_rich_lines(&console_rich_text, win_w);
 
     let new_cid = ContentId::from_hash((
@@ -236,18 +241,18 @@ impl uitk::TileRenderer for ConsoleCanvasRenderer {
     }
 }
 
-fn get_console_rich_text(input_buffer: &String, console_buffer: &Vec<EvalResult>) -> RichText {
+fn get_console_rich_text(stylesheet: &StyleSheet, input_buffer: &String, console_buffer: &Vec<EvalResult>) -> RichText {
     let font = &HACK_15;
 
     let mut console_rich_text = RichText::new();
 
     for res in console_buffer.iter() {
-        console_rich_text.add_part(">>> ", Color::YELLOW, font, None);
-        console_rich_text.add_part(&res.cmd, Color::WHITE, font, None);
+        console_rich_text.add_part(">>> ", stylesheet.colors.yellow, font, None);
+        console_rich_text.add_part(&res.cmd, stylesheet.colors.text, font, None);
 
         let color = match &res.pyres {
-            python::EvalResult::Failure(_) => Color::RED,
-            _ => Color::WHITE,
+            python::EvalResult::Failure(_) => stylesheet.colors.red,
+            _ => stylesheet.colors.text,
         };
 
         let text = match &res.pyres {
@@ -256,11 +261,11 @@ fn get_console_rich_text(input_buffer: &String, console_buffer: &Vec<EvalResult>
         };
 
         console_rich_text.add_part(&text, color, font, None);
-        console_rich_text.add_part("\n", Color::WHITE, font, None)
+        console_rich_text.add_part("\n", stylesheet.colors.text, font, None)
     }
 
-    console_rich_text.add_part(">>> ", Color::WHITE, font, None);
-    console_rich_text.add_part(input_buffer.as_ref(), Color::WHITE, font, None);
+    console_rich_text.add_part(">>> ", stylesheet.colors.text, font, None);
+    console_rich_text.add_part(input_buffer.as_ref(), stylesheet.colors.text, font, None);
 
     console_rich_text
 }

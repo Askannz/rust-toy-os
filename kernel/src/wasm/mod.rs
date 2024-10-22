@@ -800,6 +800,18 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
 
     linker_impl!(
         m,
+        "host_get_stylesheet",
+        |mut caller: Caller<StoreData>, addr: i32| {
+            let stylesheet = caller
+                .data_mut()
+                .with_step_context(|step_context| step_context.system.stylesheet.clone());
+
+            write_to_wasm_mem(&mut caller, addr, &stylesheet);
+        }
+    );
+
+    linker_impl!(
+        m,
         "host_get_consumed_fuel",
         |mut caller: Caller<StoreData>, consumed_addr: i32| {
             let remaining = caller.get_fuel().expect("Fuel metering disabled");

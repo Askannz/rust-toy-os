@@ -9,7 +9,7 @@ use std::fmt::Debug;
 use alloc::collections::BTreeMap;
 use alloc::format;
 use anyhow::Context;
-use applib::{Color, Rect};
+use applib::{Color, Rect, StyleSheet};
 use core::cell::OnceCell;
 use guestlib::{PixelData, WasmLogger};
 
@@ -200,32 +200,39 @@ pub fn step() {
     } = state;
 
     let time = guestlib::get_time();
+    let stylesheet = guestlib::get_stylesheet();
 
     let mut framebuffer = state.pixel_data.get_framebuffer();
 
-    let mut uitk_context = ui_store.get_context(&mut framebuffer, &win_input_state, uuid_provider, time);
+    let mut uitk_context = ui_store.get_context(
+        &mut framebuffer,
+        &stylesheet,
+        &win_input_state,
+        uuid_provider,
+        time
+    );
 
     let ui_layout = compute_ui_layout(&win_rect);
 
     let is_go_button_fired = uitk_context.button(&uitk::ButtonConfig {
         rect: ui_layout.go_button_rect.clone(),
         text: "GO".into(),
-        idle_color: Color::rgb(0, 180, 0),
+        idle_color: stylesheet.colors.green,
         ..Default::default()
     });
 
     let is_reload_button_fired = uitk_context.button(&uitk::ButtonConfig {
         rect: ui_layout.reload_button_rect.clone(),
         text: "Reload".into(),
-        idle_color: Color::rgb(180, 180, 0),
+        idle_color: stylesheet.colors.yellow,
         ..Default::default()
     });
 
     uitk_context.editable_text(
         &uitk::EditableTextConfig {
             rect: ui_layout.url_bar_rect.clone(),
-            color: Color::WHITE,
-            bg_color: Some(Color::rgb(128, 128, 128)),
+            color: stylesheet.colors.text,
+            bg_color: Some(stylesheet.colors.background),
             ..Default::default()
         },
         &mut state.url_text,
@@ -238,9 +245,9 @@ pub fn step() {
         &uitk::ProgressBarConfig {
             rect: ui_layout.progress_bar_rect.clone(),
             max_val: 8,
-            bg_color: Color::rgb(128, 128, 128),
-            bar_color: Color::rgb(128, 128, 255),
-            text_color: Color::WHITE,
+            bg_color: stylesheet.colors.background,
+            bar_color: stylesheet.colors.accent,
+            text_color: stylesheet.colors.text,
             ..Default::default()
         },
         progress_val,
@@ -250,7 +257,7 @@ pub fn step() {
     let url_go = is_go_button_fired || check_enter_pressed(&win_input_state);
 
     let prev_state_debug = format!("{:?}", state.request_state);
-    try_update_request_state(state, url_go, is_reload_button_fired, &ui_layout, &win_input_state, time);
+    try_update_request_state(state, &stylesheet, url_go, is_reload_button_fired, &ui_layout, &win_input_state, time);
     let new_state_debug = format!("{:?}", state.request_state);
 
     if new_state_debug != prev_state_debug {
@@ -316,13 +323,14 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
 
 fn try_update_request_state(
     state: &mut AppState,
+    stylesheet: &StyleSheet,
     url_go: bool,
     is_reload_button_fired: bool,
     ui_layout: &UiLayout,
     input_state: &InputState,
     time: f64,
 ) {
-    match update_request_state(state, url_go, is_reload_button_fired, ui_layout, input_state, time) {
+    match update_request_state(state, stylesheet,url_go, is_reload_button_fired, ui_layout, input_state, time) {
         Ok(_) => (),
         Err(err) => {
             log::error!("{}", err);
@@ -352,6 +360,7 @@ fn make_error_html(error: anyhow::Error) -> String {
 
 fn update_request_state(
     state: &mut AppState,
+    stylesheet: &StyleSheet,
     url_go: bool,
     is_reload_button_fired: bool,
     ui_layout: &UiLayout,
@@ -364,10 +373,13 @@ fn update_request_state(
             layout,
         } => {
             let mut framebuffer = state.pixel_data.get_framebuffer();
-            let mut uitk_context =
-                state
-                    .ui_store
-                    .get_context(&mut framebuffer, input_state, &mut state.uuid_provider, time);
+            let mut uitk_context = state.ui_store.get_context(
+                &mut framebuffer,
+                &stylesheet,
+                input_state,
+                &mut state.uuid_provider,
+                time
+            );
 
             let link_hover = html_canvas(
                 &mut uitk_context,

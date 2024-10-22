@@ -1,6 +1,7 @@
 use crate::app::AppDescriptor;
 use alloc::vec::Vec;
-use applib::{decode_png, Framebuffer, OwnedPixels, Rect};
+use applib::{decode_png, Framebuffer, OwnedPixels, Rect, Color};
+use applib::{StyleSheet, StyleSheetColors};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -25,6 +26,24 @@ lazy_static! {
     pub static ref RELOAD_ICON: Framebuffer<OwnedPixels> =
         Framebuffer::from_png(include_bytes!("../icons/reload.png"));
     pub static ref BLANK_ICON: Framebuffer<OwnedPixels> = Framebuffer::new_owned(32, 32);
+
+    //
+    // Stylesheet
+
+    pub static ref STYLESHEET: StyleSheet = StyleSheet {
+        colors: StyleSheetColors {
+            background: Color::rgb(0x44, 0x44, 0x44),
+            blue: Color::rgb(0, 0, 150),
+            element: Color::rgb(100, 100, 100),
+            green: Color::rgb(0, 180, 0),
+            hover_overlay: Color::rgba(150, 150, 150, 100),
+            selected_overlay: Color::rgba(255, 255, 255, 100),
+            red: Color::rgb(180, 0, 0),
+            yellow: Color::rgb(180, 180, 0),
+            text: Color::WHITE,
+            accent: Color::rgb(122, 0, 255),
+        }
+    };
 
     //
     // WASM apps

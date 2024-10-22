@@ -3,7 +3,7 @@ use alloc::collections::btree_map::BTreeMap;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
-use applib::BorrowedPixels;
+use applib::{BorrowedPixels, StyleSheet};
 
 use crate::shell::{pie_menu, PieMenuEntry};
 use applib::drawing::primitives::draw_rect;
@@ -85,9 +85,9 @@ pub fn run_apps<F: FbViewMut>(
     input_state: &InputState,
     interaction_state: &mut AppsInteractionState,
 ) {
-    const PIE_DEFAULT_COLOR: Color = Color::rgb(0x44, 0x44, 0x44);
     const MIN_APP_SIZE: u32 = 200;
 
+    let stylesheet = system.stylesheet.clone();
     let pointer = &input_state.pointer;
 
     //
@@ -231,7 +231,7 @@ pub fn run_apps<F: FbViewMut>(
         let deco = compute_decorations(&app, input_state);
         let app_fb = app.wasm_app.step(system, input_state, &app.rect);
 
-        draw_app(*fb, app_name, &app_fb, &deco);
+        draw_app(*fb, &stylesheet, app_name, &app_fb, &deco);
     }
 
     //
@@ -246,9 +246,9 @@ pub fn run_apps<F: FbViewMut>(
             .values()
             .map(|app| PieMenuEntry::Button {
                 icon: app.descriptor.icon,
-                color: PIE_DEFAULT_COLOR,
+                color: stylesheet.colors.background,
                 text: app.descriptor.name.to_owned(),
-                text_color: Color::WHITE,
+                text_color: stylesheet.colors.text,
                 font: &HACK_15,
                 weight: 1.0,
             })
@@ -285,26 +285,26 @@ pub fn run_apps<F: FbViewMut>(
             let entries = [
                 PieMenuEntry::Button {
                     icon: &resources::CLOSE_ICON,
-                    color: Color::rgb(180, 0, 0),
+                    color: stylesheet.colors.red,
                     text: "Close".to_owned(),
-                    text_color: Color::WHITE,
+                    text_color: stylesheet.colors.text,
                     font: &HACK_15,
                     weight: 1.0,
                 },
                 PieMenuEntry::Spacer {
-                    color: PIE_DEFAULT_COLOR,
+                    color: stylesheet.colors.background,
                     weight: 1.0,
                 },
                 PieMenuEntry::Button {
                     icon: &resources::RELOAD_ICON,
-                    color: Color::rgb(180, 180, 0),
+                    color: stylesheet.colors.yellow,
                     text: "Reload".to_owned(),
-                    text_color: Color::WHITE,
+                    text_color: stylesheet.colors.text,
                     font: &HACK_15,
                     weight: 1.0,
                 },
                 PieMenuEntry::Spacer {
-                    color: PIE_DEFAULT_COLOR,
+                    color: stylesheet.colors.background,
                     weight: 3.0,
                 },
             ];
@@ -451,18 +451,15 @@ fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
 
 fn draw_app<F: FbViewMut>(
     fb: &mut F,
+    stylesheet: &StyleSheet,
     app_name: &str,
     app_fb: &Framebuffer<BorrowedPixels>,
     deco: &AppDecorations,
 ) {
-    const COLOR_IDLE: Color = Color::rgba(0x44, 0x44, 0x44, 0xff);
-    const COLOR_HOVER: Color = Color::rgba(0x66, 0x66, 0x66, 0xff);
-    const COLOR_HANDLE: Color = Color::rgba(122, 0, 255, 0xff);
-    const COLOR_TEXT: Color = Color::rgba(0xff, 0xff, 0xff, 0xff);
 
     let color_deco = match deco.titlebar_hover {
-        true => COLOR_HOVER,
-        false => COLOR_IDLE,
+        true => stylesheet.colors.hover_overlay,
+        false => stylesheet.colors.background,
     };
 
     draw_rect(fb, &deco.titlebar_rect, color_deco, false);
@@ -489,14 +486,14 @@ fn draw_app<F: FbViewMut>(
         text_rect.x0,
         text_rect.y0,
         &deco.titlebar_font,
-        COLOR_TEXT,
+        stylesheet.colors.text,
         None,
     );
 
     fb.copy_from_fb(app_fb, deco.content_rect.origin(), false);
 
     for rect in deco.handle_rects.iter() {
-        draw_rect(fb, rect, COLOR_HANDLE, false);
+        draw_rect(fb, rect, stylesheet.colors.accent, false);
     }
 }
 

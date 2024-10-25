@@ -18,6 +18,8 @@
 
 # Features
 
+* input restricted to current app
+* graceful restart on app crash
 * resumable tile rendering
 * nested pie menus
 * apps z-order and focus

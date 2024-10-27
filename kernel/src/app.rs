@@ -25,8 +25,19 @@ pub struct AppDescriptor {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum HoverKind {
+    Titlebar,
+    Resize,
+    Window,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AppsInteractionState {
     Idle,
+    AppHover {
+        app_name: &'static str,
+        hover_kind: HoverKind,
+    },
     TitlebarHold {
         app_name: &'static str,
         anchor: Point2D<i64>,
@@ -36,12 +47,10 @@ pub enum AppsInteractionState {
     },
     PieDesktopMenu {
         anchor: Point2D<i64>,
-        first_frame: bool,
     },
     PieAppMenu {
         app_name: &'static str,
         anchor: Point2D<i64>,
-        first_frame: bool,
     },
     // first_frame is to prevent the pie menus from capturing the mouse click
     // triggers immediately and closing after one frame
@@ -92,221 +101,96 @@ pub fn run_apps<F: FbViewMut>(
     let stylesheet = system.stylesheet.clone();
     let pointer = &input_state.pointer;
 
-    let mut z_ordering = {
-        let mut v: Vec<&'static str> = apps.keys().map(|s| *s).collect();
-        v.sort_by_key(|app_name| apps.get_mut(app_name).unwrap().z_order);
-        v
-    };
-
     //
     // Hover
 
-    #[derive(Debug, Clone, Copy, PartialEq)]
-    enum HoverKind {
-        Titlebar,
-        Resize,
-        Window,
-    }
-
-    #[derive(Debug)]
-    struct Hover<'a> {
-        app_name: &'a str,
-        kind: HoverKind,
-    }
-
-    let hover_state = z_ordering.iter().rev()
-        .map(|app_name| {
-            let app = apps.get(app_name).unwrap();
+    let hover_state = get_z_sorted_apps(apps).iter().rev()
+        .map(|(app_name, app)| {
             let deco = compute_decorations(app, input_state);
             (app_name, app, deco)
         })
         .find_map(|(app_name, app, deco)| {
-            if !app.is_open {
-                None
-            } else if deco.titlebar_hover {
-                Some(Hover {
-                    app_name,
-                    kind: HoverKind::Titlebar,
-                })
-            } else if deco.resize_hover {
-                Some(Hover {
-                    app_name,
-                    kind: HoverKind::Resize,
-                })
-            } else if deco.window_hover {
-                Some(Hover {
-                    app_name,
-                    kind: HoverKind::Window,
-                })
-            } else {
-                None
-            }
+            if !app.is_open { None }
+            else if deco.titlebar_hover { Some((*app_name, HoverKind::Titlebar)) }
+            else if deco.resize_hover { Some((*app_name, HoverKind::Resize)) }
+            else if deco.window_hover { Some((*app_name, HoverKind::Window)) }
+            else { None }
         });
 
     //
     // Interaction state update
 
-    *interaction_state = match *interaction_state {
-        AppsInteractionState::Idle if pointer.left_click_trigger => match hover_state {
-            Some(Hover { app_name, kind }) if kind == HoverKind::Titlebar => {
-                let app = apps.get_mut(app_name).unwrap();
-                let dx = pointer.x - app.rect.x0;
-                let dy = pointer.y - app.rect.y0;
-                AppsInteractionState::TitlebarHold {
-                    app_name,
-                    anchor: Point2D { x: dx, y: dy },
-                }
-            }
+    let is = interaction_state;
 
-            Some(Hover { app_name, kind }) if kind == HoverKind::Resize => {
-                AppsInteractionState::ResizeHold {
-                    app_name,
-                }
-            }
+    match *is {
 
-            _ => *interaction_state,
+        AppsInteractionState::Idle => match hover_state {
+            None if pointer.right_click_trigger => {
+                let anchor = Point2D { x: pointer.x, y: pointer.y };
+                *is = AppsInteractionState::PieDesktopMenu { anchor };
+            },
+            None => (),
+            Some((app_name, hover_kind)) => *is = AppsInteractionState::AppHover { app_name, hover_kind }
         },
 
-        AppsInteractionState::Idle if pointer.right_click_trigger => match hover_state {
-            Some(Hover { app_name, .. }) => {
-                let anchor = Point2D {
-                    x: pointer.x,
-                    y: pointer.y,
-                };
-                AppsInteractionState::PieAppMenu {
-                    app_name,
-                    anchor,
-                    first_frame: true,
-                }
-            }
+        AppsInteractionState::AppHover { app_name, .. } if pointer.right_click_trigger => {
+            let anchor = Point2D { x: pointer.x, y: pointer.y };
+            let z_max = get_z_max(&apps);
+            apps.get_mut(app_name).unwrap().z_order = z_max + 1;
+            *is = AppsInteractionState::PieAppMenu { app_name, anchor };
+        },
 
-            _ => {
-                let anchor = Point2D {
-                    x: pointer.x,
-                    y: pointer.y,
-                };
-                AppsInteractionState::PieDesktopMenu {
-                    anchor,
-                    first_frame: true,
-                }
+        AppsInteractionState::AppHover { app_name, hover_kind } if pointer.left_click_trigger => {
+
+            let z_max = get_z_max(&apps);
+            apps.get_mut(app_name).unwrap().z_order = z_max + 1;
+
+            match hover_kind {
+                HoverKind::Titlebar => {
+                    let app = apps.get_mut(app_name).unwrap();
+                    let dx = pointer.x - app.rect.x0;
+                    let dy = pointer.y - app.rect.y0;
+                    let anchor = Point2D { x: dx, y: dy };
+                    *is =  AppsInteractionState::TitlebarHold { app_name, anchor };
+                },
+
+                HoverKind::Resize => *is = AppsInteractionState::ResizeHold { app_name },
+
+                HoverKind::Window => (),
             }
+        },
+
+        AppsInteractionState::AppHover { .. } => match hover_state {
+            None => *is = AppsInteractionState::Idle,
+            Some((app_name, hover_kind)) => *is = AppsInteractionState::AppHover { app_name, hover_kind }
         },
 
         AppsInteractionState::TitlebarHold { .. } if !pointer.left_clicked => {
-            AppsInteractionState::Idle
-        }
+            *is = AppsInteractionState::Idle;
+        },
 
-        AppsInteractionState::ResizeHold { .. } if !pointer.left_clicked => {
-            AppsInteractionState::Idle
-        }
-
-        AppsInteractionState::PieAppMenu { .. } if pointer.right_click_trigger => {
-            AppsInteractionState::Idle
-        }
-
-        AppsInteractionState::PieDesktopMenu { .. } if pointer.right_click_trigger => {
-            AppsInteractionState::Idle
-        }
-
-        _ => *interaction_state,
-    };
-
-    //
-    // Update window rects
-
-    if let AppsInteractionState::TitlebarHold { app_name, anchor } = interaction_state {
-        if let Some(app) = apps.get_mut(app_name).filter(|app| app.is_open) {
+        AppsInteractionState::TitlebarHold { app_name, anchor } => {
+            let app = apps.get_mut(app_name).unwrap();
             app.rect.x0 = pointer.x - anchor.x;
             app.rect.y0 = pointer.y - anchor.y;
-        }
-    } else if let AppsInteractionState::ResizeHold { app_name } = interaction_state {
-        if let Some(app) = apps.get_mut(app_name).filter(|app| app.is_open) {
+        },
+
+        AppsInteractionState::ResizeHold { .. } if !pointer.left_clicked => {
+            *is = AppsInteractionState::Idle;
+        },
+
+        AppsInteractionState::ResizeHold { app_name } => {
+            let app = apps.get_mut(app_name).unwrap();
             let [x1, y1, _, _] = app.rect.as_xyxy();
             let x2 = i64::max(x1 + MIN_APP_SIZE as i64, pointer.x);
             let y2 = i64::max(y1 + MIN_APP_SIZE as i64, pointer.y);
             app.rect = Rect::from_xyxy([x1, y1, x2, y2]);
-        }
-    }
+        },
 
-    //
-    // Update z-order
+        AppsInteractionState::PieAppMenu { app_name, anchor } => {
 
-    if let Some(Hover { app_name, .. }) = hover_state {
-        if pointer.left_click_trigger {
-            z_ordering.retain_mut(|name| *name != app_name);
-            z_ordering.push(&app_name);
-        }
-    }
+            let app = apps.get_mut(app_name).unwrap();
 
-    //
-    // Step and draw apps
-
-    let UiContext { fb, .. } = uitk_context;
-
-    for (i, app_name) in z_ordering.iter().enumerate() {
-
-        let app = apps.get_mut(app_name).unwrap();
-
-        app.z_order = i;
-
-        if !app.is_open {
-            continue;
-        }
-
-        let deco = compute_decorations(&app, input_state);
-        let app_fb = app.wasm_app.step(system, input_state, &app.rect);
-
-        draw_app(*fb, &stylesheet, app_name, &app_fb, &deco);
-    }
-
-    //
-    // Pie menus
-
-    if let AppsInteractionState::PieDesktopMenu {
-        anchor,
-        first_frame,
-    } = *interaction_state
-    {
-        let entries: Vec<PieMenuEntry> = apps
-            .values()
-            .map(|app| PieMenuEntry::Button {
-                icon: app.descriptor.icon,
-                color: stylesheet.colors.background,
-                text: app.descriptor.name.to_owned(),
-                text_color: stylesheet.colors.text,
-                font: &HACK_15,
-                weight: 1.0,
-            })
-            .collect();
-
-        let selected = pie_menu(uitk_context, &entries, anchor);
-
-        match selected {
-            Some(app_name) if pointer.left_click_trigger => {
-                let app = apps.get_mut(app_name).unwrap();
-
-                let deco = compute_decorations(app, input_state);
-
-                let preferred_rect =
-                    Rect::from_center(pointer.x, pointer.y, app.rect.w, app.rect.h);
-
-                app.is_open = true;
-                app.rect = position_window(&preferred_rect, uitk_context.fb.shape(), &deco);
-            }
-
-            _ => (),
-        }
-
-        if !first_frame && (pointer.right_click_trigger || pointer.left_click_trigger) {
-            *interaction_state = AppsInteractionState::Idle
-        }
-    } else if let AppsInteractionState::PieAppMenu {
-        app_name,
-        anchor,
-        first_frame,
-    } = *interaction_state
-    {
-        if let Some(app) = apps.get_mut(app_name) {
             let entries = [
                 PieMenuEntry::Button {
                     icon: &resources::CLOSE_ICON,
@@ -341,17 +225,84 @@ pub fn run_apps<F: FbViewMut>(
                 _ => (),
             }
 
-            if !first_frame && (pointer.right_click_trigger || pointer.left_click_trigger) {
-                *interaction_state = AppsInteractionState::Idle
+            if pointer.right_click_trigger || pointer.left_click_trigger {
+                *is = AppsInteractionState::Idle
+            }
+        },
+
+        AppsInteractionState::PieDesktopMenu { anchor } => {
+
+            let entries: Vec<PieMenuEntry> = apps
+                .values()
+                .map(|app| PieMenuEntry::Button {
+                    icon: app.descriptor.icon,
+                    color: stylesheet.colors.background,
+                    text: app.descriptor.name.to_owned(),
+                    text_color: stylesheet.colors.text,
+                    font: &HACK_15,
+                    weight: 1.0,
+                })
+                .collect();
+
+            let selected = pie_menu(uitk_context, &entries, anchor);
+
+            match selected {
+                Some(app_name) if pointer.left_click_trigger => {
+
+                    let z_max = apps.values().map(|app| app.z_order).max().unwrap();
+
+                    let app = apps.get_mut(app_name).unwrap();
+
+                    let deco = compute_decorations(app, input_state);
+
+                    let preferred_rect =
+                        Rect::from_center(pointer.x, pointer.y, app.rect.w, app.rect.h);
+
+                    app.is_open = true;
+                    app.rect = position_window(&preferred_rect, uitk_context.fb.shape(), &deco);
+                    app.z_order = z_max + 1;
+                }
+
+                _ => (),
+            }
+
+            if pointer.right_click_trigger || pointer.left_click_trigger {
+                *is = AppsInteractionState::Idle
             }
         }
     }
 
-    match interaction_state {
-        AppsInteractionState::PieDesktopMenu { first_frame, .. } => *first_frame = false,
-        AppsInteractionState::PieAppMenu { first_frame, .. } => *first_frame = false,
-        _ => (),
-    };
+    normalize_z_order(apps);
+
+    //
+    // DEBUG
+
+    //log::debug!("{:?}", is);
+
+    //
+    // Step and draw apps
+
+    let UiContext { fb, .. } = uitk_context;
+
+    for (app_name, app) in get_z_sorted_apps(apps) {
+
+        if !app.is_open {
+            continue;
+        }
+
+        let deco = compute_decorations(&app, input_state);
+        let app_fb = app.wasm_app.step(system, input_state, &app.rect);
+
+        let highlight = match *is {
+            AppsInteractionState::AppHover { 
+                app_name: hover_app_name,
+                hover_kind
+            } => hover_app_name == app_name && hover_kind == HoverKind::Titlebar,
+            _ => false,
+        };
+
+        draw_app(*fb, &stylesheet, app_name, &app_fb, &deco, highlight);
+    }
 }
 
 struct AppDecorations {
@@ -365,6 +316,23 @@ struct AppDecorations {
     titlebar_hover: bool,
     resize_hover: bool,
     window_hover: bool,
+}
+
+fn normalize_z_order(apps: &mut BTreeMap<&'static str, App>) {
+    let mut sorted_apps = get_z_sorted_apps(apps);
+    sorted_apps.iter_mut().enumerate().for_each(|(i, (_app_name, app))| app.z_order = i);
+}
+
+fn get_z_max(apps: &BTreeMap<&'static str, App>) -> usize {
+    apps.values().map(|app| app.z_order).max().unwrap()
+}
+
+fn get_z_sorted_apps<'a>(apps: &'a mut BTreeMap<&'static str, App>) -> Vec<(&'static str, &'a mut App)> {
+    let mut sorted_apps: Vec<(&'static str, &'a mut App)> = apps.iter_mut()
+        .map(|(app_name, app)| (*app_name, app))
+        .collect();
+    sorted_apps.sort_by_key(|(_app_name, app)| app.z_order);
+    sorted_apps
 }
 
 fn position_window(preferred_rect: &Rect, fb_shape: (u32, u32), deco: &AppDecorations) -> Rect {
@@ -480,9 +448,10 @@ fn draw_app<F: FbViewMut>(
     app_name: &str,
     app_fb: &Framebuffer<BorrowedPixels>,
     deco: &AppDecorations,
+    highlight: bool,
 ) {
 
-    let color_deco = match deco.titlebar_hover {
+    let color_deco = match highlight {
         true => stylesheet.colors.hover_overlay,
         false => stylesheet.colors.background,
     };

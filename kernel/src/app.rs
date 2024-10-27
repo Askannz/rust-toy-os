@@ -3,6 +3,7 @@ use alloc::collections::btree_map::BTreeMap;
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use applib::input::PointerState;
 use applib::{BorrowedPixels, StyleSheet};
 
 use crate::shell::{pie_menu, PieDrawCalls, PieMenuEntry};
@@ -41,6 +42,9 @@ pub enum AppsInteractionState {
     TitlebarHold {
         app_name: &'static str,
         anchor: Point2D<i64>,
+
+        // In "toggle" mode, another click is required to get out of this mode
+        toggle: bool,  
     },
     ResizeHold {
         app_name: &'static str,
@@ -177,10 +181,8 @@ pub fn run_apps<F: FbViewMut>(
             match hover_kind {
                 HoverKind::Titlebar => {
                     let app = apps_manager.get_mut(app_name);
-                    let dx = pointer.x - app.rect.x0;
-                    let dy = pointer.y - app.rect.y0;
-                    let anchor = Point2D { x: dx, y: dy };
-                    *is =  AppsInteractionState::TitlebarHold { app_name, anchor };
+                    let anchor = get_hold_anchor(pointer, &app.rect);
+                    *is =  AppsInteractionState::TitlebarHold { app_name, anchor, toggle: false };
                 },
 
                 HoverKind::Resize => *is = AppsInteractionState::ResizeHold { app_name },
@@ -194,11 +196,15 @@ pub fn run_apps<F: FbViewMut>(
             Some((app_name, hover_kind)) => *is = AppsInteractionState::AppHover { app_name, hover_kind }
         },
 
-        AppsInteractionState::TitlebarHold { .. } if !pointer.left_clicked => {
+        AppsInteractionState::TitlebarHold { toggle, .. } if !toggle && !pointer.left_clicked => {
+            *is = AppsInteractionState::Idle;
+        },
+        
+        AppsInteractionState::TitlebarHold { toggle, .. } if toggle && (pointer.left_click_trigger ||  pointer.right_click_trigger) => {
             *is = AppsInteractionState::Idle;
         },
 
-        AppsInteractionState::TitlebarHold { app_name, anchor } => {
+        AppsInteractionState::TitlebarHold { app_name, anchor, .. } => {
             let app = apps_manager.get_mut(app_name);
             app.rect.x0 = pointer.x - anchor.x;
             app.rect.y0 = pointer.y - anchor.y;
@@ -229,8 +235,12 @@ pub fn run_apps<F: FbViewMut>(
                     font: &HACK_15,
                     weight: 1.0,
                 },
-                PieMenuEntry::Spacer {
-                    color: stylesheet.colors.background,
+                PieMenuEntry::Button {
+                    icon: &resources::MOVE_ICON,
+                    color: stylesheet.colors.blue,
+                    text: "Move".to_owned(),
+                    text_color: stylesheet.colors.text,
+                    font: &HACK_15,
                     weight: 1.0,
                 },
                 PieMenuEntry::Button {
@@ -252,12 +262,18 @@ pub fn run_apps<F: FbViewMut>(
             pie_draw_calls.replace(draw_calls);
 
             match selected {
-                Some(0) if pointer.left_click_trigger => app.is_open = false,
+                Some(0) if pointer.left_click_trigger => {
+                    app.is_open = false;
+                    *is = AppsInteractionState::Idle
+                },
+                Some(1) if pointer.left_click_trigger => {
+                    let anchor = get_hold_anchor(pointer, &app.rect);
+                    *is = AppsInteractionState::TitlebarHold { app_name, anchor, toggle: true }
+                },
+                _ if pointer.right_click_trigger || pointer.left_click_trigger => {
+                    *is = AppsInteractionState::Idle
+                }
                 _ => (),
-            }
-
-            if pointer.right_click_trigger || pointer.left_click_trigger {
-                *is = AppsInteractionState::Idle
             }
         },
 
@@ -387,6 +403,12 @@ struct AppDecorations {
     window_hover: bool,
 }
 
+
+fn get_hold_anchor(pointer: &PointerState, rect: &Rect) -> Point2D<i64> {
+    let dx = pointer.x - rect.x0;
+    let dy = pointer.y - rect.y0;
+    Point2D { x: dx, y: dy }
+}
 
 fn position_window(preferred_rect: &Rect, fb_shape: (u32, u32), deco: &AppDecorations) -> Rect {
     let (fb_w, fb_h) = fb_shape;

@@ -14,10 +14,10 @@
 * use "Color" in place of u32?
 * better tile cache
 * sort out naming of scrollable_canvas/dyn_scrollable_canvas
+* make all of uitk use the stylesheet
 
 # Features
 
-* resize button in pie menu
 * graceful restart on app crash
 * resumable tile rendering
 * nested pie menus

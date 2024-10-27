@@ -32,6 +32,7 @@ mod system;
 mod time;
 mod virtio;
 mod wasm;
+mod topbar;
 
 use time::SystemClock;
 
@@ -140,6 +141,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         let time = system.clock.time();
 
+        let datetime = SystemClock::utc_datetime(runtime_services);
+
         update_input_state(&mut input_state, (w, h), &mut virtio_inputs);
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
@@ -156,6 +159,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             &mut uuid_provider,
             time
         );
+
+        topbar::topbar(&mut uitk_context, datetime);
 
         run_apps(
             &mut uitk_context,

@@ -32,6 +32,29 @@ impl SystemClock {
         while self.time() - t0 < duration {}
     }
 
+    pub fn utc_datetime(runtime_services: &RuntimeServices) -> DateTime<Utc> {
+
+        let t_uefi = runtime_services.get_time().unwrap();
+
+        // We're assuming the UEFI RTC clock returns UTC
+        Utc
+            .from_local_datetime(
+                &NaiveDate::from_ymd_opt(
+                    t_uefi.year().into(),
+                    t_uefi.month().into(),
+                    t_uefi.day().into(),
+                )
+                .expect("Invalid RTC clock")
+                .and_hms_opt(
+                    t_uefi.hour().into(),
+                    t_uefi.minute().into(),
+                    t_uefi.second().into(),
+                )
+                .expect("Invalid RTC clock"),
+            )
+            .unwrap()
+    }
+
     fn estimate_cpu_period(runtime_services: &RuntimeServices) -> f64 {
         // Waiting for the "seconds" value to change
         let s1 = runtime_services.get_time().unwrap().second();
@@ -64,25 +87,8 @@ impl SystemClock {
     }
 
     fn get_epoch_time(runtime_services: &RuntimeServices) -> f64 {
-        let t_uefi = runtime_services.get_time().unwrap();
 
-        // We're just assuming the UEFI RTC clock returns UTC
-        let t_chrono = Utc
-            .from_local_datetime(
-                &NaiveDate::from_ymd_opt(
-                    t_uefi.year().into(),
-                    t_uefi.month().into(),
-                    t_uefi.day().into(),
-                )
-                .expect("Invalid RTC clock")
-                .and_hms_opt(
-                    t_uefi.hour().into(),
-                    t_uefi.minute().into(),
-                    t_uefi.second().into(),
-                )
-                .expect("Invalid RTC clock"),
-            )
-            .unwrap();
+        let t_chrono = Self::utc_datetime(runtime_services);
 
         let secs_since_epoch: u64 = (t_chrono - DateTime::UNIX_EPOCH)
             .num_seconds()

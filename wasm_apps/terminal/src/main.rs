@@ -81,7 +81,6 @@ pub fn step() {
 
     let win_rect = guestlib::get_win_rect();
     let stylesheet = guestlib::get_stylesheet();
-    let input_state = input_state.change_origin(&win_rect);
 
     let mut cursor = state.input_buffer.as_ref().len();
     uitk::string_input(

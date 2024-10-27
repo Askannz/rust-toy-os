@@ -1,7 +1,7 @@
 use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::format;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use applib::{BorrowedPixels, StyleSheet};
 
@@ -52,8 +52,11 @@ pub enum AppsInteractionState {
         app_name: &'static str,
         anchor: Point2D<i64>,
     },
-    // first_frame is to prevent the pie menus from capturing the mouse click
-    // triggers immediately and closing after one frame
+}
+
+pub struct AppsManager {
+    pub apps: BTreeMap<&'static str, App>,
+    z_order: Vec<&'static str>
 }
 
 pub struct App {
@@ -61,13 +64,29 @@ pub struct App {
     pub descriptor: AppDescriptor,
     pub is_open: bool,
     pub rect: Rect,
-    pub z_order: usize,
     pub time_used: f64,
 }
 
 pub enum AppState {
     Running { wasm_app: WasmApp },
     Crashed { error: anyhow::Error }
+}
+
+impl AppsManager {
+
+    pub fn new(apps: BTreeMap<&'static str, App>) -> Self {
+        let z_order: Vec<&'static str> = apps.keys().cloned().collect();
+        Self { apps, z_order }
+    }
+
+    fn get_mut(&mut self, app_name: &'static str) -> &mut App {
+        self.apps.get_mut(app_name).unwrap()
+    }
+
+    fn set_on_top(&mut self, app_name: &'static str) {
+        self.z_order.retain_mut(|name| *name != app_name);
+        self.z_order.push(app_name);
+    }
 }
 
 impl AppDescriptor {
@@ -91,7 +110,6 @@ impl AppDescriptor {
             app_state: AppState::Running { wasm_app },
             is_open: false,
             rect: self.init_win_rect.clone(),
-            z_order: 0,
             time_used: 0.0,
         }
     }
@@ -100,7 +118,7 @@ impl AppDescriptor {
 pub fn run_apps<F: FbViewMut>(
     uitk_context: &mut uitk::UiContext<F>,
     system: &mut System,
-    apps: &mut BTreeMap<&'static str, App>,
+    apps_manager: &mut AppsManager,
     input_state: &InputState,
     interaction_state: &mut AppsInteractionState,
 ) {
@@ -113,12 +131,13 @@ pub fn run_apps<F: FbViewMut>(
     //
     // Hover
 
-    let hover_state = get_z_sorted_apps(apps).iter().rev()
-        .map(|(app_name, app)| {
+    let hover_state = apps_manager.z_order.iter().rev()
+        .map(|app_name| {
+            let app = apps_manager.apps.get(app_name).unwrap();
             let deco = compute_decorations(app, input_state);
-            (app_name, app, deco)
+            (app, deco, app_name)
         })
-        .find_map(|(app_name, app, deco)| {
+        .find_map(|(app, deco, app_name)| {
             if !app.is_open { None }
             else if deco.titlebar_hover { Some((*app_name, HoverKind::Titlebar)) }
             else if deco.resize_hover { Some((*app_name, HoverKind::Resize)) }
@@ -144,19 +163,17 @@ pub fn run_apps<F: FbViewMut>(
 
         AppsInteractionState::AppHover { app_name, .. } if pointer.right_click_trigger => {
             let anchor = Point2D { x: pointer.x, y: pointer.y };
-            let z_max = get_z_max(&apps);
-            apps.get_mut(app_name).unwrap().z_order = z_max + 1;
+            apps_manager.set_on_top(app_name);
             *is = AppsInteractionState::PieAppMenu { app_name, anchor };
         },
 
         AppsInteractionState::AppHover { app_name, hover_kind } if pointer.left_click_trigger => {
 
-            let z_max = get_z_max(&apps);
-            apps.get_mut(app_name).unwrap().z_order = z_max + 1;
+            apps_manager.set_on_top(app_name);
 
             match hover_kind {
                 HoverKind::Titlebar => {
-                    let app = apps.get_mut(app_name).unwrap();
+                    let app = apps_manager.get_mut(app_name);
                     let dx = pointer.x - app.rect.x0;
                     let dy = pointer.y - app.rect.y0;
                     let anchor = Point2D { x: dx, y: dy };
@@ -179,7 +196,7 @@ pub fn run_apps<F: FbViewMut>(
         },
 
         AppsInteractionState::TitlebarHold { app_name, anchor } => {
-            let app = apps.get_mut(app_name).unwrap();
+            let app = apps_manager.get_mut(app_name);
             app.rect.x0 = pointer.x - anchor.x;
             app.rect.y0 = pointer.y - anchor.y;
         },
@@ -189,7 +206,7 @@ pub fn run_apps<F: FbViewMut>(
         },
 
         AppsInteractionState::ResizeHold { app_name } => {
-            let app = apps.get_mut(app_name).unwrap();
+            let app = apps_manager.get_mut(app_name);
             let [x1, y1, _, _] = app.rect.as_xyxy();
             let x2 = i64::max(x1 + MIN_APP_SIZE as i64, pointer.x);
             let y2 = i64::max(y1 + MIN_APP_SIZE as i64, pointer.y);
@@ -198,7 +215,7 @@ pub fn run_apps<F: FbViewMut>(
 
         AppsInteractionState::PieAppMenu { app_name, anchor } => {
 
-            let app = apps.get_mut(app_name).unwrap();
+            let app = apps_manager.get_mut(app_name);
 
             let entries = [
                 PieMenuEntry::Button {
@@ -232,7 +249,7 @@ pub fn run_apps<F: FbViewMut>(
             pie_draw_calls.replace(draw_calls);
 
             match selected {
-                Some("Close") if pointer.left_click_trigger => app.is_open = false,
+                Some(0) if pointer.left_click_trigger => app.is_open = false,
                 _ => (),
             }
 
@@ -243,12 +260,15 @@ pub fn run_apps<F: FbViewMut>(
 
         AppsInteractionState::PieDesktopMenu { anchor } => {
 
-            let entries: Vec<PieMenuEntry> = apps
-                .values()
-                .map(|app| PieMenuEntry::Button {
+            let mut apps_vec: Vec<(&'static str, &mut App)> = apps_manager.apps.iter_mut()
+                .map(|(app_name, app)| (*app_name, app))
+                .collect();
+
+            let entries: Vec<PieMenuEntry> = apps_vec.iter()
+                .map(|(app_name, app)| PieMenuEntry::Button {
                     icon: app.descriptor.icon,
                     color: stylesheet.colors.background,
-                    text: app.descriptor.name.to_owned(),
+                    text: app_name.to_string(),
                     text_color: stylesheet.colors.text,
                     font: &HACK_15,
                     weight: 1.0,
@@ -260,11 +280,9 @@ pub fn run_apps<F: FbViewMut>(
             pie_draw_calls.replace(draw_calls);
 
             match selected {
-                Some(app_name) if pointer.left_click_trigger => {
+                Some(entry_index) if pointer.left_click_trigger => {
 
-                    let z_max = get_z_max(&apps);
-
-                    let app = apps.get_mut(app_name).unwrap();
+                    let (app_name, app) = apps_vec.remove(entry_index);
 
                     let deco = compute_decorations(app, input_state);
 
@@ -273,7 +291,7 @@ pub fn run_apps<F: FbViewMut>(
 
                     app.is_open = true;
                     app.rect = position_window(&preferred_rect, uitk_context.fb.shape(), &deco);
-                    app.z_order = z_max + 1;
+                    apps_manager.set_on_top(app_name);
                 }
 
                 _ => (),
@@ -285,8 +303,6 @@ pub fn run_apps<F: FbViewMut>(
         }
     }
 
-    normalize_z_order(apps);
-
     //
     // DEBUG
 
@@ -296,8 +312,11 @@ pub fn run_apps<F: FbViewMut>(
     // Step and draw apps
 
     let UiContext { fb, .. } = uitk_context;
+    let AppsManager { apps, z_order } = apps_manager;
 
-    for (app_name, app) in get_z_sorted_apps(apps) {
+    for (i, app_name) in z_order.iter().enumerate() {
+
+        let app = apps.get_mut(app_name).unwrap();
 
         if !app.is_open {
             continue;
@@ -309,9 +328,11 @@ pub fn run_apps<F: FbViewMut>(
             AppsInteractionState::AppHover { 
                 app_name: hover_app_name,
                 hover_kind
-            } => hover_app_name == app_name && hover_kind == HoverKind::Titlebar,
+            } => hover_app_name == *app_name && hover_kind == HoverKind::Titlebar,
             _ => false,
         };
+
+        let is_foreground = i == z_order.len() - 1;
 
         draw_decorations(*fb, &stylesheet, app_name, &deco, highlight);
 
@@ -321,7 +342,7 @@ pub fn run_apps<F: FbViewMut>(
 
             AppState::Running { wasm_app } => {
 
-                let wasm_res = wasm_app.step(system, input_state, &app.rect);
+                let wasm_res = wasm_app.step(system, input_state, &app.rect, is_foreground);
                 match wasm_res {
                     Ok(app_fb) => fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false),
                     Err(error) => {
@@ -363,22 +384,6 @@ struct AppDecorations {
     window_hover: bool,
 }
 
-fn normalize_z_order(apps: &mut BTreeMap<&'static str, App>) {
-    let mut sorted_apps = get_z_sorted_apps(apps);
-    sorted_apps.iter_mut().enumerate().for_each(|(i, (_app_name, app))| app.z_order = i);
-}
-
-fn get_z_max(apps: &BTreeMap<&'static str, App>) -> usize {
-    apps.values().map(|app| app.z_order).max().unwrap()
-}
-
-fn get_z_sorted_apps<'a>(apps: &'a mut BTreeMap<&'static str, App>) -> Vec<(&'static str, &'a mut App)> {
-    let mut sorted_apps: Vec<(&'static str, &'a mut App)> = apps.iter_mut()
-        .map(|(app_name, app)| (*app_name, app))
-        .collect();
-    sorted_apps.sort_by_key(|(_app_name, app)| app.z_order);
-    sorted_apps
-}
 
 fn position_window(preferred_rect: &Rect, fb_shape: (u32, u32), deco: &AppDecorations) -> Rect {
     let (fb_w, fb_h) = fb_shape;

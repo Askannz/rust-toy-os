@@ -39,7 +39,7 @@ use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
 use virtio::network::VirtioNetwork;
 
-use app::{run_apps, App, AppsInteractionState};
+use app::{run_apps, App, AppsInteractionState, AppsManager};
 use applib::input::keymap::{EventType, Keycode};
 use resources::{APPLICATIONS, WALLPAPER, STYLESHEET};
 use system::System;
@@ -105,7 +105,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         stylesheet: &STYLESHEET,
     };
 
-    let mut applications: BTreeMap<&'static str, App> = APPLICATIONS
+    let apps: BTreeMap<&'static str, App> = APPLICATIONS
         .iter()
         .map(|app_desc| {
             (
@@ -114,6 +114,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             )
         })
         .collect();
+
+    let mut apps_manager = AppsManager::new(apps);
 
     log::info!("Applications loaded");
 
@@ -157,7 +159,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         run_apps(
             &mut uitk_context,
             &mut system,
-            &mut applications,
+            &mut apps_manager,
             &input_state,
             &mut apps_interaction_state,
         );

@@ -4,7 +4,6 @@
 * gpu crash after a while
 * clicks go through scrollbars
 * scrollbars interfere with resize button
-* memory alloc failure when resizing windows rapidly
 
 # Refactorings
 
@@ -18,7 +17,7 @@
 
 # Features
 
-* input restricted to current app
+* resize button in pie menu
 * graceful restart on app crash
 * resumable tile rendering
 * nested pie menus

@@ -66,8 +66,7 @@ pub fn step() {
 
     let mut framebuffer = state.pixel_data.get_framebuffer();
 
-    let input_state_local = input_state.change_origin(&win_rect);
-    let pointer = &input_state_local.pointer;
+    let pointer = &input_state.pointer;
 
     let redraw = match state.prev_pointer {
         Some((px, py)) if (pointer.x, pointer.y) == (px, py) => false,
@@ -88,7 +87,7 @@ pub fn step() {
     let mut uitk_context = state.ui_store.get_context(
         &mut framebuffer,
         &stylesheet,
-        &input_state_local,
+        &input_state,
         &mut state.uuid_provider,
         time,
     );

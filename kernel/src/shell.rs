@@ -50,7 +50,7 @@ pub fn pie_menu<'a, F: FbViewMut>(
     uitk_context: &mut uitk::UiContext<F>,
     entries: &'a [PieMenuEntry],
     center: Point2D<i64>,
-) -> (Option<&'a str>, PieDrawCalls) {
+) -> (Option<usize>, PieDrawCalls) {
     const INNER_RADIUS: f32 = 50.0;
     const OUTER_RADIUS: f32 = 100.0;
     const DEADZONE_INNER_RADIUS: f32 = 25.0;
@@ -76,7 +76,7 @@ pub fn pie_menu<'a, F: FbViewMut>(
     let mut a0 = 0.0;
     let mut draw_calls  = PieDrawCalls { calls: Vec::new() };
 
-    for entry in entries.iter() {
+    for (entry_index, entry) in entries.iter().enumerate() {
         let delta_angle = 2.0 * PI * entry.weight() / total_weight;
         let a1 = a0 + delta_angle;
 
@@ -108,7 +108,7 @@ pub fn pie_menu<'a, F: FbViewMut>(
                     && center_dist < DEADZONE_OUTER_RADIUS;
 
                 if is_hovered {
-                    selected_entry = Some(text.as_str());
+                    selected_entry = Some(entry_index);
                 }
 
                 is_hovered

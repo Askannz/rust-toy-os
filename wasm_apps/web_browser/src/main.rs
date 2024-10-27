@@ -191,7 +191,6 @@ pub fn step() {
 
     let input_state = guestlib::get_input_state();
     let win_rect = guestlib::get_win_rect();
-    let win_input_state = input_state.change_origin(&win_rect);
 
     let AppState {
         ui_store,
@@ -207,7 +206,7 @@ pub fn step() {
     let mut uitk_context = ui_store.get_context(
         &mut framebuffer,
         &stylesheet,
-        &win_input_state,
+        &input_state,
         uuid_provider,
         time
     );
@@ -254,10 +253,10 @@ pub fn step() {
         &progress_str,
     );
 
-    let url_go = is_go_button_fired || check_enter_pressed(&win_input_state);
+    let url_go = is_go_button_fired || check_enter_pressed(&input_state);
 
     let prev_state_debug = format!("{:?}", state.request_state);
-    try_update_request_state(state, &stylesheet, url_go, is_reload_button_fired, &ui_layout, &win_input_state, time);
+    try_update_request_state(state, &stylesheet, url_go, is_reload_button_fired, &ui_layout, &input_state, time);
     let new_state_debug = format!("{:?}", state.request_state);
 
     if new_state_debug != prev_state_debug {

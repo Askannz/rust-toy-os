@@ -264,10 +264,20 @@ impl WasmApp {
         system: &mut System,
         input_state: &InputState,
         win_rect: &Rect,
+        is_foreground: bool,
     ) -> Result<Framebuffer<BorrowedPixels>, anyhow::Error> {
 
+        let relative_input_state = {
+            let mut input_state = input_state.clone();
+            if !is_foreground {
+                input_state.clear_events();
+            }
+            input_state.change_origin(win_rect);
+            input_state
+        };
+
         let res = self.store_wrapper
-            .with_context(system, input_state, win_rect, |mut store| {
+            .with_context(system, &relative_input_state, win_rect, |mut store| {
                 self.wasm_step.call(&mut store, ())
             });
 
@@ -276,7 +286,7 @@ impl WasmApp {
                 let wasm_fb = self.store_wrapper.get_framebuffer(&self.instance);
                 Ok(wasm_fb)
             },
-            Err(wasm_err) => Err(anyhow::format_err!("{:?}", wasm_err))
+            Err(wasm_err) => Err(anyhow::format_err!(wasm_err))
         }
     }
 }

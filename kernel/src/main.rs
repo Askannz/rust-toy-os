@@ -3,7 +3,7 @@
 #![feature(alloc_error_handler)]
 #![feature(abi_x86_interrupt)]
 
-use alloc::collections::btree_map::BTreeMap;
+use alloc::vec::Vec;
 use alloc::format;
 use core::panic::PanicInfo;
 use num_traits::Float;
@@ -105,7 +105,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         stylesheet: &STYLESHEET,
     };
 
-    let apps: BTreeMap<&'static str, App> = APPLICATIONS
+    let apps: Vec<(&'static str, App)> = APPLICATIONS
         .iter()
         .map(|app_desc| {
             (

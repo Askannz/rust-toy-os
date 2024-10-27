@@ -55,8 +55,7 @@ pub enum AppsInteractionState {
 }
 
 pub struct AppsManager {
-    pub apps: BTreeMap<&'static str, App>,
-    z_order: Vec<&'static str>
+    apps: Vec<(&'static str, App)>
 }
 
 pub struct App {
@@ -74,18 +73,23 @@ pub enum AppState {
 
 impl AppsManager {
 
-    pub fn new(apps: BTreeMap<&'static str, App>) -> Self {
-        let z_order: Vec<&'static str> = apps.keys().cloned().collect();
-        Self { apps, z_order }
+    pub fn new(apps: Vec<(&'static str, App)>) -> Self {
+        Self { apps }
     }
 
     fn get_mut(&mut self, app_name: &'static str) -> &mut App {
-        self.apps.get_mut(app_name).unwrap()
+        let (_, app) = self.apps.iter_mut().find(|(name, _)| *name == app_name).unwrap();
+        app
     }
 
     fn set_on_top(&mut self, app_name: &'static str) {
-        self.z_order.retain_mut(|name| *name != app_name);
-        self.z_order.push(app_name);
+        let index = self.apps.iter().position(|(name, _)| *name == app_name).unwrap();
+        let (_, app) = self.apps.remove(index);
+        self.apps.push((app_name, app));
+    }
+
+    fn z_ordered(&mut self) -> Vec<(&'static str, &mut App)> {
+        self.apps.iter_mut().map(|(app_name, app)| (*app_name, app)).collect()
     }
 }
 
@@ -131,13 +135,12 @@ pub fn run_apps<F: FbViewMut>(
     //
     // Hover
 
-    let hover_state = apps_manager.z_order.iter().rev()
-        .map(|app_name| {
-            let app = apps_manager.apps.get(app_name).unwrap();
+    let hover_state = apps_manager.z_ordered().iter().rev()
+        .map(|(app_name, app)| {
             let deco = compute_decorations(app, input_state);
-            (app, deco, app_name)
+            (app_name, app, deco)
         })
-        .find_map(|(app, deco, app_name)| {
+        .find_map(|(app_name, app, deco)| {
             if !app.is_open { None }
             else if deco.titlebar_hover { Some((*app_name, HoverKind::Titlebar)) }
             else if deco.resize_hover { Some((*app_name, HoverKind::Resize)) }
@@ -312,11 +315,11 @@ pub fn run_apps<F: FbViewMut>(
     // Step and draw apps
 
     let UiContext { fb, .. } = uitk_context;
-    let AppsManager { apps, z_order } = apps_manager;
 
-    for (i, app_name) in z_order.iter().enumerate() {
+    let mut ordered = apps_manager.z_ordered();
+    let n = ordered.len();
 
-        let app = apps.get_mut(app_name).unwrap();
+    for (i, (app_name, app)) in ordered.iter_mut().enumerate() {
 
         if !app.is_open {
             continue;
@@ -332,7 +335,7 @@ pub fn run_apps<F: FbViewMut>(
             _ => false,
         };
 
-        let is_foreground = i == z_order.len() - 1;
+        let is_foreground = i == n - 1;
 
         draw_decorations(*fb, &stylesheet, app_name, &deco, highlight);
 

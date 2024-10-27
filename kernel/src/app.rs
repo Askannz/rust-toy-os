@@ -57,12 +57,17 @@ pub enum AppsInteractionState {
 }
 
 pub struct App {
-    pub wasm_app: WasmApp,
+    pub app_state: AppState,
     pub descriptor: AppDescriptor,
     pub is_open: bool,
     pub rect: Rect,
     pub z_order: usize,
     pub time_used: f64,
+}
+
+pub enum AppState {
+    Running { wasm_app: WasmApp },
+    Crashed { error: anyhow::Error }
 }
 
 impl AppDescriptor {
@@ -72,15 +77,18 @@ impl AppDescriptor {
         input_state: &InputState,
         wasm_engine: &WasmEngine,
     ) -> App {
+
+        let wasm_app = wasm_engine.instantiate_app(
+            system,
+            input_state,
+            self.data,
+            self.name,
+            &self.init_win_rect,
+        );
+
         App {
             descriptor: self.clone(),
-            wasm_app: wasm_engine.instantiate_app(
-                system,
-                input_state,
-                self.data,
-                self.name,
-                &self.init_win_rect,
-            ),
+            app_state: AppState::Running { wasm_app },
             is_open: false,
             rect: self.init_win_rect.clone(),
             z_order: 0,
@@ -296,7 +304,6 @@ pub fn run_apps<F: FbViewMut>(
         }
 
         let deco = compute_decorations(&app, input_state);
-        let app_fb = app.wasm_app.step(system, input_state, &app.rect);
 
         let highlight = match *is {
             AppsInteractionState::AppHover { 
@@ -306,7 +313,36 @@ pub fn run_apps<F: FbViewMut>(
             _ => false,
         };
 
-        draw_app(*fb, &stylesheet, app_name, &app_fb, &deco, highlight);
+        draw_decorations(*fb, &stylesheet, app_name, &deco, highlight);
+
+        //fb.copy_from_fb(app_fb, deco.content_rect.origin(), false);
+    
+        match &mut app.app_state {
+
+            AppState::Running { wasm_app } => {
+
+                let wasm_res = wasm_app.step(system, input_state, &app.rect);
+                match wasm_res {
+                    Ok(app_fb) => fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false),
+                    Err(error) => {
+                        app.app_state = AppState::Crashed { error }
+                    }
+                }
+            },
+
+            AppState::Crashed { error } => {
+
+                let (x0, y0) = deco.content_rect.origin();
+                draw_str(
+                    *fb,
+                    &format!("{:?}", error),
+                    x0, y0,
+                    &DEFAULT_FONT,
+                    Color::WHITE,
+                    None
+                );
+            },
+        }
     }
 
     if let Some(draw_calls) = pie_draw_calls {
@@ -451,11 +487,10 @@ fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
     }
 }
 
-fn draw_app<F: FbViewMut>(
+fn draw_decorations<F: FbViewMut>(
     fb: &mut F,
     stylesheet: &StyleSheet,
     app_name: &str,
-    app_fb: &Framebuffer<BorrowedPixels>,
     deco: &AppDecorations,
     highlight: bool,
 ) {
@@ -492,8 +527,6 @@ fn draw_app<F: FbViewMut>(
         stylesheet.colors.text,
         None,
     );
-
-    fb.copy_from_fb(app_fb, deco.content_rect.origin(), false);
 
     for rect in deco.handle_rects.iter() {
         draw_rect(fb, rect, stylesheet.colors.accent, false);

@@ -151,14 +151,14 @@ struct StoreWrapper {
 }
 
 impl StoreWrapper {
-    fn with_context<F>(
+    fn with_context<F, T>(
         &mut self,
         system: &mut System,
         input_state: &InputState,
         win_rect: &Rect,
         mut func: F,
-    ) where
-        F: FnMut(&mut Store<StoreData>),
+    ) -> T where
+        F: FnMut(&mut Store<StoreData>) -> T,
     {
         self.store.set_fuel(STEP_FUEL).unwrap();
 
@@ -171,9 +171,11 @@ impl StoreWrapper {
             timings: BTreeMap::new(),
         });
 
-        func(&mut self.store);
+        let res = func(&mut self.store);
 
         self.store.as_context_mut().data_mut().step_context = None;
+
+        res
     }
 
     fn get_framebuffer(&mut self, instance: &Instance) -> Framebuffer<BorrowedPixels> {
@@ -262,17 +264,20 @@ impl WasmApp {
         system: &mut System,
         input_state: &InputState,
         win_rect: &Rect,
-    ) -> Framebuffer<BorrowedPixels> {
-        self.store_wrapper
+    ) -> Result<Framebuffer<BorrowedPixels>, anyhow::Error> {
+
+        let res = self.store_wrapper
             .with_context(system, input_state, win_rect, |mut store| {
-                self.wasm_step
-                    .call(&mut store, ())
-                    .expect("Failed to step WASM app");
+                self.wasm_step.call(&mut store, ())
             });
 
-        let wasm_fb = self.store_wrapper.get_framebuffer(&self.instance);
-
-        wasm_fb
+        match res {
+            Ok(()) => {
+                let wasm_fb = self.store_wrapper.get_framebuffer(&self.instance);
+                Ok(wasm_fb)
+            },
+            Err(wasm_err) => Err(anyhow::format_err!("{:?}", wasm_err))
+        }
     }
 }
 

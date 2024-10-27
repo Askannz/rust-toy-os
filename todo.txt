@@ -32,7 +32,6 @@
 * system settings window
 * app audit window
 * file editor + "fake" filesystem
-* clock
 * better memory allocator
 
 * Tiling windows

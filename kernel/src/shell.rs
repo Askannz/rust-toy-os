@@ -1,4 +1,6 @@
+use alloc::borrow::ToOwned;
 use alloc::string::String;
+use alloc::vec::Vec;
 use applib::drawing::primitives::{draw_arc, ArcMode};
 use applib::drawing::text::{draw_str, Font};
 use applib::geometry::{Point2D, Vec2D};
@@ -38,11 +40,17 @@ impl PieMenuEntry {
     }
 }
 
+// We have to defer the draw operation of the pie menu,
+// because it's supposed to be drawn above the rest (app windows, etc)
+pub struct PieDrawCalls {
+    calls: Vec<DrawCall>
+}
+
 pub fn pie_menu<'a, F: FbViewMut>(
     uitk_context: &mut uitk::UiContext<F>,
     entries: &'a [PieMenuEntry],
     center: Point2D<i64>,
-) -> Option<&'a str> {
+) -> (Option<&'a str>, PieDrawCalls) {
     const INNER_RADIUS: f32 = 50.0;
     const OUTER_RADIUS: f32 = 100.0;
     const DEADZONE_INNER_RADIUS: f32 = 25.0;
@@ -66,6 +74,7 @@ pub fn pie_menu<'a, F: FbViewMut>(
 
     let mut selected_entry = None;
     let mut a0 = 0.0;
+    let mut draw_calls  = PieDrawCalls { calls: Vec::new() };
 
     for entry in entries.iter() {
         let delta_angle = 2.0 * PI * entry.weight() / total_weight;
@@ -121,16 +130,15 @@ pub fn pie_menu<'a, F: FbViewMut>(
             outer: (a0 + outer_angle_gap, a1 - outer_angle_gap),
         };
 
-        draw_arc(
-            uitk_context.fb,
-            p_arc,
-            INNER_RADIUS,
-            OUTER_RADIUS,
-            arc_mode,
-            ARC_PX_PER_PT,
-            entry.color(),
-            false,
-        );
+        draw_calls.calls.push(DrawCall::Arc {
+            center: p_arc,
+            r_inner: INNER_RADIUS,
+            r_outer: OUTER_RADIUS,
+            mode: arc_mode,
+            px_per_pt: ARC_PX_PER_PT,
+            color: entry.color(),
+            blend: false
+        });
 
         if let PieMenuEntry::Button {
             icon,
@@ -143,21 +151,24 @@ pub fn pie_menu<'a, F: FbViewMut>(
             let (icon_w, icon_h) = icon.shape();
             let x0_icon = p_icon.x - (icon_w / 2) as i64;
             let y0_icon = p_icon.y - (icon_h / 2) as i64;
-            uitk_context
-                .fb
-                .copy_from_fb(*icon, (x0_icon, y0_icon), true);
+
+            draw_calls.calls.push(DrawCall::Icon {
+                icon: *icon,
+                x0: x0_icon,
+                y0: y0_icon
+            });
 
             if is_hovered {
-                draw_arc(
-                    uitk_context.fb,
-                    p_arc,
-                    INNER_RADIUS,
-                    OUTER_RADIUS,
-                    arc_mode,
-                    ARC_PX_PER_PT,
-                    stylesheet.colors.hover_overlay,
-                    true,
-                );
+
+                draw_calls.calls.push(DrawCall::Arc {
+                    center: p_arc,
+                    r_inner: INNER_RADIUS,
+                    r_outer: OUTER_RADIUS,
+                    mode: arc_mode,
+                    px_per_pt: ARC_PX_PER_PT,
+                    color: stylesheet.colors.hover_overlay,
+                    blend: true
+                });
 
                 let p_text =
                     center + (v_bisect * (OUTER_RADIUS + TEXT_OFFSET)).round_to_int() + v_offset;
@@ -167,26 +178,86 @@ pub fn pie_menu<'a, F: FbViewMut>(
                     false => p_text.x - text_w as i64,
                 };
                 let y0_text = p_text.y - (text_h / 2) as i64;
-                draw_str(
-                    uitk_context.fb,
-                    text,
-                    x0_text,
-                    y0_text,
-                    font,
-                    *text_color,
-                    None,
-                );
+
+                draw_calls.calls.push(DrawCall::Text { 
+                    s: text.to_owned(),
+                    x0: x0_text,
+                    y0: y0_text,
+                    font: font,
+                    color: *text_color,
+                    bg_color: None
+                });
             }
         }
 
         a0 = a1;
     }
 
-    selected_entry
+    (selected_entry, draw_calls)
 }
 
 fn compute_text_bbox(s: &str, font: &Font) -> (u32, u32) {
     let w = font.char_w * s.len();
     let h = font.char_h;
     (w as u32, h as u32)
+}
+
+impl PieDrawCalls {
+    pub fn draw<F: FbViewMut>(self, fb: &mut F) {
+        for call in self.calls.into_iter() {
+            match call {
+
+                DrawCall::Arc { 
+                    center,
+                    r_inner,
+                    r_outer,
+                    mode,
+                    px_per_pt, 
+                    color,
+                    blend 
+                } => draw_arc(fb, center, r_inner, r_outer, mode, px_per_pt, color, blend),
+
+                DrawCall::Icon { 
+                    icon,
+                    x0,
+                    y0
+                } => fb.copy_from_fb(icon, (x0, y0), true),
+
+                DrawCall::Text { 
+                    s,
+                    x0,
+                    y0,
+                    font,
+                    color,
+                    bg_color
+                } => draw_str(fb, &s, x0, y0, font, color, bg_color),
+            }
+        }
+    }
+}
+
+
+enum DrawCall {
+    Arc {
+        center: Point2D<i64>,
+        r_inner: f32,
+        r_outer: f32,
+        mode: ArcMode,
+        px_per_pt: f32,
+        color: Color,
+        blend: bool,
+    },
+    Icon {
+        icon: &'static Framebuffer<OwnedPixels>,
+        x0: i64,
+        y0: i64,
+    },
+    Text {
+        s: String,
+        x0: i64,
+        y0: i64,
+        font: &'static Font,
+        color: Color,
+        bg_color: Option<Color>,
+    }
 }

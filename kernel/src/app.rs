@@ -5,7 +5,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use applib::{BorrowedPixels, StyleSheet};
 
-use crate::shell::{pie_menu, PieMenuEntry};
+use crate::shell::{pie_menu, PieDrawCalls, PieMenuEntry};
 use applib::drawing::primitives::draw_rect;
 use applib::drawing::text::{draw_str, Font, DEFAULT_FONT, HACK_15};
 use applib::geometry::{Point2D, Vec2D};
@@ -100,6 +100,7 @@ pub fn run_apps<F: FbViewMut>(
 
     let stylesheet = system.stylesheet.clone();
     let pointer = &input_state.pointer;
+    let mut pie_draw_calls: Option<PieDrawCalls> = None;
 
     //
     // Hover
@@ -218,7 +219,9 @@ pub fn run_apps<F: FbViewMut>(
                 },
             ];
 
-            let selected = pie_menu(uitk_context, &entries, anchor);
+            let (selected, draw_calls) = pie_menu(uitk_context, &entries, anchor);
+
+            pie_draw_calls.replace(draw_calls);
 
             match selected {
                 Some("Close") if pointer.left_click_trigger => app.is_open = false,
@@ -244,12 +247,14 @@ pub fn run_apps<F: FbViewMut>(
                 })
                 .collect();
 
-            let selected = pie_menu(uitk_context, &entries, anchor);
+            let (selected, draw_calls) = pie_menu(uitk_context, &entries, anchor);
+
+            pie_draw_calls.replace(draw_calls);
 
             match selected {
                 Some(app_name) if pointer.left_click_trigger => {
 
-                    let z_max = apps.values().map(|app| app.z_order).max().unwrap();
+                    let z_max = get_z_max(&apps);
 
                     let app = apps.get_mut(app_name).unwrap();
 
@@ -302,6 +307,10 @@ pub fn run_apps<F: FbViewMut>(
         };
 
         draw_app(*fb, &stylesheet, app_name, &app_fb, &deco, highlight);
+    }
+
+    if let Some(draw_calls) = pie_draw_calls {
+        draw_calls.draw(*fb);
     }
 }
 

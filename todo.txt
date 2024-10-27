@@ -22,7 +22,6 @@
 * graceful restart on app crash
 * resumable tile rendering
 * nested pie menus
-* apps z-order and focus
 * choose proper style for UI (color, fonts, etc)
 * color palette
 * web browser: improve compatibility (be able to load wikipedia for ex)

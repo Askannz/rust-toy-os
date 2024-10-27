@@ -59,7 +59,7 @@ pub enum AppsInteractionState {
 }
 
 pub struct AppsManager {
-    apps: Vec<(&'static str, App)>
+    z_ordered: Vec<App>
 }
 
 pub struct App {
@@ -71,61 +71,32 @@ pub struct App {
 }
 
 pub enum AppState {
+    Init,
     Running { wasm_app: WasmApp },
     Crashed { error: anyhow::Error }
 }
 
 impl AppsManager {
 
-    pub fn new(apps: Vec<(&'static str, App)>) -> Self {
-        Self { apps }
+    pub fn new(apps: Vec<App>) -> Self {
+        Self { z_ordered: apps }
     }
 
     fn get_mut(&mut self, app_name: &'static str) -> &mut App {
-        let (_, app) = self.apps.iter_mut().find(|(name, _)| *name == app_name).unwrap();
-        app
+        self.z_ordered.iter_mut().find(|app| app.descriptor.name == app_name).unwrap()
     }
 
     fn set_on_top(&mut self, app_name: &'static str) {
-        let index = self.apps.iter().position(|(name, _)| *name == app_name).unwrap();
-        let (_, app) = self.apps.remove(index);
-        self.apps.push((app_name, app));
-    }
-
-    fn z_ordered(&mut self) -> Vec<(&'static str, &mut App)> {
-        self.apps.iter_mut().map(|(app_name, app)| (*app_name, app)).collect()
-    }
-}
-
-impl AppDescriptor {
-    pub fn instantiate(
-        &self,
-        system: &mut System,
-        input_state: &InputState,
-        wasm_engine: &WasmEngine,
-    ) -> App {
-
-        let wasm_app = wasm_engine.instantiate_app(
-            system,
-            input_state,
-            self.data,
-            self.name,
-            &self.init_win_rect,
-        );
-
-        App {
-            descriptor: self.clone(),
-            app_state: AppState::Running { wasm_app },
-            is_open: false,
-            rect: self.init_win_rect.clone(),
-            time_used: 0.0,
-        }
+        let index = self.z_ordered.iter().position(|app| app.descriptor.name == app_name).unwrap();
+        let app = self.z_ordered.remove(index);
+        self.z_ordered.push(app);
     }
 }
 
 pub fn run_apps<F: FbViewMut>(
     uitk_context: &mut uitk::UiContext<F>,
     system: &mut System,
+    wasm_engine: &WasmEngine,
     apps_manager: &mut AppsManager,
     input_state: &InputState,
     interaction_state: &mut AppsInteractionState,
@@ -139,16 +110,19 @@ pub fn run_apps<F: FbViewMut>(
     //
     // Hover
 
-    let hover_state = apps_manager.z_ordered().iter().rev()
-        .map(|(app_name, app)| {
+    let hover_state = apps_manager.z_ordered.iter().rev()
+        .map(|app| {
             let deco = compute_decorations(app, input_state);
-            (app_name, app, deco)
+            (app, deco)
         })
-        .find_map(|(app_name, app, deco)| {
+        .find_map(|(app, deco)| {
+
+            let app_name = app.descriptor.name;
+
             if !app.is_open { None }
-            else if deco.titlebar_hover { Some((*app_name, HoverKind::Titlebar)) }
-            else if deco.resize_hover { Some((*app_name, HoverKind::Resize)) }
-            else if deco.window_hover { Some((*app_name, HoverKind::Window)) }
+            else if deco.titlebar_hover { Some((app_name, HoverKind::Titlebar)) }
+            else if deco.resize_hover { Some((app_name, HoverKind::Resize)) }
+            else if deco.window_hover { Some((app_name, HoverKind::Window)) }
             else { None }
         });
 
@@ -264,14 +238,19 @@ pub fn run_apps<F: FbViewMut>(
             match selected {
                 Some(0) if pointer.left_click_trigger => {
                     app.is_open = false;
-                    *is = AppsInteractionState::Idle
+                    *is = AppsInteractionState::Idle;
                 },
                 Some(1) if pointer.left_click_trigger => {
                     let anchor = get_hold_anchor(pointer, &app.rect);
-                    *is = AppsInteractionState::TitlebarHold { app_name, anchor, toggle: true }
+                    *is = AppsInteractionState::TitlebarHold { app_name, anchor, toggle: true };
+                },
+                Some(2) if pointer.left_click_trigger => {
+                    log::info!("De-loading app {}", app.descriptor.name);
+                    app.app_state = AppState::Init;
+                    *is = AppsInteractionState::Idle;
                 },
                 _ if pointer.right_click_trigger || pointer.left_click_trigger => {
-                    *is = AppsInteractionState::Idle
+                    *is = AppsInteractionState::Idle;
                 }
                 _ => (),
             }
@@ -279,15 +258,11 @@ pub fn run_apps<F: FbViewMut>(
 
         AppsInteractionState::PieDesktopMenu { anchor } => {
 
-            let mut apps_vec: Vec<(&'static str, &mut App)> = apps_manager.apps.iter_mut()
-                .map(|(app_name, app)| (*app_name, app))
-                .collect();
-
-            let entries: Vec<PieMenuEntry> = apps_vec.iter()
-                .map(|(app_name, app)| PieMenuEntry::Button {
+            let entries: Vec<PieMenuEntry> = apps_manager.z_ordered.iter()
+                .map(|app| PieMenuEntry::Button {
                     icon: app.descriptor.icon,
                     color: stylesheet.colors.background,
-                    text: app_name.to_string(),
+                    text: app.descriptor.name.to_string(),
                     text_color: stylesheet.colors.text,
                     font: &HACK_15,
                     weight: 1.0,
@@ -301,7 +276,7 @@ pub fn run_apps<F: FbViewMut>(
             match selected {
                 Some(entry_index) if pointer.left_click_trigger => {
 
-                    let (app_name, app) = apps_vec.remove(entry_index);
+                    let app = &mut apps_manager.z_ordered[entry_index];
 
                     let deco = compute_decorations(app, input_state);
 
@@ -310,6 +285,7 @@ pub fn run_apps<F: FbViewMut>(
 
                     app.is_open = true;
                     app.rect = position_window(&preferred_rect, uitk_context.fb.shape(), &deco);
+                    let app_name = app.descriptor.name;
                     apps_manager.set_on_top(app_name);
                 }
 
@@ -332,15 +308,15 @@ pub fn run_apps<F: FbViewMut>(
 
     let UiContext { fb, .. } = uitk_context;
 
-    let mut ordered = apps_manager.z_ordered();
-    let n = ordered.len();
+    let n = apps_manager.z_ordered.len();
 
-    for (i, (app_name, app)) in ordered.iter_mut().enumerate() {
+    for (i, app) in apps_manager.z_ordered.iter_mut().enumerate() {
 
         if !app.is_open {
             continue;
         }
 
+        let app_name = &app.descriptor.name;
         let deco = compute_decorations(&app, input_state);
 
         let highlight = match *is {
@@ -358,6 +334,22 @@ pub fn run_apps<F: FbViewMut>(
         //fb.copy_from_fb(app_fb, deco.content_rect.origin(), false);
     
         match &mut app.app_state {
+
+            AppState::Init => {
+
+                let desc = &app.descriptor;
+
+                log::info!("Initializing app {}", desc.name);
+                let wasm_app = wasm_engine.instantiate_app(
+                    system,
+                    input_state,
+                    desc.data,
+                    desc.name,
+                    &app.rect,
+                );
+
+                app.app_state = AppState::Running { wasm_app };
+            },
 
             AppState::Running { wasm_app } => {
 

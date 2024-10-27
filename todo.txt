@@ -4,6 +4,7 @@
 * gpu crash after a while
 * clicks go through scrollbars
 * scrollbars interfere with resize button
+* web browser crashes when loading HN with a wrong HTTP path
 
 # Refactorings
 
@@ -18,7 +19,7 @@
 
 # Features
 
-* graceful restart on app crash
+* app crash demo
 * resumable tile rendering
 * nested pie menus
 * choose proper style for UI (color, fonts, etc)

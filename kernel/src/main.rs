@@ -39,7 +39,7 @@ use virtio::gpu::VirtioGPU;
 use virtio::input::VirtioInput;
 use virtio::network::VirtioNetwork;
 
-use app::{run_apps, App, AppsInteractionState, AppsManager};
+use app::{run_apps, App, AppsInteractionState, AppsManager, AppState};
 use applib::input::keymap::{EventType, Keycode};
 use resources::{APPLICATIONS, WALLPAPER, STYLESHEET};
 use system::System;
@@ -105,13 +105,14 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         stylesheet: &STYLESHEET,
     };
 
-    let apps: Vec<(&'static str, App)> = APPLICATIONS
+    let apps: Vec<App> = APPLICATIONS
         .iter()
-        .map(|app_desc| {
-            (
-                app_desc.name,
-                app_desc.instantiate(&mut system, &input_state, &wasm_engine),
-            )
+        .map(|app_desc| App {
+            descriptor: app_desc.clone(),
+            app_state: AppState::Init,
+            is_open: false,
+            rect: app_desc.init_win_rect.clone(),
+            time_used: 0.0,
         })
         .collect();
 
@@ -159,6 +160,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         run_apps(
             &mut uitk_context,
             &mut system,
+            &wasm_engine,
             &mut apps_manager,
             &input_state,
             &mut apps_interaction_state,

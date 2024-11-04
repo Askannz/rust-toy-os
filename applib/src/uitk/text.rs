@@ -163,15 +163,27 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
             let mut tile_fb = Framebuffer::new_owned(rect.w, rect.h);
 
-            draw_str(&mut tile_fb, buffer.as_ref(), 0, 0, font, text_color, None);
+            let buffer = buffer.as_ref();
+
+            let text_h = font.char_h as u32;
+            let text_w = (buffer.len() * font.char_w) as u32;
+            let text_rect = Rect { 
+                x0: stylesheet.margin as i64,
+                y0: 0,
+                w: text_w,
+                h: text_h
+            }.align_to_rect_vert(rect);
+            let (text_x0, text_y0) = (text_rect.x0, text_rect.y0);
+
+            draw_str(&mut tile_fb, buffer.as_ref(), text_x0, text_y0, font, text_color, None);
 
             //
             // Draw blinking cursor
 
             if cursor_visible {
                 let cursor_rect = Rect {
-                    x0: (*cursor * font.char_w) as i64,
-                    y0: 0,
+                    x0: text_x0 + text_w as i64,
+                    y0: text_y0,
                     w: 2,
                     h: font.char_h as u32,
                 };

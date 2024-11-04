@@ -4,6 +4,7 @@ use crate::Color;
 #[repr(C)]
 pub struct StyleSheet {
     pub colors: StyleSheetColors,
+    pub margin: u32,
 }
 
 #[derive(Clone)]

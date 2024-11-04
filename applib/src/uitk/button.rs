@@ -1,6 +1,6 @@
 use crate::drawing::primitives::draw_rect;
 use crate::drawing::text::{draw_str, Font};
-use crate::uitk::UiContext;
+use crate::uitk::{button, UiContext};
 use crate::{Color, FbView, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use alloc::borrow::ToOwned;
 use alloc::string::String;
@@ -35,27 +35,41 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             InteractionState::Clicked => colorsheet.selected_overlay,
         };
 
-        let Rect { x0, y0, h, .. } = config.rect;
-        let h: i64 = h.into();
-        let x_padding: i64 = config.x_padding.into();
+        draw_rect(*fb, &config.rect, colorsheet.background, false);
 
-        draw_rect(*fb, &config.rect, button_color, false);
+        let button_rect = {
+            let m = stylesheet.margin as i64;
+            let [x0, y0, x1, y1] = config.rect.as_xyxy();
+            Rect::from_xyxy([x0+m, y0+m, x1-m, y1-m])
+        };
 
-        let mut text_offset_x = 0;
-        if let Some(icon) = config.icon {
-            let (icon_w, icon_h) = icon.shape();
-            let icon_x0 = x0 + x_padding;
-            let icon_y0 = y0 + i64::max(0, (h - i64::from(icon_h)) / 2);
-            text_offset_x = icon_w as i64 + x_padding;
-            fb.copy_from_fb(icon, (icon_x0, icon_y0), true);
-        }
+        draw_rect(*fb, &button_rect, button_color, false);
 
         let font = font_family.get_default();
-        let &Font { char_h, .. } = font;
-        let char_h = char_h as i64;
+        let &Font { char_h, char_w, .. } = font;
+        let text_h = char_h as u32;
+        let text_w = (config.text.len() * char_w) as u32;
 
-        let text_x0 = x0 + x_padding + text_offset_x;
-        let text_y0 = y0 + i64::max(0, (h - char_h) / 2);
+        let (text_x0, text_y0) = match &config.icon {
+            Some(icon) => {
+                let (icon_w, icon_h) = icon.shape();
+
+                let rect = Rect {
+                    x0: 0, y0: 0,
+                    w: icon_w + text_w,
+                    h: u32::max(icon_h, text_h)
+                }.align_to_rect(&config.rect);
+
+                fb.copy_from_fb(*icon, (rect.x0, rect.y0), true);
+
+                (rect.x0 + icon_w as i64, rect.y0)
+            },
+
+            None => {
+                let rect = Rect { x0: 0, y0: 0, w: text_w, h: text_h }.align_to_rect(&config.rect);
+                (rect.x0, rect.y0)
+            }
+        };
 
         draw_str(
             *fb,
@@ -76,7 +90,6 @@ pub struct ButtonConfig {
     pub rect: Rect,
     pub text: String,
     pub icon: Option<&'static Framebuffer<OwnedPixels>>,
-    pub x_padding: u32,
 }
 
 impl Default for ButtonConfig {
@@ -90,7 +103,6 @@ impl Default for ButtonConfig {
             },
             text: "Button".to_owned(),
             icon: None,
-            x_padding: 10,
         }
     }
 }

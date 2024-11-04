@@ -15,7 +15,7 @@
 * use "Color" in place of u32?
 * better tile cache
 * sort out naming of scrollable_canvas/dyn_scrollable_canvas
-* make all of uitk use the stylesheet
+* proper text layouting utilities
 
 # Features
 

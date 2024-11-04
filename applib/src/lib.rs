@@ -91,10 +91,21 @@ impl Rect {
         }
     }
 
+    pub fn align_to_rect(&self, other: &Rect) -> Rect {
+        let (x1c, y1c) = other.center();
+        Self::from_center(x1c, y1c, self.w, self.h)
+    }
+
     pub fn align_to_rect_vert(&self, other: &Rect) -> Rect {
         let (x0c, _) = self.center();
         let (_, y1c) = other.center();
         Self::from_center(x0c, y1c, self.w, self.h)
+    }
+
+    pub fn align_to_rect_horiz(&self, other: &Rect) -> Rect {
+        let (_, y0c) = self.center();
+        let (x1c, _) = other.center();
+        Self::from_center(x1c, y0c, self.w, self.h)
     }
 
     pub fn check_contains_point(&self, x: i64, y: i64) -> bool {

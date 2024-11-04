@@ -1,4 +1,5 @@
 use crate::{blend_colors, decode_png, Color, FbView, FbViewMut, Rect};
+use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
@@ -11,29 +12,48 @@ struct FontSpec {
     base_y: usize,
 }
 
-impl FontSpec {
-    fn load(&self) -> Font {
-        let FontSpec {
-            nb_chars,
-            char_h,
-            char_w,
-            base_y,
-            ..
-        } = *self;
+fn load_font(spec: &FontSpec) -> Font {
+    let FontSpec {
+        nb_chars,
+        char_h,
+        char_w,
+        base_y,
+        ..
+    } = *spec;
 
-        let bitmap = decode_png(self.bitmap_png);
+    let bitmap = decode_png(spec.bitmap_png);
 
-        if bitmap.len() != nb_chars * char_w * char_h {
-            panic!("Invalid font bitmap size");
-        }
+    if bitmap.len() != nb_chars * char_w * char_h {
+        panic!("Invalid font bitmap size");
+    }
 
-        Font {
-            bitmap,
-            nb_chars,
-            char_h,
-            char_w,
-            base_y,
-        }
+    Font {
+        bitmap,
+        nb_chars,
+        char_h,
+        char_w,
+        base_y,
+    }
+}
+
+pub struct FontFamily {
+    by_size: BTreeMap<usize, Font>
+}
+
+impl FontFamily {
+    pub fn from_font_specs(specs: &[FontSpec]) -> Self {
+
+        let by_size = specs.iter().map(|spec| {
+            let font = load_font(spec);
+            (spec.char_h, font)
+        })
+        .collect();
+
+        FontFamily { by_size }
+    }
+
+    pub fn get_default(&self) -> &Font {
+        self.by_size.values().next().unwrap()
     }
 }
 
@@ -46,22 +66,22 @@ pub struct Font {
 }
 
 lazy_static! {
-    pub static ref DEFAULT_FONT: Font = FontSpec {
-        bitmap_png: include_bytes!("../../fonts/default.png"),
-        nb_chars: 95,
-        char_h: 24,
-        char_w: 12,
-        base_y: 19
-    }
-    .load();
-    pub static ref HACK_15: Font = FontSpec {
-        bitmap_png: include_bytes!("../../fonts/hack_15.png"),
-        nb_chars: 95,
-        char_h: 18,
-        char_w: 10,
-        base_y: 14,
-    }
-    .load();
+    pub static ref DEFAULT_FONT_FAMILY: FontFamily = FontFamily::from_font_specs(&[
+        FontSpec {
+            bitmap_png: include_bytes!("../../fonts/default.png"),
+            nb_chars: 95,
+            char_h: 24,
+            char_w: 12,
+            base_y: 19
+        },
+        FontSpec {
+            bitmap_png: include_bytes!("../../fonts/hack_15.png"),
+            nb_chars: 95,
+            char_h: 18,
+            char_w: 10,
+            base_y: 14,
+        }
+    ]);
 }
 
 pub fn draw_str<F: FbViewMut>(

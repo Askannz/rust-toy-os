@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use alloc::{borrow::ToOwned, format};
 use applib::content::{ContentId, TrackedContent};
 use applib::drawing::text::{
-    draw_rich_slice, format_rich_lines, FormattedRichText, RichText, HACK_15,
+    draw_rich_slice, format_rich_lines, FontFamily, FormattedRichText, RichText, DEFAULT_FONT_FAMILY
 };
 use applib::input::InputEvent;
 use applib::input::{InputState, Keycode};
@@ -113,7 +113,7 @@ pub fn step() {
         h: win_h,
     };
 
-    let formatted = get_formatted_text(&stylesheet, &state.input_buffer, &state.console_buffer, (win_w, win_h));
+    let formatted = get_formatted_text(&stylesheet, &DEFAULT_FONT_FAMILY, &state.input_buffer, &state.console_buffer, (win_w, win_h));
 
     let renderer = ConsoleCanvasRenderer { formatted };
 
@@ -158,6 +158,7 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
 
 fn get_formatted_text(
     stylesheet: &StyleSheet,
+    font_family: &'static FontFamily,
     input_buffer: &TrackedContent<String>,
     console_buffer: &TrackedContent<Vec<EvalResult>>,
     win_shape: (u32, u32)
@@ -165,7 +166,7 @@ fn get_formatted_text(
 
     let (win_w, _win_h) = win_shape;
 
-    let console_rich_text = get_console_rich_text(stylesheet, input_buffer.as_ref(), console_buffer.as_ref());
+    let console_rich_text = get_console_rich_text(stylesheet, font_family, input_buffer.as_ref(), console_buffer.as_ref());
     let formatted = format_rich_lines(&console_rich_text, win_w);
 
     let new_cid = ContentId::from_hash((
@@ -240,8 +241,8 @@ impl uitk::TileRenderer for ConsoleCanvasRenderer {
     }
 }
 
-fn get_console_rich_text(stylesheet: &StyleSheet, input_buffer: &String, console_buffer: &Vec<EvalResult>) -> RichText {
-    let font = &HACK_15;
+fn get_console_rich_text(stylesheet: &StyleSheet, font_family: &'static FontFamily, input_buffer: &String, console_buffer: &Vec<EvalResult>) -> RichText {
+    let font = font_family.get_default();
 
     let mut console_rich_text = RichText::new();
 

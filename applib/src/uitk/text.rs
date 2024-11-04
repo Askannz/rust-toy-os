@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 
 use crate::content::TrackedContent;
 use crate::drawing::primitives::draw_rect;
-use crate::drawing::text::{draw_rich_slice, draw_str, Font, FormattedRichText, HACK_15};
+use crate::drawing::text::{draw_rich_slice, draw_str, Font, FormattedRichText};
 use crate::input::{InputEvent, InputState};
 use crate::input::{Keycode, CHARMAP};
 use crate::uitk::{ContentId, UiContext, CachedTile};
@@ -18,9 +18,6 @@ use super::UuidProvider;
 #[derive(Clone)]
 pub struct EditableTextConfig {
     pub rect: Rect,
-    pub font: &'static Font,
-    pub color: Color,
-    pub bg_color: Option<Color>,
 }
 
 impl Default for EditableTextConfig {
@@ -32,9 +29,6 @@ impl Default for EditableTextConfig {
                 w: 100,
                 h: 25,
             },
-            font: &HACK_15,
-            color: Color::WHITE,
-            bg_color: None,
         }
     }
 }
@@ -136,6 +130,8 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             input_state,
             uuid_provider,
             tile_cache,
+            font_family,
+            stylesheet,
             ..
         } = self;
 
@@ -144,12 +140,15 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         let time_sec = (self.time as u64) / 1000;
         let cursor_visible = time_sec % 2 == 0;
 
+        let colorsheet = &stylesheet.colors;
+        let font = font_family.get_default();
+        let text_color = colorsheet.text;
+
         let tile_content_id = ContentId::from_hash((
             config.rect.w,
             config.rect.h,
-            addr_of!(config.font),
-            config.color,
-            config.bg_color,
+            addr_of!(font),
+            text_color,
             cursor_visible,
             buffer.get_id(),
         ));
@@ -160,17 +159,11 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
             let EditableTextConfig {
                 rect,
-                font,
-                color,
-                bg_color,
             } = config;
 
             let mut tile_fb = Framebuffer::new_owned(rect.w, rect.h);
 
-            if let Some(bg_color) = bg_color {
-                draw_rect(&mut tile_fb, &config.rect, *bg_color, false);
-            }
-            draw_str(&mut tile_fb, buffer.as_ref(), 0, 0, font, *color, None);
+            draw_str(&mut tile_fb, buffer.as_ref(), 0, 0, font, text_color, None);
 
             //
             // Draw blinking cursor
@@ -182,7 +175,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
                     w: 2,
                     h: font.char_h as u32,
                 };
-                draw_rect(&mut tile_fb, &cursor_rect, *color, false);
+                draw_rect(&mut tile_fb, &cursor_rect, text_color, false);
             }
 
             tile_fb
@@ -221,25 +214,5 @@ pub fn render_rich_text<F: FbViewMut>(
         }
 
         y += line.h as i64;
-    }
-}
-
-#[derive(Clone)]
-pub struct ScrollableTextConfig {
-    pub rect: Rect,
-    pub scrollable: bool,
-}
-
-impl Default for ScrollableTextConfig {
-    fn default() -> Self {
-        ScrollableTextConfig {
-            rect: Rect {
-                x0: 0,
-                y0: 0,
-                w: 100,
-                h: 25,
-            },
-            scrollable: true,
-        }
     }
 }

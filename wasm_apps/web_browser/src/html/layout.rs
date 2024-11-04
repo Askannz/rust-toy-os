@@ -2,7 +2,7 @@ use core::hash::Hasher;
 
 use anyhow::anyhow;
 
-use applib::drawing::text::{Font, HACK_15};
+use applib::drawing::text::{Font, DEFAULT_FONT_FAMILY};
 use applib::{Color, Rect};
 
 use super::parsing::{HtmlTree, NodeData as HtmlNodeData, NodeId as HtmlNodeId};
@@ -194,7 +194,7 @@ fn parse_node<'b>(
             let m = ZERO_M;
 
             let text = core::str::from_utf8(text.as_bytes()).expect("Not UTF-8");
-            let font = &HACK_15; // TODO
+            let font = DEFAULT_FONT_FAMILY.get_default(); // TODO
             let color = if link { Color::BLUE } else { Color::BLACK };
             let w = (text.len() * font.char_w) as u32 + m.left + m.right;
             let h = font.char_h as u32 + m.top + m.bottom;

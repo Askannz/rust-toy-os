@@ -16,7 +16,6 @@ pub enum PieMenuEntry {
         color: Color,
         text: String,
         text_color: Color,
-        font: &'static Font,
         weight: f32,
     },
     Spacer {
@@ -62,6 +61,7 @@ pub fn pie_menu<'a, F: FbViewMut>(
 
     let pointer = &uitk_context.input_state.pointer;
     let stylesheet = &uitk_context.stylesheet;
+    let font = &uitk_context.font_family.get_default();
 
     let pointer = Point2D::<i64> {
         x: pointer.x,
@@ -144,7 +144,6 @@ pub fn pie_menu<'a, F: FbViewMut>(
             icon,
             text,
             text_color,
-            font,
             ..
         } = entry
         {

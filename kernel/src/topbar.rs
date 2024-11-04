@@ -1,6 +1,6 @@
 use alloc::format;
 use applib::drawing::primitives::draw_rect;
-use applib::drawing::text::{draw_str, HACK_15};
+use applib::drawing::text::{draw_str};
 use applib::uitk::UiContext;
 use applib::Rect;
 use applib::{uitk::{self}, FbViewMut};
@@ -13,7 +13,7 @@ pub fn topbar<'a, F: FbViewMut>(
 
     const BAR_H: u32 = 40;
 
-    let font = &HACK_15;
+    let font = uitk_context.font_family.get_default();
 
     let UiContext { fb, stylesheet, .. } = uitk_context;
 

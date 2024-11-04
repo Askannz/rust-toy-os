@@ -8,7 +8,7 @@ use applib::{BorrowedPixels, StyleSheet};
 
 use crate::shell::{pie_menu, PieDrawCalls, PieMenuEntry};
 use applib::drawing::primitives::draw_rect;
-use applib::drawing::text::{draw_str, Font, DEFAULT_FONT, HACK_15};
+use applib::drawing::text::{draw_str, Font};
 use applib::geometry::{Point2D, Vec2D};
 use applib::uitk::{self, UiContext};
 use applib::{input::InputState, Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
@@ -207,7 +207,6 @@ pub fn run_apps<F: FbViewMut>(
                     color: stylesheet.colors.red,
                     text: "Close".to_owned(),
                     text_color: stylesheet.colors.text,
-                    font: &HACK_15,
                     weight: 1.0,
                 },
                 PieMenuEntry::Button {
@@ -215,7 +214,6 @@ pub fn run_apps<F: FbViewMut>(
                     color: stylesheet.colors.blue,
                     text: "Move".to_owned(),
                     text_color: stylesheet.colors.text,
-                    font: &HACK_15,
                     weight: 1.0,
                 },
                 PieMenuEntry::Button {
@@ -223,7 +221,6 @@ pub fn run_apps<F: FbViewMut>(
                     color: stylesheet.colors.yellow,
                     text: "Reload".to_owned(),
                     text_color: stylesheet.colors.text,
-                    font: &HACK_15,
                     weight: 1.0,
                 },
                 match app.app_state {
@@ -232,7 +229,6 @@ pub fn run_apps<F: FbViewMut>(
                         color: stylesheet.colors.yellow,
                         text: "Pause".to_owned(),
                         text_color: stylesheet.colors.text,
-                        font: &HACK_15,
                         weight: 1.0,
                     },
                     AppState::Paused { .. } => PieMenuEntry::Button {
@@ -240,7 +236,6 @@ pub fn run_apps<F: FbViewMut>(
                         color: stylesheet.colors.green,
                         text: "Resume".to_owned(),
                         text_color: stylesheet.colors.text,
-                        font: &HACK_15,
                         weight: 1.0,
                     },
                     _ => PieMenuEntry::Spacer { 
@@ -306,7 +301,6 @@ pub fn run_apps<F: FbViewMut>(
                     color: stylesheet.colors.background,
                     text: app.descriptor.name.to_string(),
                     text_color: stylesheet.colors.text,
-                    font: &HACK_15,
                     weight: 1.0,
                 })
                 .collect();
@@ -350,6 +344,8 @@ pub fn run_apps<F: FbViewMut>(
 
     let UiContext { fb, .. } = uitk_context;
 
+    let font = uitk_context.font_family.get_default();
+
     let n = apps_manager.z_ordered.len();
 
     for (i, app) in apps_manager.z_ordered.iter_mut().enumerate() {
@@ -371,7 +367,7 @@ pub fn run_apps<F: FbViewMut>(
 
         let is_foreground = i == n - 1;
 
-        draw_decorations(*fb, &stylesheet, app_name, &deco, highlight);
+        draw_decorations(*fb, &stylesheet, font, app_name, &deco, highlight);
 
         //fb.copy_from_fb(app_fb, deco.content_rect.origin(), false);
     
@@ -414,12 +410,13 @@ pub fn run_apps<F: FbViewMut>(
 
             AppState::Crashed { error } => {
 
+                let font = uitk_context.font_family.get_default();
                 let (x0, y0) = deco.content_rect.origin();
                 draw_str(
                     *fb,
                     &format!("{:?}", error),
                     x0, y0,
-                    &DEFAULT_FONT,
+                    font,
                     Color::WHITE,
                     None
                 );
@@ -439,7 +436,6 @@ struct AppDecorations {
     resize_zone_rect: Rect,
     border_rects: [Rect; 3],
     handle_rects: [Rect; 2],
-    titlebar_font: &'static Font,
     titlebar_hover: bool,
     resize_hover: bool,
     window_hover: bool,
@@ -476,7 +472,6 @@ fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
     const RESIZE_HANDLE_GAP: u32 = 2;
     const RESIZE_ZONE_LEN: u32 = 32;
     const RESIZE_HANDLE_OFFSET: u32 = 4;
-    let FONT: &'static Font = &DEFAULT_FONT;
 
     let window_rect = Rect {
         x0: app.rect.x0 - BORDER_THICKNESS as i64,
@@ -549,7 +544,6 @@ fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
         content_rect: app.rect.clone(),
         window_rect,
         titlebar_rect,
-        titlebar_font: FONT,
         titlebar_hover,
         resize_hover,
         window_hover,
@@ -562,6 +556,7 @@ fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
 fn draw_decorations<F: FbViewMut>(
     fb: &mut F,
     stylesheet: &StyleSheet,
+    font: &Font,
     app_name: &str,
     deco: &AppDecorations,
     highlight: bool,
@@ -577,7 +572,7 @@ fn draw_decorations<F: FbViewMut>(
         draw_rect(fb, rect, color_deco, false);
     }
 
-    let text_h = deco.titlebar_font.char_h as u32;
+    let text_h = font.char_h as u32;
 
     let padding = (deco.titlebar_rect.h - text_h) / 2;
     let text_rect = Rect {
@@ -588,14 +583,14 @@ fn draw_decorations<F: FbViewMut>(
     }
     .align_to_rect_vert(&deco.titlebar_rect);
 
-    let ellipsized_title = ellipsize_text(app_name, &deco.titlebar_font, text_rect.w);
+    let ellipsized_title = ellipsize_text(app_name, font, text_rect.w);
 
     draw_str(
         fb,
         &ellipsized_title,
         text_rect.x0,
         text_rect.y0,
-        &deco.titlebar_font,
+        font,
         stylesheet.colors.text,
         None,
     );

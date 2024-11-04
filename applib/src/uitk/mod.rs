@@ -11,11 +11,12 @@ pub use button::ButtonConfig;
 pub use dyn_scrollable_canvas::{TileRenderer};
 pub use progress_bar::ProgressBarConfig;
 pub use scrollable_canvas::set_autoscroll;
-pub use text::{render_rich_text, string_input, EditableTextConfig, ScrollableTextConfig};
+pub use text::{render_rich_text, string_input, EditableTextConfig};
 
 pub use crate::content::{ContentId, UuidProvider};
 use crate::{InputState, StyleSheet};
 use crate::{FbViewMut, Framebuffer, OwnedPixels};
+use crate::drawing::text::{Font, FontFamily, DEFAULT_FONT_FAMILY};
 
 
 const TILE_CACHE_MAX_SIZE: usize = 10_000_000; // in bytes
@@ -89,11 +90,14 @@ impl TileCache {
 
 pub struct UiContext<'a, F: FbViewMut> {
     pub fb: &'a mut F,
+
     pub stylesheet: &'a StyleSheet,
-    pub tile_cache: &'a mut TileCache,
     pub input_state: &'a InputState,
     pub uuid_provider: &'a mut UuidProvider,
     pub time: f64,
+
+    pub tile_cache: &'a mut TileCache,
+    pub font_family: &'static FontFamily,
 }
 
 pub struct UiStore {
@@ -125,6 +129,7 @@ impl UiStore {
             input_state,
             uuid_provider,
             time,
+            font_family: &DEFAULT_FONT_FAMILY,
         }
     }
 }

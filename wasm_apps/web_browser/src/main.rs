@@ -216,22 +216,18 @@ pub fn step() {
     let is_go_button_fired = uitk_context.button(&uitk::ButtonConfig {
         rect: ui_layout.go_button_rect.clone(),
         text: "GO".into(),
-        idle_color: stylesheet.colors.green,
         ..Default::default()
     });
 
     let is_reload_button_fired = uitk_context.button(&uitk::ButtonConfig {
         rect: ui_layout.reload_button_rect.clone(),
         text: "Reload".into(),
-        idle_color: stylesheet.colors.yellow,
         ..Default::default()
     });
 
     uitk_context.editable_text(
         &uitk::EditableTextConfig {
             rect: ui_layout.url_bar_rect.clone(),
-            color: stylesheet.colors.text,
-            bg_color: Some(stylesheet.colors.background),
             ..Default::default()
         },
         &mut state.url_text,
@@ -244,9 +240,6 @@ pub fn step() {
         &uitk::ProgressBarConfig {
             rect: ui_layout.progress_bar_rect.clone(),
             max_val: 8,
-            bg_color: stylesheet.colors.background,
-            bar_color: stylesheet.colors.accent,
-            text_color: stylesheet.colors.text,
             ..Default::default()
         },
         progress_val,

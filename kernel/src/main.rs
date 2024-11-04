@@ -13,9 +13,9 @@ use uefi::prelude::{entry, Boot, Handle, Status, SystemTable};
 use uefi::table::boot::MemoryType;
 
 use applib::drawing::primitives::draw_rect;
-use applib::drawing::text::{draw_str, DEFAULT_FONT};
+use applib::drawing::text::{draw_str};
 use applib::input::{InputEvent, InputState};
-use applib::uitk::{self};
+use applib::uitk::{self, UiContext};
 use applib::{BorrowedMutPixels, Color, FbViewMut, Framebuffer, Rect};
 
 extern crate alloc;
@@ -173,11 +173,11 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
 
-        draw_cursor(&mut framebuffer, &input_state);
+        draw_cursor(uitk_context.fb, &input_state);
 
         {
             let System { clock, .. } = &mut system;
-            fps_manager.end_frame(clock, &mut framebuffer);
+            fps_manager.end_frame(&mut uitk_context, clock);
         }
 
         virtio_gpu.flush();
@@ -317,16 +317,22 @@ impl FpsManager {
         self.frame_start_t = clock.time();
     }
 
-    fn end_frame<F: FbViewMut>(&mut self, clock: &SystemClock, fb: &mut F) {
+    fn end_frame<F: FbViewMut>(&mut self, 
+        uitk_context: &mut uitk::UiContext<F>,
+        clock: &SystemClock,
+    ) {
         const SMOOTHING: f64 = 0.8;
+
+        let UiContext { fb, font_family, .. } = uitk_context;
+        let font = font_family.get_default();
 
         let frametime_target = 1000.0 / self.fps_target;
 
         let fps = 1000.0 / self.frametime;
         let s = format!("{:.2} FPS", fps);
-        draw_str(fb, &s, 0, 0, &DEFAULT_FONT, Color::WHITE, None);
+        draw_str(*fb, &s, 0, 0, font, Color::WHITE, None);
 
-        let char_h = DEFAULT_FONT.char_h as u32;
+        let char_h = font.char_h as u32;
         let graph_w = 12 * 9;
         let graph_h = 6;
         let used_frac = self.used / frametime_target;
@@ -341,7 +347,7 @@ impl FpsManager {
             }
         };
         draw_rect(
-            fb,
+            *fb,
             &Rect {
                 x0: 0,
                 y0: char_h as i64,
@@ -352,7 +358,7 @@ impl FpsManager {
             false,
         );
         draw_rect(
-            fb,
+            *fb,
             &Rect {
                 x0: 0,
                 y0: char_h as i64 + 3,
@@ -370,11 +376,11 @@ impl FpsManager {
         };
         let budget_txt = format!("{:>6.2} ms", self.used);
         draw_str(
-            fb,
+            *fb,
             &budget_txt,
             0,
             (char_h + graph_h + 6) as i64,
-            &DEFAULT_FONT,
+            font,
             budget_color,
             None,
         );

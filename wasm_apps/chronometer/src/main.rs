@@ -1,7 +1,7 @@
 extern crate alloc;
 
 use alloc::format;
-use applib::drawing::text::{draw_str, DEFAULT_FONT};
+use applib::drawing::text::{draw_str, DEFAULT_FONT_FAMILY};
 use applib::{Color, FbViewMut};
 use core::cell::OnceCell;
 use guestlib::PixelData;
@@ -37,6 +37,8 @@ pub fn step() {
 
     let mut framebuffer = state.pixel_data.get_framebuffer();
 
+    let font = DEFAULT_FONT_FAMILY.get_default();
+
     framebuffer.fill(Color::BLACK);
     draw_chrono(&mut framebuffer, t);
 
@@ -46,7 +48,7 @@ pub fn step() {
         &s,
         0,
         0,
-        &DEFAULT_FONT,
+        font,
         Color::YELLOW,
         None,
     );

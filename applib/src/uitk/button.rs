@@ -1,5 +1,5 @@
 use crate::drawing::primitives::draw_rect;
-use crate::drawing::text::{draw_str, Font, DEFAULT_FONT};
+use crate::drawing::text::{draw_str, Font};
 use crate::uitk::UiContext;
 use crate::{Color, FbView, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use alloc::borrow::ToOwned;
@@ -15,9 +15,10 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         }
 
         let UiContext {
-            fb, input_state, ..
+            fb, input_state, stylesheet, font_family, ..
         } = self;
 
+        let colorsheet = &stylesheet.colors;
         let ps = &input_state.pointer;
 
         let interaction_state = match config.rect.check_contains_point(ps.x, ps.y) {
@@ -29,9 +30,9 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         };
 
         let button_color = match interaction_state {
-            InteractionState::Idle => config.idle_color,
-            InteractionState::Hover => config.hover_color,
-            InteractionState::Clicked => config.clicked_color,
+            InteractionState::Idle => colorsheet.element,
+            InteractionState::Hover => colorsheet.hover_overlay,
+            InteractionState::Clicked => colorsheet.selected_overlay,
         };
 
         let Rect { x0, y0, h, .. } = config.rect;
@@ -49,7 +50,8 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             fb.copy_from_fb(icon, (icon_x0, icon_y0), true);
         }
 
-        let &Font { char_h, .. } = config.font;
+        let font = font_family.get_default();
+        let &Font { char_h, .. } = font;
         let char_h = char_h as i64;
 
         let text_x0 = x0 + x_padding + text_offset_x;
@@ -60,8 +62,8 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             &config.text,
             text_x0,
             text_y0,
-            config.font,
-            config.text_color,
+            font,
+            colorsheet.text,
             None,
         );
 
@@ -73,11 +75,6 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 pub struct ButtonConfig {
     pub rect: Rect,
     pub text: String,
-    pub font: &'static Font,
-    pub text_color: Color,
-    pub idle_color: Color,
-    pub hover_color: Color,
-    pub clicked_color: Color,
     pub icon: Option<&'static Framebuffer<OwnedPixels>>,
     pub x_padding: u32,
 }
@@ -92,11 +89,6 @@ impl Default for ButtonConfig {
                 h: 25,
             },
             text: "Button".to_owned(),
-            font: &DEFAULT_FONT,
-            text_color: Color::from_u32(0xFFFFFF),
-            idle_color: Color::from_u32(0x444444),
-            hover_color: Color::from_u32(0x888888),
-            clicked_color: Color::from_u32(0x222222),
             icon: None,
             x_padding: 10,
         }

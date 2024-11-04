@@ -1,6 +1,7 @@
 pub mod keymap;
 
 use crate::Rect;
+use crate::geometry::Point2D;
 pub use keymap::{Keycode, CHARMAP};
 
 pub const MAX_EVENTS: usize = 10;
@@ -53,16 +54,9 @@ impl InputState {
         }
     }
 
-    pub fn change_origin(&self, rect: &Rect) -> Self {
-        let mut new = self.clone();
-
-        let PointerState { x, y, .. } = self.pointer;
-        let &Rect { x0, y0, .. } = rect;
-
-        new.pointer.x = x - x0;
-        new.pointer.y = y - y0;
-
-        new
+    pub fn change_origin(&mut self, origin: Point2D<i64>) {
+        self.pointer.x -= origin.x;
+        self.pointer.y -= origin.y;
     }
 
     fn update_shift_key_state(&mut self, event: &InputEvent) {

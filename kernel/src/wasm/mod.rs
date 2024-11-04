@@ -2,6 +2,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::ToString;
 use alloc::vec;
 use alloc::{borrow::ToOwned, string::String};
+use applib::geometry::Point2D;
 use applib::BorrowedPixels;
 use core::mem::size_of;
 use smoltcp::iface::SocketHandle;
@@ -272,7 +273,8 @@ impl WasmApp {
             if !is_foreground {
                 input_state.clear_events();
             }
-            input_state.change_origin(win_rect);
+            let (ox, oy) = win_rect.origin();
+            input_state.change_origin(Point2D { x: ox, y: oy });
             input_state
         };
 

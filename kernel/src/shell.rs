@@ -174,9 +174,6 @@ pub fn pie_menu<'a, F: FbViewMut>(
                     center + (v_bisect * (OUTER_RADIUS + TEXT_OFFSET)).round_to_int() + v_offset;
                 let (text_w, text_h) = compute_text_bbox(text, font);
 
-                // DEBUG
-                log::debug!("{}", v_bisect.x);
-
                 let x0_text = {
 
                     const EPSILON: f32 = 0.1;

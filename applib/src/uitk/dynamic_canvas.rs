@@ -21,7 +21,7 @@ pub trait TileRenderer {
 }
 
 impl<'a, F: FbViewMut> UiContext<'a, F> {
-    pub fn dyn_scrollable_canvas<T: TileRenderer>(
+    pub fn dynamic_canvas<T: TileRenderer>(
         &mut self,
         dst_rect: &Rect,
         renderer: &T,

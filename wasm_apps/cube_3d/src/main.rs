@@ -92,7 +92,7 @@ pub fn step() {
         time,
     );
 
-    uitk_context.scrollable_canvas(
+    uitk_context.static_canvas(
         &win_rect.zero_origin(),
         &state.render_fb,
         &mut state.scroll_offsets,

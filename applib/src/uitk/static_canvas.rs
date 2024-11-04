@@ -32,7 +32,7 @@ impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
 }
 
 impl<'a, F: FbViewMut> UiContext<'a, F> {
-    pub fn scrollable_canvas<F1: FbView>(
+    pub fn static_canvas<F1: FbView>(
         &mut self,
         dst_rect: &Rect,
         src_fb: &TrackedContent<F1>,
@@ -41,7 +41,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
     ) {
         let renderer = BufferCopyRenderer { src_fb };
 
-        self.dyn_scrollable_canvas(dst_rect, &renderer, offsets, dragging)
+        self.dynamic_canvas(dst_rect, &renderer, offsets, dragging)
     }
 }
 

@@ -2,15 +2,15 @@ use alloc::vec::Vec;
 use alloc::collections::BTreeMap;
 
 mod button;
-mod dyn_scrollable_canvas;
+mod dynamic_canvas;
 mod progress_bar;
-mod scrollable_canvas;
+mod static_canvas;
 mod text;
 
 pub use button::ButtonConfig;
-pub use dyn_scrollable_canvas::{TileRenderer};
+pub use dynamic_canvas::{TileRenderer};
 pub use progress_bar::ProgressBarConfig;
-pub use scrollable_canvas::set_autoscroll;
+pub use static_canvas::set_autoscroll;
 pub use text::{render_rich_text, string_input, EditableTextConfig};
 
 pub use crate::content::{ContentId, UuidProvider};

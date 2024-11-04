@@ -127,7 +127,7 @@ pub fn step() {
         time
     );
 
-    uitk_context.dyn_scrollable_canvas(
+    uitk_context.dynamic_canvas(
         &rect_console,
         &renderer,
         &mut state.scroll_offsets,

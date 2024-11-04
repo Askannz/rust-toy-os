@@ -14,7 +14,6 @@
 * html layouting (proper tree structure?)
 * use "Color" in place of u32?
 * better tile cache
-* sort out naming of scrollable_canvas/dyn_scrollable_canvas
 * proper text layouting utilities
 
 # Features

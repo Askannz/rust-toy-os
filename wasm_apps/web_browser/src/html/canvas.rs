@@ -14,7 +14,7 @@ pub fn html_canvas<'a, F: FbViewMut>(
     offsets: &mut (i64, i64),
     dragging: &mut (bool, bool),
 ) -> Option<&'a str> {
-    uitk_context.dyn_scrollable_canvas(dst_rect, &HtmlRenderer { layout }, offsets, dragging);
+    uitk_context.dynamic_canvas(dst_rect, &HtmlRenderer { layout }, offsets, dragging);
 
     let UiContext {
         fb, input_state, ..

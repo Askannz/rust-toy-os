@@ -3,7 +3,7 @@ use crate::Rect;
 use crate::{FbView, FbViewMut};
 use crate::content::{TrackedContent, ContentId};
 
-use super::{TileRenderer};
+use super::dynamic_canvas::TileRenderer;
 
 struct BufferCopyRenderer<'a, F: FbView> {
     src_fb: &'a TrackedContent<F>,

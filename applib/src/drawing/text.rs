@@ -41,7 +41,7 @@ pub struct FontFamily {
 }
 
 impl FontFamily {
-    pub fn from_font_specs(specs: &[FontSpec]) -> Self {
+    fn from_font_specs(specs: &[FontSpec]) -> Self {
 
         let by_size = specs.iter().map(|spec| {
             let font = load_font(spec);

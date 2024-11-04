@@ -1,17 +1,15 @@
 use alloc::vec::Vec;
 use alloc::collections::BTreeMap;
 
-mod button;
-mod dynamic_canvas;
-mod progress_bar;
-mod static_canvas;
+mod widgets;
 mod text;
 
-pub use button::ButtonConfig;
-pub use dynamic_canvas::{TileRenderer};
-pub use progress_bar::ProgressBarConfig;
-pub use static_canvas::set_autoscroll;
-pub use text::{render_rich_text, string_input, EditableTextConfig};
+pub use widgets::button::ButtonConfig;
+pub use widgets::dynamic_canvas::TileRenderer;
+pub use widgets::progress_bar::ProgressBarConfig;
+pub use widgets::editable_text::EditableTextConfig;
+pub use widgets::static_canvas::set_autoscroll;
+pub use text::{render_rich_text, string_input};
 
 pub use crate::content::{ContentId, UuidProvider};
 use crate::{InputState, StyleSheet};

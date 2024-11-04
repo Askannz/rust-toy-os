@@ -1,6 +1,6 @@
 use crate::drawing::primitives::draw_rect;
 use crate::drawing::text::{draw_str, Font};
-use crate::uitk::{button, UiContext};
+use crate::uitk::{UiContext};
 use crate::{Color, FbView, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use alloc::borrow::ToOwned;
 use alloc::string::String;

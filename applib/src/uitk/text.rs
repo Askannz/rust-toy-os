@@ -1,3 +1,6 @@
+use core::hash::Hash;
+use core::ptr::addr_of;
+
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -12,7 +15,7 @@ use crate::{Color, FbViewMut, Rect};
 
 use super::UuidProvider;
 
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub struct EditableTextConfig {
     pub rect: Rect,
     pub font: &'static Font,
@@ -141,7 +144,15 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         let time_sec = (self.time as u64) / 1000;
         let cursor_visible = time_sec % 2 == 0;
 
-        let tile_content_id = ContentId::from_hash((config, cursor_visible, buffer.get_id()));
+        let tile_content_id = ContentId::from_hash((
+            config.rect.w,
+            config.rect.h,
+            addr_of!(config.font),
+            config.color,
+            config.bg_color,
+            cursor_visible,
+            buffer.get_id(),
+        ));
 
         let tile_fb = tile_cache.fetch_or_create(tile_content_id, self.time, || {
             //

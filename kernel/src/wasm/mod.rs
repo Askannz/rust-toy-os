@@ -178,18 +178,17 @@ impl StoreWrapper {
         res
     }
 
-    fn get_framebuffer(&mut self, instance: &Instance) -> Framebuffer<BorrowedPixels> {
+    fn get_framebuffer(&self, instance: &Instance) -> Option<Framebuffer<BorrowedPixels>> {
         let wasm_fb_def = self
             .store
             .as_context()
             .data()
             .framebuffer
-            .clone()
-            .expect("No WASM framebuffer");
+            .clone()?;
 
         let mem = instance.get_memory(&self.store, "memory").unwrap();
-        let ctx = self.store.as_context_mut();
-        let mem_data = mem.data_mut(ctx);
+        let ctx = self.store.as_context();
+        let mem_data = mem.data(ctx);
 
         let wasm_fb = {
             let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
@@ -198,7 +197,7 @@ impl StoreWrapper {
             Framebuffer::<BorrowedPixels>::new(fb_data, w, h)
         };
 
-        wasm_fb
+        Some(wasm_fb)
     }
 }
 
@@ -259,13 +258,14 @@ pub struct WasmApp {
 }
 
 impl WasmApp {
+
     pub fn step(
         &mut self,
         system: &mut System,
         input_state: &InputState,
         win_rect: &Rect,
         is_foreground: bool,
-    ) -> Result<Framebuffer<BorrowedPixels>, anyhow::Error> {
+    ) -> Result<(), anyhow::Error> {
 
         let relative_input_state = {
             let mut input_state = input_state.clone();
@@ -276,18 +276,17 @@ impl WasmApp {
             input_state
         };
 
-        let res = self.store_wrapper
+        self.store_wrapper
             .with_context(system, &relative_input_state, win_rect, |mut store| {
                 self.wasm_step.call(&mut store, ())
-            });
+            })
+            .map_err(|wasm_err| anyhow::format_err!(wasm_err))?;
 
-        match res {
-            Ok(()) => {
-                let wasm_fb = self.store_wrapper.get_framebuffer(&self.instance);
-                Ok(wasm_fb)
-            },
-            Err(wasm_err) => Err(anyhow::format_err!(wasm_err))
-        }
+        Ok(())
+    }
+
+    pub fn get_framebuffer(&self) -> Option<Framebuffer<BorrowedPixels>> {
+        self.store_wrapper.get_framebuffer(&self.instance)
     }
 }
 

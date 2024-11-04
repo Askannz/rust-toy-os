@@ -27,6 +27,10 @@ lazy_static! {
         Framebuffer::from_png(include_bytes!("../icons/reload.png"));
     pub static ref MOVE_ICON: Framebuffer<OwnedPixels> =
         Framebuffer::from_png(include_bytes!("../icons/move.png"));
+    pub static ref PLAY_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/play.png"));
+    pub static ref PAUSE_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/pause.png"));
     pub static ref BLANK_ICON: Framebuffer<OwnedPixels> = Framebuffer::new_owned(32, 32);
 
     //

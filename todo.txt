@@ -20,10 +20,11 @@
 # Features
 
 * app crash demo
+* app log stream
 * resumable tile rendering
 * nested pie menus
 * choose proper style for UI (color, fonts, etc)
-* color palette
+* selectable color palette
 * web browser: improve compatibility (be able to load wikipedia for ex)
 * web browser: navigation controls (back/reload/home)
 * web browser: use proper fonts for HN

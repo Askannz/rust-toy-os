@@ -73,6 +73,7 @@ pub struct App {
 pub enum AppState {
     Init,
     Running { wasm_app: WasmApp },
+    Paused { wasm_app: WasmApp },
     Crashed { error: anyhow::Error }
 }
 
@@ -225,6 +226,28 @@ pub fn run_apps<F: FbViewMut>(
                     font: &HACK_15,
                     weight: 1.0,
                 },
+                match app.app_state {
+                    AppState::Running { .. } => PieMenuEntry::Button {
+                        icon: &resources::PAUSE_ICON,
+                        color: stylesheet.colors.yellow,
+                        text: "Pause".to_owned(),
+                        text_color: stylesheet.colors.text,
+                        font: &HACK_15,
+                        weight: 1.0,
+                    },
+                    AppState::Paused { .. } => PieMenuEntry::Button {
+                        icon: &resources::PLAY_ICON,
+                        color: stylesheet.colors.green,
+                        text: "Resume".to_owned(),
+                        text_color: stylesheet.colors.text,
+                        font: &HACK_15,
+                        weight: 1.0,
+                    },
+                    _ => PieMenuEntry::Spacer { 
+                        color: stylesheet.colors.background,
+                        weight: 1.0
+                    },
+                },
                 PieMenuEntry::Spacer {
                     color: stylesheet.colors.background,
                     weight: 3.0,
@@ -248,6 +271,25 @@ pub fn run_apps<F: FbViewMut>(
                     log::info!("De-loading app {}", app.descriptor.name);
                     app.app_state = AppState::Init;
                     *is = AppsInteractionState::Idle;
+                },
+                Some(3) if pointer.left_click_trigger => {
+
+                    // AppState::Init is just a placeholder for the swap
+                    let tmp = core::mem::replace(&mut app.app_state, AppState::Init);
+
+                    app.app_state = match tmp {
+                        AppState::Running { wasm_app } => {
+                            log::info!("Pausing app {}", app.descriptor.name);
+                            *is = AppsInteractionState::Idle;
+                            AppState::Paused { wasm_app }
+                        },
+                        AppState::Paused { wasm_app } => {
+                            log::info!("Resuming app {}", app.descriptor.name);
+                            *is = AppsInteractionState::Idle;
+                            AppState::Running { wasm_app }
+                        },
+                        _ => tmp
+                    }
                 },
                 _ if pointer.right_click_trigger || pointer.left_click_trigger => {
                     *is = AppsInteractionState::Idle;
@@ -352,14 +394,22 @@ pub fn run_apps<F: FbViewMut>(
             },
 
             AppState::Running { wasm_app } => {
-
+                
                 let wasm_res = wasm_app.step(system, input_state, &app.rect, is_foreground);
+
                 match wasm_res {
-                    Ok(app_fb) => fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false),
-                    Err(error) => {
-                        app.app_state = AppState::Crashed { error }
-                    }
+                    Ok(()) => if let Some(app_fb) = wasm_app.get_framebuffer() {
+                        fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false)
+                    },
+                    Err(error) => app.app_state = AppState::Crashed { error },
                 }
+            },
+
+            AppState::Paused { wasm_app } => {
+                if let Some(app_fb) = wasm_app.get_framebuffer() {
+                    fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false)
+                }
+                draw_rect(*fb, &deco.content_rect, Color::rgba(100, 100, 100, 100), true);
             },
 
             AppState::Crashed { error } => {

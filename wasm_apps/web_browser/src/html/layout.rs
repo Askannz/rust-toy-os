@@ -76,7 +76,7 @@ fn parse_node<'b>(
         bottom: 5,
     };
 
-    let node = tree.get_node(html_node_id).unwrap();
+    let node = tree.get_node(html_node_id)?;
 
     match &node.data {
         HtmlNodeData::Tag { name, .. } if *name == "head" => None,

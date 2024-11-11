@@ -335,18 +335,24 @@ fn try_update_request_state(
 }
 
 fn make_error_html(error: anyhow::Error) -> String {
-    let errors: Vec<String> = error
+
+    let traceback: Vec<String> = error
         .chain()
         .enumerate()
-        .map(|(i, sub_err)| format!("<p>{}: {}</p>", i, sub_err))
+        .map(|(i, sub_err)| format!(
+            "<tr><td>{}: {}</td></tr>\n",
+            i, sub_err
+        ))
         .collect();
 
     format!(
-        "<html>\n\
-        <p bgcolor=\"#ff0000\">ERROR</p>\n\
-        {}
-        </html>\n",
-        errors.join("\n")
+        r##"<html>
+            <table>
+                <tr><td>Error:</td></tr>
+                {}
+            </table>
+        </html>"##,
+        traceback.join("\n"),
     )
 }
 

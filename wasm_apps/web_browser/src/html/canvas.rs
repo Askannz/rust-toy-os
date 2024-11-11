@@ -96,6 +96,7 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
 
     fn render<F: FbViewMut>(&self, dst_fb: &mut F, tile_rect: &Rect) {
         //log::debug!("Rendering HTML tile");
+        dst_fb.fill(Color::WHITE);
         render_html(dst_fb, self.layout.as_ref(), tile_rect);
     }
 }

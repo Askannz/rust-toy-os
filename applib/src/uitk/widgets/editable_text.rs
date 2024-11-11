@@ -33,10 +33,11 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             ..
         } = self;
 
+        let old_cursor = *cursor;
         string_input(buffer, input_state, false, cursor, *uuid_provider);
 
         let time_sec = (self.time as u64) / 1000;
-        let cursor_visible = time_sec % 2 == 0;
+        let cursor_visible = time_sec % 2 == 0 || *cursor != old_cursor;
 
         let colorsheet = &stylesheet.colors;
         let font = font_family.get_default();
@@ -48,6 +49,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             addr_of!(font),
             text_color,
             cursor_visible,
+            *cursor,
             buffer.get_id(),
         ));
 
@@ -80,7 +82,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
             if cursor_visible {
                 let cursor_rect = Rect {
-                    x0: text_x0 + text_w as i64,
+                    x0: text_x0 + (*cursor * font.char_w) as i64,
                     y0: text_y0,
                     w: 2,
                     h: font.char_h as u32,

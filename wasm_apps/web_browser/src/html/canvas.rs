@@ -1,7 +1,7 @@
 use super::layout::{LayoutNode, NodeData};
 use super::render::render_html;
 use applib::content::{ContentId, TrackedContent};
-use applib::drawing::primitives::{blend_rect, draw_rect};
+use applib::drawing::primitives::{draw_rect};
 use applib::uitk::{self, TileRenderer, UiContext};
 use applib::Color;
 use applib::Rect;
@@ -26,13 +26,13 @@ pub fn html_canvas<'a, F: FbViewMut>(
 
     match get_hovered_link(p.x - vr.x0 + ox, p.y - vr.y0 + oy, layout.as_ref()) {
         Some(link_data) => {
-            let draw_rect = Rect {
+            let rect = Rect {
                 x0: link_data.rect.x0 + vr.x0 - ox,
                 y0: link_data.rect.y0 + vr.y0 - oy,
                 w: link_data.rect.w,
                 h: link_data.rect.h,
             };
-            blend_rect(*fb, &draw_rect, Color::rgba(0, 0, 255, 128));
+            draw_rect(*fb, &rect, Color::rgba(0, 0, 255, 128), true);
             Some(&link_data.url)
         }
         None => None,

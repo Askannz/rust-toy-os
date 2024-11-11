@@ -192,25 +192,3 @@ pub fn draw_rect<F: FbViewMut>(fb: &mut F, rect: &Rect, color: Color, blend: boo
         }
     }
 }
-
-pub fn blend_rect<F: FbViewMut>(fb: &mut F, rect: &Rect, color: Color) {
-    let (fb_w, fb_h) = fb.shape();
-    let rect = rect.intersection(&Rect {
-        x0: 0,
-        y0: 0,
-        w: fb_w,
-        h: fb_h,
-    });
-
-    if let Some(Rect { x0, y0, w, h }) = rect {
-        let (w, h): (i64, i64) = (w.into(), h.into());
-        for y in y0..y0 + h {
-            for x in x0..x0 + w {
-                if let Some(curr_color) = fb.get_pixel(x, y) {
-                    let new_color = blend_colors(color, curr_color);
-                    fb.set_pixel(x, y, new_color);
-                }
-            }
-        }
-    }
-}

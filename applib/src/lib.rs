@@ -317,6 +317,7 @@ pub trait FbViewMut: FbView {
 }
 
 impl<'a> Framebuffer<BorrowedMutPixels<'a>> {
+
     pub fn new<'b>(data: &'b mut [Color], w: u32, h: u32) -> Framebuffer<BorrowedMutPixels<'b>> {
         assert_eq!(data.len(), (w * h) as usize);
         let rect = Rect { x0: 0, y0: 0, w, h };
@@ -327,9 +328,25 @@ impl<'a> Framebuffer<BorrowedMutPixels<'a>> {
             rect,
         }
     }
+
+    pub fn from_bytes<'b>(bytes: &'b mut [u8], w: u32, h: u32) -> Framebuffer<BorrowedMutPixels<'b>> {
+
+        assert_eq!(bytes.len(), (4 * w * h) as usize);
+
+        // Safe because of the check above, and because Color has an alignment of 1
+        let data = unsafe { 
+            let (head, body, tail) = bytes.align_to_mut::<Color>();
+            assert_eq!(head.len(), 0);
+            assert_eq!(tail.len(), 0);
+            body
+        };
+
+        Self::new(data, w, h)
+    }
 }
 
 impl<'a> Framebuffer<BorrowedPixels<'a>> {
+
     pub fn new<'b>(data: &'b [Color], w: u32, h: u32) -> Framebuffer<BorrowedPixels<'b>> {
         assert_eq!(data.len(), (w * h) as usize);
         let rect = Rect { x0: 0, y0: 0, w, h };
@@ -339,6 +356,21 @@ impl<'a> Framebuffer<BorrowedPixels<'a>> {
             data_h: h,
             rect,
         }
+    }
+
+    pub fn from_bytes<'b>(bytes: &'b [u8], w: u32, h: u32) -> Framebuffer<BorrowedPixels<'b>> {
+
+        assert_eq!(bytes.len(), (4 * w * h) as usize);
+
+        // Safe because of the check above, and because Color has an alignment of 1
+        let data = unsafe { 
+            let (head, body, tail) = bytes.align_to::<Color>();
+            assert_eq!(head.len(), 0);
+            assert_eq!(tail.len(), 0);
+            body
+        };
+
+        Self::new(data, w, h)
     }
 }
 

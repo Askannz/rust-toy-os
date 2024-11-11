@@ -12,7 +12,6 @@
 * tidy up applib
 * better names for applib/guestlib?
 * html layouting (proper tree structure?)
-* use "Color" in place of u32?
 * better tile cache
 * proper text layouting utilities
 

@@ -191,17 +191,10 @@ impl StoreWrapper {
         let ctx = self.store.as_context();
         let mem_data = mem.data(ctx);
 
-        let wasm_fb = {
-            let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
-            let fb_data = &mem_data[addr..addr + (w * h * 4) as usize];
-            let fb_data = unsafe { 
-                let (head, body, tail) = fb_data.align_to::<Color>();
-                assert_eq!(head.len(), 0);
-                assert_eq!(tail.len(), 0);
-                body
-            };
-            Framebuffer::<BorrowedPixels>::new(fb_data, w, h)
-        };
+        let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
+        let wasm_fb_bytes = &mem_data[addr..addr + (w * h * 4) as usize];
+
+        let wasm_fb = Framebuffer::<BorrowedPixels>::from_bytes(wasm_fb_bytes, w, h);
 
         Some(wasm_fb)
     }

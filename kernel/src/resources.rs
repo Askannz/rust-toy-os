@@ -9,7 +9,8 @@ lazy_static! {
     //
     // Wallpaper
 
-    pub static ref WALLPAPER: Vec<u8> = decode_png(include_bytes!("../../wallpaper.png"));
+    pub static ref WALLPAPER: Framebuffer<OwnedPixels> = 
+        Framebuffer::from_png(include_bytes!("../../wallpaper.png"));
 
 
     //

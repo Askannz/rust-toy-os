@@ -16,7 +16,7 @@ use applib::drawing::primitives::draw_rect;
 use applib::drawing::text::{draw_str};
 use applib::input::{InputEvent, InputState};
 use applib::uitk::{self, UiContext};
-use applib::{BorrowedMutPixels, Color, FbViewMut, Framebuffer, Rect};
+use applib::{BorrowedMutPixels, Color, FbView, FbViewMut, Framebuffer, OwnedPixels, Rect};
 
 extern crate alloc;
 
@@ -146,15 +146,10 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         update_input_state(&mut input_state, (w, h), &mut virtio_inputs);
 
-        virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
+        let mut framebuffer = Framebuffer::<BorrowedMutPixels>::from_bytes(&mut virtio_gpu.framebuffer, w, h);
 
-        let fb_data = unsafe { 
-            let (head, body, tail) = virtio_gpu.framebuffer.as_mut().align_to_mut::<Color>();
-            assert_eq!(head.len(), 0);
-            assert_eq!(tail.len(), 0);
-            body
-        };
-        let mut framebuffer = Framebuffer::<BorrowedMutPixels>::new(fb_data, w, h);
+        let wallpaper: &Framebuffer<OwnedPixels> = &WALLPAPER;
+        framebuffer.copy_from_fb(wallpaper, (0, 0), false);
 
         //log::debug!("{:?}", system_state);
 

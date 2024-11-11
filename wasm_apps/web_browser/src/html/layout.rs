@@ -2,7 +2,7 @@ use core::hash::Hasher;
 
 use anyhow::anyhow;
 
-use applib::drawing::text::{Font, DEFAULT_FONT_FAMILY};
+use applib::drawing::text::{format_rich_lines, Font, FormattedRichText, RichText, DEFAULT_FONT_FAMILY};
 use applib::{Color, Rect};
 
 use super::parsing::{HtmlTree, NodeData as HtmlNodeData, NodeId as HtmlNodeId};
@@ -15,9 +15,7 @@ pub struct LayoutNode {
 
 pub enum NodeData {
     Text {
-        text: String,
-        color: Color,
-        font: &'static Font,
+        text: FormattedRichText,
         url: Option<String>,
     },
     Image,
@@ -43,9 +41,9 @@ struct Margins {
     bottom: u32,
 }
 
-pub fn compute_layout(html_tree: &HtmlTree) -> anyhow::Result<LayoutNode> {
+pub fn compute_layout(html_tree: &HtmlTree, page_max_w: u32) -> anyhow::Result<LayoutNode> {
     let mut next_node_id = 0u64;
-    parse_node(&mut next_node_id, &html_tree, HtmlNodeId(0), 0, 0, false)
+    parse_node(&mut next_node_id, &html_tree, HtmlNodeId(0), 0, 0, false, page_max_w)
         .ok_or(anyhow!("Error computing HTML layout"))
 }
 
@@ -62,6 +60,7 @@ fn parse_node<'b>(
     mut x0: i64,
     mut y0: i64,
     link: bool,
+    page_max_w: u32,
 ) -> Option<LayoutNode> {
     const ZERO_M: Margins = Margins { left: 0, right: 0, top: 0, bottom: 0 };
     const TR_M: Margins = Margins { left: 0, right: 0, top: 5, bottom: 5 };
@@ -121,6 +120,8 @@ fn parse_node<'b>(
                 "h1" => (Orientation::Horizontal, P_M),
                 "h2" => (Orientation::Horizontal, P_M),
                 "h3" => (Orientation::Horizontal, P_M),
+                "ul" => (Orientation::Vertical, ZERO_M),
+                "li" => (Orientation::Horizontal, ZERO_M),
                 _ => (Orientation::Horizontal, ZERO_M),
             };
 
@@ -151,6 +152,7 @@ fn parse_node<'b>(
                     child_x0,
                     child_y0,
                     url.is_some(),
+                    page_max_w,
                 ) {
                     let Rect {
                         w: child_w,
@@ -198,8 +200,13 @@ fn parse_node<'b>(
             let text = core::str::from_utf8(text.as_bytes()).expect("Not UTF-8");
             let font = DEFAULT_FONT_FAMILY.get_default(); // TODO
             let color = if link { Color::BLUE } else { Color::BLACK };
-            let w = (text.len() * font.char_w) as u32 + m.left + m.right;
-            let h = font.char_h as u32 + m.top + m.bottom;
+
+            let text_max_w = i64::max(10, page_max_w as i64 - x0) as u32;
+            let rich_text = RichText::from_str(text, color, font, None);
+            let formatted = format_rich_lines(&rich_text, text_max_w);
+
+            let w = formatted.w + m.left + m.right;
+            let h = formatted.h as u32 + m.top + m.bottom;
 
             Some(LayoutNode {
                 id: make_node_id(next_node_id),
@@ -210,9 +217,7 @@ fn parse_node<'b>(
                     h,
                 },
                 data: NodeData::Text {
-                    text: text.to_string(),
-                    color,
-                    font,
+                    text: formatted,
                     url: None,
                 },
             })
@@ -250,50 +255,50 @@ fn check_is_block_element(node_data: &HtmlNodeData) -> bool {
     }
 }
 
-fn debug_layout(root_node: &LayoutNode) {
-    fn repr_node(out_str: &mut String, node: &LayoutNode, is_last: bool, prefix: &str) {
-        let c = match is_last {
-            true => "└",
-            false => "├",
-        };
+// fn debug_layout(root_node: &LayoutNode) {
+//     fn repr_node(out_str: &mut String, node: &LayoutNode, is_last: bool, prefix: &str) {
+//         let c = match is_last {
+//             true => "└",
+//             false => "├",
+//         };
 
-        match &node.data {
-            NodeData::Text { text, .. } => {
-                for line in text.split("\n") {
-                    out_str.push_str(&format!("{}{}{}\n", prefix, c, line));
-                }
-            }
-            NodeData::Image => {
-                out_str.push_str(&format!("{}{}IMAGE {:?}\n", prefix, c, node.rect));
-            }
-            NodeData::Container {
-                children,
-                orientation,
-                tag,
-                ..
-            } => {
-                out_str.push_str(&format!(
-                    "{}{}CONTAINER {} {:?} {:?}\n",
-                    prefix, c, tag, orientation, node.rect
-                ));
+//         match &node.data {
+//             NodeData::Text { text, .. } => {
+//                 for line in text.split("\n") {
+//                     out_str.push_str(&format!("{}{}{}\n", prefix, c, line));
+//                 }
+//             }
+//             NodeData::Image => {
+//                 out_str.push_str(&format!("{}{}IMAGE {:?}\n", prefix, c, node.rect));
+//             }
+//             NodeData::Container {
+//                 children,
+//                 orientation,
+//                 tag,
+//                 ..
+//             } => {
+//                 out_str.push_str(&format!(
+//                     "{}{}CONTAINER {} {:?} {:?}\n",
+//                     prefix, c, tag, orientation, node.rect
+//                 ));
 
-                let c2 = match is_last {
-                    true => " ",
-                    false => "|",
-                };
+//                 let c2 = match is_last {
+//                     true => " ",
+//                     false => "|",
+//                 };
 
-                let child_prefix = format!("{}{}", prefix, c2);
+//                 let child_prefix = format!("{}{}", prefix, c2);
 
-                for (i, child) in children.iter().enumerate() {
-                    let child_is_last = i == children.len() - 1;
-                    repr_node(out_str, child, child_is_last, &child_prefix);
-                }
-            }
-        }
-    }
+//                 for (i, child) in children.iter().enumerate() {
+//                     let child_is_last = i == children.len() - 1;
+//                     repr_node(out_str, child, child_is_last, &child_prefix);
+//                 }
+//             }
+//         }
+//     }
 
-    let mut out_str = String::new();
-    repr_node(&mut out_str, root_node, false, "");
+//     let mut out_str = String::new();
+//     repr_node(&mut out_str, root_node, false, "");
 
-    guestlib::print_console(&out_str);
-}
+//     guestlib::print_console(&out_str);
+// }

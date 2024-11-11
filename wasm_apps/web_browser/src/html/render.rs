@@ -1,5 +1,6 @@
 use applib::drawing::primitives::draw_rect;
 use applib::drawing::text::draw_str;
+use applib::uitk::render_rich_text;
 use applib::{FbViewMut, Rect};
 
 use super::layout::{LayoutNode, NodeData};
@@ -28,15 +29,15 @@ fn draw_node<F: FbViewMut>(dst_fb: &mut F, node: &LayoutNode, src_rect: &Rect) {
 
     match &node.data {
         NodeData::Text {
-            text, color, font, ..
+            text, ..
         } => {
-            // This will draw the whole line, including chars outside of
-            // the current tile.
-            // TODO: optimize this
 
             let draw_x0 = node_rect.x0 - ox;
             let draw_y0 = node_rect.y0 - oy;
-            draw_str(dst_fb, text, draw_x0, draw_y0, font, *color, None);
+
+            let draw_rect = Rect { x0: draw_x0, y0: draw_y0, w: text.w, h: text.h };
+
+            render_rich_text(dst_fb, &draw_rect, text, (0, 0));
         }
         NodeData::Image => (),
         NodeData::Container {

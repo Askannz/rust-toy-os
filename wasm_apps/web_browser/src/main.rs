@@ -154,7 +154,7 @@ pub fn init() -> () {
     log::set_max_level(LOGGING_LEVEL);
     log::set_logger(&LOGGER).unwrap();
 
-    let url_text = String::from("https://news.ycombinator.com/");
+    let url_text = String::from("https://motherfuckingwebsite.com/");
     let url_len = url_text.len();
 
     let mut uuid_provider = uitk::UuidProvider::new();
@@ -546,7 +546,8 @@ fn update_request_state(
 
         RequestState::Render { http_target, html } => {
             let html_tree = parse_html(html)?;
-            let layout = compute_layout(&html_tree)?;
+            let page_max_w = ui_layout.canvas_rect.w;
+            let layout = compute_layout(&html_tree, page_max_w)?;
 
             //log::debug!("Layout: {:?}", layout.rect);
             state.request_state = RequestState::Idle {

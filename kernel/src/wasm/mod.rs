@@ -1,9 +1,10 @@
 use alloc::collections::BTreeMap;
 use alloc::string::ToString;
 use alloc::vec;
+use alloc::vec::Vec;
 use alloc::{borrow::ToOwned, string::String};
 use applib::geometry::Point2D;
-use applib::BorrowedPixels;
+use applib::{BorrowedPixels, OwnedPixels};
 use core::mem::size_of;
 use smoltcp::iface::SocketHandle;
 
@@ -193,9 +194,8 @@ impl StoreWrapper {
 
         let wasm_fb = {
             let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
-            let fb_data = &mem_data[addr..addr + (w * h * 4) as usize];
-            let fb_data = unsafe { fb_data.align_to::<u32>().1 };
-            Framebuffer::<BorrowedPixels>::new(fb_data, w, h)
+            let wasm_data_u8 = &mem_data[addr..addr + (w * h * 4) as usize];
+            Framebuffer::<BorrowedPixels>::new(wasm_data_u8, w, h)
         };
 
         Some(wasm_fb)

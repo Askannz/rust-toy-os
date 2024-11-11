@@ -38,21 +38,21 @@ extern "C" {
 
 #[derive(Debug)]
 struct FramebufferHandle {
-    ptr: *mut u32,
+    ptr: *mut u8,
     w: u32,
     h: u32,
 }
 
 impl FramebufferHandle {
     fn new(w: u32, h: u32) -> Self {
-        let ptr = vec![0u32; (w * h) as usize].leak().as_mut_ptr();
+        let ptr = vec![0u8; (4 * w * h) as usize].leak().as_mut_ptr();
         Self { ptr, w, h }
     }
 
     fn as_framebuffer(&mut self) -> Framebuffer<BorrowedMutPixels> {
         let FramebufferHandle { ptr, w, h } = *self;
 
-        let fb_data = unsafe { core::slice::from_raw_parts_mut(ptr, (w * h) as usize) };
+        let fb_data = unsafe { core::slice::from_raw_parts_mut(ptr, (4 * w * h) as usize) };
 
         Framebuffer::<BorrowedMutPixels>::new(fb_data, w, h)
     }
@@ -62,7 +62,7 @@ impl FramebufferHandle {
     }
 
     fn destroy(self) {
-        let n = (self.w * self.h) as usize;
+        let n = (4 * self.w * self.h) as usize;
         let data = unsafe { Vec::from_raw_parts(self.ptr, n, n) };
         core::mem::drop(data)
     }

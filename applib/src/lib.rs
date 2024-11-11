@@ -22,7 +22,7 @@ pub use stylesheet::{StyleSheet, StyleSheetColors};
 
 #[derive(Clone, Copy, Hash)]
 #[repr(transparent)]
-pub struct Color(pub u32);
+pub struct Color(pub [u8; 4]);
 
 impl Color {
     pub const WHITE: Color = Color::rgb(255, 255, 255);
@@ -35,31 +35,20 @@ impl Color {
     pub const AQUA: Color = Color::rgb(0, 250, 255);
 
     pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
-        let (r, g, b, a) = (r as u32, g as u32, b as u32, a as u32);
-
-        let val = (a << 3 * 8) + (b << 2 * 8) + (g << 1 * 8) + (r << 0 * 8);
-
-        Color(val)
+        Color([r, g, b, a])
     }
 
     pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
         Self::rgba(r, g, b, 255)
     }
 
-    pub const fn from_u32(val: u32) -> Self {
-        Color(val)
+    pub const fn from_u8(val: &[u8; 4]) -> Self {
+        Color(*val)
     }
 
     pub fn as_rgba(&self) -> (u8, u8, u8, u8) {
-        let mask = 0xFFu32;
-        let val = self.0;
-
-        let r = ((mask << 0 * 8) & val) >> 0 * 8;
-        let g = ((mask << 1 * 8) & val) >> 1 * 8;
-        let b = ((mask << 2 * 8) & val) >> 2 * 8;
-        let a = ((mask << 3 * 8) & val) >> 3 * 8;
-
-        (r as u8, g as u8, b as u8, a as u8)
+        let Color([r, g, b, a]) = *self;
+        (r, g, b, a)
     }
 }
 
@@ -200,40 +189,40 @@ impl ops::Add<Vec2D<i64>> for Rect {
 }
 
 pub trait FbData {
-    fn as_slice(&self) -> &[u32];
+    fn as_slice(&self) -> &[u8];
 }
 
 pub trait FbDataMut: FbData {
-    fn as_mut_slice(&mut self) -> &mut [u32];
+    fn as_mut_slice(&mut self) -> &mut [u8];
 }
 
-pub struct OwnedPixels(Vec<u32>);
-pub struct BorrowedPixels<'a>(&'a [u32]);
-pub struct BorrowedMutPixels<'a>(&'a mut [u32]);
+pub struct OwnedPixels(Vec<u8>);
+pub struct BorrowedPixels<'a>(&'a [u8]);
+pub struct BorrowedMutPixels<'a>(&'a mut [u8]);
 
 impl FbData for OwnedPixels {
-    fn as_slice(&self) -> &[u32] {
+    fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
     }
 }
 impl<'a> FbData for BorrowedPixels<'a> {
-    fn as_slice(&self) -> &[u32] {
+    fn as_slice(&self) -> &[u8] {
         self.0
     }
 }
 impl<'a> FbData for BorrowedMutPixels<'a> {
-    fn as_slice(&self) -> &[u32] {
+    fn as_slice(&self) -> &[u8] {
         self.0
     }
 }
 
 impl FbDataMut for OwnedPixels {
-    fn as_mut_slice(&mut self) -> &mut [u32] {
+    fn as_mut_slice(&mut self) -> &mut [u8] {
         self.0.as_mut_slice()
     }
 }
 impl<'a> FbDataMut for BorrowedMutPixels<'a> {
-    fn as_mut_slice(&mut self) -> &mut [u32] {
+    fn as_mut_slice(&mut self) -> &mut [u8] {
         self.0
     }
 }
@@ -246,13 +235,13 @@ pub struct Framebuffer<T> {
 }
 
 pub struct FbLineMut<'a> {
-    data: &'a mut [u32],
+    data: &'a mut [u8],
     x_data_start: u32,
     line_w: u32,
 }
 
 pub struct FbLine<'a> {
-    data: &'a [u32],
+    data: &'a [u8],
     x_data_start: u32,
     line_w: u32,
 }
@@ -265,38 +254,70 @@ pub struct FbLineCoords {
 
 impl<'a> FbLineMut<'a> {
     fn fill(&mut self, color: Color, blend: bool) {
-        if blend {
-            self.data.iter_mut().for_each(|pixel| {
-                *pixel = blend_colors(color, Color(*pixel)).0;
-            });
-        } else {
-            self.data.fill(color.0)
+
+        let x_len = self.data.len() / 4;
+
+        for x in 0..x_len {
+
+            let new_color = match blend {
+                false => color,
+                true => {
+                    let curr_val: &[u8; 4] = &self.data[4*x..4*x+4].try_into().unwrap();
+                    let curr_color = Color::from_u8(curr_val);
+                    blend_colors(color, curr_color)
+                }
+            };
+
+            let (r, g, b, a) = new_color.as_rgba();
+            self.data[4*x] = r;
+            self.data[4*x+1] = g;
+            self.data[4*x+2] = b;
+            self.data[4*x+3] = a;
         }
     }
 
     fn copy_from_line(&mut self, other: &FbLine, blend: bool) {
+
         assert_eq!(self.line_w, other.line_w);
+
+        let self_x_data_len = (self.data.len() / 4) as u32;
+        let other_x_data_len = (other.data.len() / 4) as u32;
 
         let new_x_data_start = u32::max(self.x_data_start, other.x_data_start);
         let new_x_data_end = u32::min(
-            self.x_data_start + self.data.len() as u32,
-            other.x_data_start + other.data.len() as u32,
+            self.x_data_start + self_x_data_len,
+            other.x_data_start + other_x_data_len,
         );
 
-        let copy_len = (new_x_data_end - new_x_data_start) as usize;
-
-        let i1 = (new_x_data_start - self.x_data_start) as usize;
-        let i2 = (new_x_data_start - other.x_data_start) as usize;
+        let x_copy_len = (new_x_data_end - new_x_data_start) as usize;
+        let x1 = (new_x_data_start - self.x_data_start) as usize;
+        let x2 = (new_x_data_start - other.x_data_start) as usize;
 
         if blend {
-            self.data[i1..i1 + copy_len]
-                .iter_mut()
-                .zip(other.data[i2..i2 + copy_len].iter())
-                .for_each(|(dst, src)| {
-                    *dst = blend_colors(Color(*src), Color(*dst)).0;
+
+            (x1..x1+x_copy_len)
+                .zip(x2..x2+x_copy_len)
+                .for_each(|(x1, x2)| {
+                    let val_1: &[u8; 4] = &self.data[4*x1..4*x1+4].try_into().unwrap();
+                    let val_2: &[u8; 4] = &other.data[4*x2..4*x2+4].try_into().unwrap();
+                    let color_1 = Color::from_u8(val_1);
+                    let color_2 = Color::from_u8(val_2);
+                    let new_color = blend_colors(color_2, color_1);
+
+                    let (r, g, b, a) = new_color.as_rgba();
+                    self.data[4*x1] = r;
+                    self.data[4*x1+1] = g;
+                    self.data[4*x1+2] = b;
+                    self.data[4*x1+3] = a;
                 });
+
         } else {
-            self.data[i1..i1 + copy_len].copy_from_slice(&other.data[i2..i2 + copy_len]);
+
+            let data_copy_len = 4 * x_copy_len as usize;
+            let i1 = 4 * x1 as usize;
+            let i2 = 4 * x2 as usize;
+
+            self.data[i1..i1 + data_copy_len].copy_from_slice(&other.data[i2..i2 + data_copy_len]);
         }
     }
 }
@@ -308,7 +329,7 @@ pub trait FbView {
     fn get_pixel(&self, x: i64, y: i64) -> Option<Color>;
 
     fn to_data_coords(&self, x: i64, y: i64) -> (i64, i64);
-    fn get_data(&self) -> &[u32];
+    fn get_data(&self) -> &[u8];
     fn get_offset_data_coords(&self, x: i64, y: i64) -> Option<usize>;
     fn get_offset_region_coords(&self, x: i64, y: i64) -> Option<usize>;
 
@@ -322,13 +343,13 @@ pub trait FbViewMut: FbView {
     fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color, blend: bool);
     fn fill(&mut self, color: Color);
     fn copy_from_fb<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool);
-    fn get_data_mut(&mut self) -> &mut [u32];
+    fn get_data_mut(&mut self) -> &mut [u8];
     fn get_line_mut<'b>(&'b mut self, x: i64, line_w: u32, y: i64) -> FbLineMut<'b>;
 }
 
 impl<'a> Framebuffer<BorrowedMutPixels<'a>> {
-    pub fn new<'b>(data: &'b mut [u32], w: u32, h: u32) -> Framebuffer<BorrowedMutPixels<'b>> {
-        assert_eq!(data.len(), (w * h) as usize);
+    pub fn new<'b>(data: &'b mut [u8], w: u32, h: u32) -> Framebuffer<BorrowedMutPixels<'b>> {
+        assert_eq!(data.len(), (4 * w * h) as usize);
         let rect = Rect { x0: 0, y0: 0, w, h };
         Framebuffer {
             data: BorrowedMutPixels(data),
@@ -340,8 +361,8 @@ impl<'a> Framebuffer<BorrowedMutPixels<'a>> {
 }
 
 impl<'a> Framebuffer<BorrowedPixels<'a>> {
-    pub fn new<'b>(data: &'b [u32], w: u32, h: u32) -> Framebuffer<BorrowedPixels<'b>> {
-        assert_eq!(data.len(), (w * h) as usize);
+    pub fn new<'b>(data: &'b [u8], w: u32, h: u32) -> Framebuffer<BorrowedPixels<'b>> {
+        assert_eq!(data.len(), (4 * w * h) as usize);
         let rect = Rect { x0: 0, y0: 0, w, h };
         Framebuffer {
             data: BorrowedPixels(data),
@@ -353,8 +374,17 @@ impl<'a> Framebuffer<BorrowedPixels<'a>> {
 }
 
 impl Framebuffer<OwnedPixels> {
+    
     pub fn new_owned(w: u32, h: u32) -> Self {
-        let data = vec![0u32; (w * h) as usize];
+        let data = vec![0u8; (4 * w * h) as usize];
+        Self::from_data(data, w, h)
+    }
+
+    pub fn from_data(data: Vec<u8>, w: u32, h: u32) -> Self {
+
+        // DEBUG
+        assert_eq!(data.len(), (4 * w * h) as usize);
+
         let rect = Rect { x0: 0, y0: 0, w, h };
         Framebuffer {
             data: OwnedPixels(data),
@@ -371,18 +401,14 @@ impl Framebuffer<OwnedPixels> {
 
         let data_u8 = decoded.u8().unwrap();
 
-        let data_u32 = unsafe {
-            assert_eq!(data_u8.len(), h * w * 4, "PNG has wrong dimentsions"); // Requires an alpha channel
-            let mut data_u8 = core::mem::ManuallyDrop::new(data_u8);
-            Vec::from_raw_parts(data_u8.as_mut_ptr() as *mut u32, h * w, h * w)
-        };
+        assert_eq!(data_u8.len(), h * w * 4, "PNG has wrong dimentsions"); // Requires an alpha channel
 
         let (w, h) = (w as u32, h as u32);
 
         let rect = Rect { x0: 0, y0: 0, w, h };
 
         Framebuffer {
-            data: OwnedPixels(data_u32),
+            data: OwnedPixels(data_u8),
             data_w: w,
             data_h: h,
             rect,
@@ -422,10 +448,13 @@ impl<T: FbData> FbView for Framebuffer<T> {
 
     fn get_pixel(&self, x: i64, y: i64) -> Option<Color> {
         let data = self.data.as_slice();
-        self.get_offset_region_coords(x, y).map(|i| Color(data[i]))
+        self.get_offset_region_coords(x, y).map(|i| {
+            let val: [u8; 4] = data[i..i+4].try_into().unwrap();
+            Color(val)
+        })
     }
 
-    fn get_data(&self) -> &[u32] {
+    fn get_data(&self) -> &[u8] {
         self.data.as_slice()
     }
 
@@ -446,7 +475,7 @@ impl<T: FbData> FbView for Framebuffer<T> {
             return None;
         }
 
-        Some((y * self.data_w + x) as usize)
+        Some(4 * (y * self.data_w + x) as usize)
     }
 
     fn get_line_coords(&self, x: i64, line_w: u32, y: i64) -> FbLineCoords {
@@ -482,7 +511,7 @@ impl<T: FbData> FbView for Framebuffer<T> {
 
         FbLineCoords {
             data_index: Some(i1),
-            data_len: (i2 - i1 + 1) as usize,
+            data_len: (i2 - i1 + 4) as usize,
             x_data_start: (x1 - x) as u32,
         }
     }
@@ -526,7 +555,13 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
     fn set_pixel(&mut self, x: i64, y: i64, color: Color) {
         let offset = self.get_offset_region_coords(x, y);
         let data = self.data.as_mut_slice();
-        offset.map(|i| data[i] = color.0);
+        let (r, g, b, a) = color.as_rgba();
+        offset.map(|i| {
+            data[i] = r;
+            data[i+1] = g;
+            data[i+2] = b;
+            data[i+3] = a;
+        });
     }
 
     fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color, blend: bool) {
@@ -536,16 +571,12 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
     fn fill(&mut self, color: Color) {
 
         let (w, h) = self.shape();
-        if w == self.data_w && h == self.data_h {
-            self.data.as_mut_slice().fill(color.0);
-        } else {
-            for y in 0..h {
-                self.fill_line(0, w, y.into(), color, false)
-            }
+        for y in 0..h {
+            self.fill_line(0, w, y.into(), color, false)
         }
     }
 
-    fn get_data_mut(&mut self) -> &mut [u32] {
+    fn get_data_mut(&mut self) -> &mut [u8] {
         self.data.as_mut_slice()
     }
 
@@ -559,10 +590,14 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
 
         let data = self.data.as_mut_slice();
 
+
+
         let line_slice = match data_index {
             Some(i) => &mut data[i..i + data_len],
             None => &mut [],
         };
+
+        assert_eq!(line_slice.len() % 4, 0);
 
         FbLineMut {
             data: line_slice,

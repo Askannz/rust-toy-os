@@ -63,18 +63,9 @@ fn parse_node<'b>(
     mut y0: i64,
     link: bool,
 ) -> Option<LayoutNode> {
-    const ZERO_M: Margins = Margins {
-        left: 0,
-        right: 0,
-        top: 0,
-        bottom: 0,
-    };
-    const TR_M: Margins = Margins {
-        left: 0,
-        right: 0,
-        top: 5,
-        bottom: 5,
-    };
+    const ZERO_M: Margins = Margins { left: 0, right: 0, top: 0, bottom: 0 };
+    const TR_M: Margins = Margins { left: 0, right: 0, top: 5, bottom: 5 };
+    const P_M: Margins = Margins { left: 0, right: 0, top: 20, bottom: 20 };
 
     let node = tree.get_node(html_node_id)?;
 
@@ -111,14 +102,25 @@ fn parse_node<'b>(
 
             let tag = name.to_string();
 
+            match tag.as_str() {
+                "script" => return None,
+                _ => ()
+            };
+
             let (orientation, margin) = match tag.as_str() {
+                "body" => (Orientation::Vertical, ZERO_M),
+                "header" => (Orientation::Vertical, ZERO_M),
+                "aside" => (Orientation::Vertical, ZERO_M),
                 "tr" => (Orientation::Horizontal, TR_M),
                 "td" => (Orientation::Vertical, ZERO_M),
                 "tbody" => (Orientation::Vertical, ZERO_M),
                 "table" => (Orientation::Vertical, ZERO_M),
                 "div" => (Orientation::Vertical, ZERO_M),
                 "span" => (Orientation::Horizontal, ZERO_M),
-                "p" => (Orientation::Horizontal, ZERO_M),
+                "p" => (Orientation::Horizontal, P_M),
+                "h1" => (Orientation::Horizontal, P_M),
+                "h2" => (Orientation::Horizontal, P_M),
+                "h3" => (Orientation::Horizontal, P_M),
                 _ => (Orientation::Horizontal, ZERO_M),
             };
 

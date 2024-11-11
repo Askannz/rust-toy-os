@@ -22,9 +22,10 @@ pub use stylesheet::{StyleSheet, StyleSheetColors};
 
 #[derive(Clone, Copy, Hash)]
 #[repr(transparent)]
-pub struct Color(pub u32);
+pub struct Color(pub [u8; 4]);
 
 impl Color {
+    pub const ZERO: Color = Color::rgba(0, 0, 0, 0);
     pub const WHITE: Color = Color::rgb(255, 255, 255);
     pub const BLACK: Color = Color::rgb(0, 0, 0);
     pub const RED: Color = Color::rgb(255, 0, 0);
@@ -35,31 +36,20 @@ impl Color {
     pub const AQUA: Color = Color::rgb(0, 250, 255);
 
     pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
-        let (r, g, b, a) = (r as u32, g as u32, b as u32, a as u32);
-
-        let val = (a << 3 * 8) + (b << 2 * 8) + (g << 1 * 8) + (r << 0 * 8);
-
-        Color(val)
+        Color([r, g, b, a])
     }
 
     pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
         Self::rgba(r, g, b, 255)
     }
 
-    pub const fn from_u32(val: u32) -> Self {
-        Color(val)
+    pub const fn from_u32(val: &[u8; 4]) -> Self {
+        Color(*val)
     }
 
     pub fn as_rgba(&self) -> (u8, u8, u8, u8) {
-        let mask = 0xFFu32;
-        let val = self.0;
-
-        let r = ((mask << 0 * 8) & val) >> 0 * 8;
-        let g = ((mask << 1 * 8) & val) >> 1 * 8;
-        let b = ((mask << 2 * 8) & val) >> 2 * 8;
-        let a = ((mask << 3 * 8) & val) >> 3 * 8;
-
-        (r as u8, g as u8, b as u8, a as u8)
+        let Color([r, g, b, a]) = *self;
+        (r, g, b, a)
     }
 }
 
@@ -200,40 +190,40 @@ impl ops::Add<Vec2D<i64>> for Rect {
 }
 
 pub trait FbData {
-    fn as_slice(&self) -> &[u32];
+    fn as_slice(&self) -> &[Color];
 }
 
 pub trait FbDataMut: FbData {
-    fn as_mut_slice(&mut self) -> &mut [u32];
+    fn as_mut_slice(&mut self) -> &mut [Color];
 }
 
-pub struct OwnedPixels(Vec<u32>);
-pub struct BorrowedPixels<'a>(&'a [u32]);
-pub struct BorrowedMutPixels<'a>(&'a mut [u32]);
+pub struct OwnedPixels(Vec<Color>);
+pub struct BorrowedPixels<'a>(&'a [Color]);
+pub struct BorrowedMutPixels<'a>(&'a mut [Color]);
 
 impl FbData for OwnedPixels {
-    fn as_slice(&self) -> &[u32] {
+    fn as_slice(&self) -> &[Color] {
         self.0.as_slice()
     }
 }
 impl<'a> FbData for BorrowedPixels<'a> {
-    fn as_slice(&self) -> &[u32] {
+    fn as_slice(&self) -> &[Color] {
         self.0
     }
 }
 impl<'a> FbData for BorrowedMutPixels<'a> {
-    fn as_slice(&self) -> &[u32] {
+    fn as_slice(&self) -> &[Color] {
         self.0
     }
 }
 
 impl FbDataMut for OwnedPixels {
-    fn as_mut_slice(&mut self) -> &mut [u32] {
+    fn as_mut_slice(&mut self) -> &mut [Color] {
         self.0.as_mut_slice()
     }
 }
 impl<'a> FbDataMut for BorrowedMutPixels<'a> {
-    fn as_mut_slice(&mut self) -> &mut [u32] {
+    fn as_mut_slice(&mut self) -> &mut [Color] {
         self.0
     }
 }
@@ -246,13 +236,13 @@ pub struct Framebuffer<T> {
 }
 
 pub struct FbLineMut<'a> {
-    data: &'a mut [u32],
+    data: &'a mut [Color],
     x_data_start: u32,
     line_w: u32,
 }
 
 pub struct FbLine<'a> {
-    data: &'a [u32],
+    data: &'a [Color],
     x_data_start: u32,
     line_w: u32,
 }
@@ -267,10 +257,10 @@ impl<'a> FbLineMut<'a> {
     fn fill(&mut self, color: Color, blend: bool) {
         if blend {
             self.data.iter_mut().for_each(|pixel| {
-                *pixel = blend_colors(color, Color(*pixel)).0;
+                *pixel = blend_colors(color, *pixel);
             });
         } else {
-            self.data.fill(color.0)
+            self.data.fill(color)
         }
     }
 
@@ -293,7 +283,7 @@ impl<'a> FbLineMut<'a> {
                 .iter_mut()
                 .zip(other.data[i2..i2 + copy_len].iter())
                 .for_each(|(dst, src)| {
-                    *dst = blend_colors(Color(*src), Color(*dst)).0;
+                    *dst = blend_colors(*src, *dst);
                 });
         } else {
             self.data[i1..i1 + copy_len].copy_from_slice(&other.data[i2..i2 + copy_len]);
@@ -308,7 +298,7 @@ pub trait FbView {
     fn get_pixel(&self, x: i64, y: i64) -> Option<Color>;
 
     fn to_data_coords(&self, x: i64, y: i64) -> (i64, i64);
-    fn get_data(&self) -> &[u32];
+    fn get_data(&self) -> &[Color];
     fn get_offset_data_coords(&self, x: i64, y: i64) -> Option<usize>;
     fn get_offset_region_coords(&self, x: i64, y: i64) -> Option<usize>;
 
@@ -322,12 +312,12 @@ pub trait FbViewMut: FbView {
     fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color, blend: bool);
     fn fill(&mut self, color: Color);
     fn copy_from_fb<F1: FbView>(&mut self, src: &F1, dst: (i64, i64), blend: bool);
-    fn get_data_mut(&mut self) -> &mut [u32];
+    fn get_data_mut(&mut self) -> &mut [Color];
     fn get_line_mut<'b>(&'b mut self, x: i64, line_w: u32, y: i64) -> FbLineMut<'b>;
 }
 
 impl<'a> Framebuffer<BorrowedMutPixels<'a>> {
-    pub fn new<'b>(data: &'b mut [u32], w: u32, h: u32) -> Framebuffer<BorrowedMutPixels<'b>> {
+    pub fn new<'b>(data: &'b mut [Color], w: u32, h: u32) -> Framebuffer<BorrowedMutPixels<'b>> {
         assert_eq!(data.len(), (w * h) as usize);
         let rect = Rect { x0: 0, y0: 0, w, h };
         Framebuffer {
@@ -340,7 +330,7 @@ impl<'a> Framebuffer<BorrowedMutPixels<'a>> {
 }
 
 impl<'a> Framebuffer<BorrowedPixels<'a>> {
-    pub fn new<'b>(data: &'b [u32], w: u32, h: u32) -> Framebuffer<BorrowedPixels<'b>> {
+    pub fn new<'b>(data: &'b [Color], w: u32, h: u32) -> Framebuffer<BorrowedPixels<'b>> {
         assert_eq!(data.len(), (w * h) as usize);
         let rect = Rect { x0: 0, y0: 0, w, h };
         Framebuffer {
@@ -354,7 +344,7 @@ impl<'a> Framebuffer<BorrowedPixels<'a>> {
 
 impl Framebuffer<OwnedPixels> {
     pub fn new_owned(w: u32, h: u32) -> Self {
-        let data = vec![0u32; (w * h) as usize];
+        let data = vec![Color([0u8; 4]); (w * h) as usize];
         let rect = Rect { x0: 0, y0: 0, w, h };
         Framebuffer {
             data: OwnedPixels(data),
@@ -370,19 +360,21 @@ impl Framebuffer<OwnedPixels> {
         let (w, h) = decoder.get_dimensions().unwrap();
 
         let data_u8 = decoded.u8().unwrap();
+        assert_eq!(data_u8.len(), h * w * 4, "PNG has wrong dimensions"); // Requires an alpha channel
 
-        let data_u32 = unsafe {
-            assert_eq!(data_u8.len(), h * w * 4, "PNG has wrong dimentsions"); // Requires an alpha channel
-            let mut data_u8 = core::mem::ManuallyDrop::new(data_u8);
-            Vec::from_raw_parts(data_u8.as_mut_ptr() as *mut u32, h * w, h * w)
-        };
+        let data: Vec<Color> = (0..h*w).map(|x| {
+            let i = 4 * x;
+            let color_bytes = data_u8[i..i+4].try_into().unwrap();
+            Color(color_bytes)
+        })
+        .collect();
 
         let (w, h) = (w as u32, h as u32);
 
         let rect = Rect { x0: 0, y0: 0, w, h };
 
         Framebuffer {
-            data: OwnedPixels(data_u32),
+            data: OwnedPixels(data),
             data_w: w,
             data_h: h,
             rect,
@@ -422,10 +414,10 @@ impl<T: FbData> FbView for Framebuffer<T> {
 
     fn get_pixel(&self, x: i64, y: i64) -> Option<Color> {
         let data = self.data.as_slice();
-        self.get_offset_region_coords(x, y).map(|i| Color(data[i]))
+        self.get_offset_region_coords(x, y).map(|i| data[i])
     }
 
-    fn get_data(&self) -> &[u32] {
+    fn get_data(&self) -> &[Color] {
         self.data.as_slice()
     }
 
@@ -526,7 +518,7 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
     fn set_pixel(&mut self, x: i64, y: i64, color: Color) {
         let offset = self.get_offset_region_coords(x, y);
         let data = self.data.as_mut_slice();
-        offset.map(|i| data[i] = color.0);
+        offset.map(|i| data[i] = color);
     }
 
     fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color, blend: bool) {
@@ -537,7 +529,7 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
 
         let (w, h) = self.shape();
         if w == self.data_w && h == self.data_h {
-            self.data.as_mut_slice().fill(color.0);
+            self.data.as_mut_slice().fill(color);
         } else {
             for y in 0..h {
                 self.fill_line(0, w, y.into(), color, false)
@@ -545,7 +537,7 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
         }
     }
 
-    fn get_data_mut(&mut self) -> &mut [u32] {
+    fn get_data_mut(&mut self) -> &mut [Color] {
         self.data.as_mut_slice()
     }
 

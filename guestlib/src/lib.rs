@@ -5,7 +5,7 @@ use alloc::format;
 use alloc::vec;
 use alloc::vec::Vec;
 use applib::StyleSheet;
-use applib::{input::InputState, BorrowedMutPixels, Framebuffer, Rect};
+use applib::{input::InputState, BorrowedMutPixels, Framebuffer, Rect, Color};
 use core::fmt::Debug;
 use core::mem::size_of;
 use log::{Log, Metadata, Record};
@@ -38,14 +38,14 @@ extern "C" {
 
 #[derive(Debug)]
 struct FramebufferHandle {
-    ptr: *mut u32,
+    ptr: *mut Color,
     w: u32,
     h: u32,
 }
 
 impl FramebufferHandle {
     fn new(w: u32, h: u32) -> Self {
-        let ptr = vec![0u32; (w * h) as usize].leak().as_mut_ptr();
+        let ptr = vec![Color::ZERO; (w * h) as usize].leak().as_mut_ptr();
         Self { ptr, w, h }
     }
 

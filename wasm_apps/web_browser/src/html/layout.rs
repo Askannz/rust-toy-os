@@ -231,7 +231,7 @@ fn parse_hexcolor(hex_str: &str) -> Color {
 
     let color_bytes: [u8; 4] = color_bytes.try_into().unwrap();
 
-    Color::from_u32(u32::from_le_bytes(color_bytes))
+    Color(color_bytes)
 }
 
 fn check_is_whitespace(s: &str) -> bool {

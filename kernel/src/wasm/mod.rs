@@ -3,7 +3,7 @@ use alloc::string::ToString;
 use alloc::vec;
 use alloc::{borrow::ToOwned, string::String};
 use applib::geometry::Point2D;
-use applib::BorrowedPixels;
+use applib::{BorrowedPixels, Color};
 use core::mem::size_of;
 use smoltcp::iface::SocketHandle;
 
@@ -194,7 +194,12 @@ impl StoreWrapper {
         let wasm_fb = {
             let WasmFramebufferDef { addr, w, h } = wasm_fb_def;
             let fb_data = &mem_data[addr..addr + (w * h * 4) as usize];
-            let fb_data = unsafe { fb_data.align_to::<u32>().1 };
+            let fb_data = unsafe { 
+                let (head, body, tail) = fb_data.align_to::<Color>();
+                assert_eq!(head.len(), 0);
+                assert_eq!(tail.len(), 0);
+                body
+            };
             Framebuffer::<BorrowedPixels>::new(fb_data, w, h)
         };
 

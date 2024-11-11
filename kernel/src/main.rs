@@ -147,7 +147,12 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         virtio_gpu.framebuffer.copy_from_slice(&WALLPAPER[..]);
 
-        let fb_data = unsafe { virtio_gpu.framebuffer.as_mut().align_to_mut::<u32>().1 };
+        let fb_data = unsafe { 
+            let (head, body, tail) = virtio_gpu.framebuffer.as_mut().align_to_mut::<Color>();
+            assert_eq!(head.len(), 0);
+            assert_eq!(tail.len(), 0);
+            body
+        };
         let mut framebuffer = Framebuffer::<BorrowedMutPixels>::new(fb_data, w, h);
 
         //log::debug!("{:?}", system_state);

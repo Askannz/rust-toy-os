@@ -259,20 +259,19 @@ impl<'a> FbLineMut<'a> {
 
         for x in 0..x_len {
 
+            let i = 4 * x;
+
             let new_color = match blend {
                 false => color,
                 true => {
-                    let curr_val: &[u8; 4] = &self.data[4*x..4*x+4].try_into().unwrap();
+                    let curr_val: &[u8; 4] = &self.data[i..i+4].try_into().unwrap();
                     let curr_color = Color::from_u8(curr_val);
                     blend_colors(color, curr_color)
                 }
             };
 
-            let (r, g, b, a) = new_color.as_rgba();
-            self.data[4*x] = r;
-            self.data[4*x+1] = g;
-            self.data[4*x+2] = b;
-            self.data[4*x+3] = a;
+            let Color(color_bytes) = new_color;
+            self.data[i..i+4].copy_from_slice(&color_bytes);
         }
     }
 
@@ -298,17 +297,18 @@ impl<'a> FbLineMut<'a> {
             (x1..x1+x_copy_len)
                 .zip(x2..x2+x_copy_len)
                 .for_each(|(x1, x2)| {
-                    let val_1: &[u8; 4] = &self.data[4*x1..4*x1+4].try_into().unwrap();
-                    let val_2: &[u8; 4] = &other.data[4*x2..4*x2+4].try_into().unwrap();
+
+                    let i1 = 4 * x1;
+                    let i2 = 4 * x2;
+
+                    let val_1: &[u8; 4] = &self.data[i1..i1+4].try_into().unwrap();
+                    let val_2: &[u8; 4] = &other.data[i2..i2+4].try_into().unwrap();
                     let color_1 = Color::from_u8(val_1);
                     let color_2 = Color::from_u8(val_2);
                     let new_color = blend_colors(color_2, color_1);
 
-                    let (r, g, b, a) = new_color.as_rgba();
-                    self.data[4*x1] = r;
-                    self.data[4*x1+1] = g;
-                    self.data[4*x1+2] = b;
-                    self.data[4*x1+3] = a;
+                    let Color(color_bytes) = new_color;
+                    self.data[i1..i1+4].copy_from_slice(&color_bytes);
                 });
 
         } else {
@@ -447,8 +447,8 @@ impl<T: FbData> FbView for Framebuffer<T> {
     }
 
     fn get_pixel(&self, x: i64, y: i64) -> Option<Color> {
-        let data = self.data.as_slice();
         self.get_offset_region_coords(x, y).map(|i| {
+            let data = self.data.as_slice();
             let val: [u8; 4] = data[i..i+4].try_into().unwrap();
             Color(val)
         })
@@ -553,26 +553,60 @@ impl<T: FbDataMut> FbViewMut for Framebuffer<T> {
     }
 
     fn set_pixel(&mut self, x: i64, y: i64, color: Color) {
-        let offset = self.get_offset_region_coords(x, y);
-        let data = self.data.as_mut_slice();
-        let (r, g, b, a) = color.as_rgba();
-        offset.map(|i| {
-            data[i] = r;
-            data[i+1] = g;
-            data[i+2] = b;
-            data[i+3] = a;
-        });
+
+        if let Some(i) = self.get_offset_region_coords(x, y) {
+            let Color(color_bytes) = color;
+            let data = self.data.as_mut_slice();
+            data[i..i+4].copy_from_slice(&color_bytes);
+        }
     }
 
     fn fill_line(&mut self, x: i64, line_w: u32, y: i64, color: Color, blend: bool) {
-        self.get_line_mut(x, line_w, y).fill(color, blend);
+
+        let (w, h) = self.shape();
+
+        if self.data_w == w && self.data_h == h {
+
+            let (w, h) = (w as i64, h as i64);
+            let line_w = line_w as i64;
+
+            if y < 0 || y >= h { return; }
+
+            let x1 = i64::max(0, x);
+            let x2 = i64::min(w, x + line_w);
+
+            let Color(color_bytes) = color;
+            let data_mut = self.data.as_mut_slice();
+
+            for x in x1..x2 {
+                let i = 4 * (y * w + x) as usize;
+                data_mut[i..i+4].copy_from_slice(&color_bytes);
+            }
+
+        } else {
+            self.get_line_mut(x, line_w, y).fill(color, blend);
+        }
     }
 
     fn fill(&mut self, color: Color) {
 
         let (w, h) = self.shape();
-        for y in 0..h {
-            self.fill_line(0, w, y.into(), color, false)
+
+        if self.data_w == w && self.data_h == h {
+
+            let Color(color_bytes) = color;
+            let data_mut = self.data.as_mut_slice();
+
+            for x in 0..w {
+                for y in 0..h {
+                    let i = 4 * (w * y + x) as usize;
+                    data_mut[i..i+4].copy_from_slice(&color_bytes);
+                }
+            }
+        } else {
+            for y in 0..h {
+                self.fill_line(0, w, y.into(), color, false)
+            }
         }
     }
 

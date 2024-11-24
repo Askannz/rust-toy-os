@@ -40,7 +40,6 @@ struct AppState {
     dragging: (bool, bool),
 
     python: python::Python,
-    content_ids: Option<[ContentId; 2]>,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -63,7 +62,6 @@ pub fn init() -> () {
         scroll_offsets: (0, 0),
         dragging: (false, false),
         python: python::Python::new(),
-        content_ids: None,
     };
     unsafe {
         APP_STATE
@@ -113,9 +111,7 @@ pub fn step() {
         h: win_h,
     };
 
-    let formatted = get_formatted_text(&stylesheet, &DEFAULT_FONT_FAMILY, &state.input_buffer, &state.console_buffer, (win_w, win_h));
-
-    let renderer = ConsoleCanvasRenderer { formatted };
+    let rich_text = get_rich_text(&stylesheet, &DEFAULT_FONT_FAMILY, &state.input_buffer, &state.console_buffer);
 
     let time = guestlib::get_time();
 
@@ -127,19 +123,13 @@ pub fn step() {
         time
     );
 
-    uitk_context.dynamic_canvas(
+    uitk_context.scrollable_text(
         &rect_console,
-        &renderer,
+        &rich_text,
         &mut state.scroll_offsets,
         &mut state.dragging,
+        autoscroll,
     );
-
-    if autoscroll {
-        let max_h = renderer.formatted.as_ref().h;
-        uitk::set_autoscroll(&rect_console, max_h, &mut state.scroll_offsets);
-    }
-
-    state.content_ids = Some([state.input_buffer.get_id(), state.console_buffer.get_id()]);
 }
 
 fn check_enter_pressed(input_state: &InputState) -> bool {
@@ -156,97 +146,18 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
 }
 
 
-fn get_formatted_text(
+fn get_rich_text(
     stylesheet: &StyleSheet,
     font_family: &'static FontFamily,
     input_buffer: &TrackedContent<String>,
     console_buffer: &TrackedContent<Vec<EvalResult>>,
-    win_shape: (u32, u32)
-) -> TrackedContent<FormattedRichText> {
+) -> TrackedContent<RichText> {
 
-    let (win_w, _win_h) = win_shape;
-
-    let console_rich_text = get_console_rich_text(stylesheet, font_family, input_buffer.as_ref(), console_buffer.as_ref());
-    let formatted = format_rich_lines(&console_rich_text, win_w);
-
-    let new_cid = ContentId::from_hash((
-        input_buffer.get_id(),
-        console_buffer.get_id(),
-        formatted.w,
-    ));
-
-    TrackedContent::new_with_id(formatted, new_cid)
-}
-
-struct ConsoleCanvasRenderer {
-    formatted: TrackedContent<FormattedRichText>,
-}
-
-
-impl uitk::TileRenderer for ConsoleCanvasRenderer {
-    fn shape(&self) -> (u32, u32) {
-        let FormattedRichText { w, h, .. } = *self.formatted.as_ref();
-        (w, h)
-    }
-
-    fn tile_shape(&self) -> (u32, u32) {
-        let FormattedRichText { w, .. } = *self.formatted.as_ref();
-        (
-            u32::max(w, 200),
-            200
-        )
-    }
-
-    fn content_id(&self, tile_rect: &Rect) -> ContentId {
-
-        let FormattedRichText { w, h, .. } = *self.formatted.as_ref();
-        let text_rect = Rect { x0: 0, y0: 0, w, h};
-
-        if tile_rect.intersection(&text_rect).is_none() {
-            ContentId::from_hash((tile_rect.w, tile_rect.h))
-        } else {
-            ContentId::from_hash((
-                tile_rect,
-                self.formatted.get_id()
-            ))
-        }
-    }
-
-    fn render<F: FbViewMut>(&self, dst_fb: &mut F, tile_rect: &Rect) {
-
-        //log::debug!("Rendering terminal tile");
-
-        let Rect { x0: ox, y0: oy, .. } = *tile_rect;
-
-        if ox != 0 {
-            return;
-        }
-
-        let mut y = 0;
-        for line in self.formatted.as_ref().lines.iter() {
-            // Bounding box of line in source
-            let line_rect = Rect {
-                x0: 0,
-                y0: y,
-                w: line.w,
-                h: line.h,
-            };
-
-            if tile_rect.intersection(&line_rect).is_some() {
-                draw_rich_slice(dst_fb, &line.chars, 0, y - oy);
-            }
-
-            y += line.h as i64;
-        }
-    }
-}
-
-fn get_console_rich_text(stylesheet: &StyleSheet, font_family: &'static FontFamily, input_buffer: &String, console_buffer: &Vec<EvalResult>) -> RichText {
     let font = font_family.get_default();
 
     let mut console_rich_text = RichText::new();
 
-    for res in console_buffer.iter() {
+    for res in console_buffer.as_ref().iter() {
         console_rich_text.add_part(">>> ", stylesheet.colors.yellow, font, None);
         console_rich_text.add_part(&res.cmd, stylesheet.colors.text, font, None);
 
@@ -267,5 +178,10 @@ fn get_console_rich_text(stylesheet: &StyleSheet, font_family: &'static FontFami
     console_rich_text.add_part(">>> ", stylesheet.colors.text, font, None);
     console_rich_text.add_part(input_buffer.as_ref(), stylesheet.colors.text, font, None);
 
-    console_rich_text
+    let new_cid = ContentId::from_hash((
+        input_buffer.get_id(),
+        console_buffer.get_id(),
+    ));
+
+    TrackedContent::new_with_id(console_rich_text, new_cid)
 }

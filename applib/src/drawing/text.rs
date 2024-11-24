@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use lazy_static::lazy_static;
 
 struct FontSpec {
+    name: &'static str,
     bitmap_png: &'static [u8],
     nb_chars: usize,
     char_h: usize,
@@ -14,6 +15,7 @@ struct FontSpec {
 
 fn load_font(spec: &FontSpec) -> Font {
     let FontSpec {
+        name,
         nb_chars,
         char_h,
         char_w,
@@ -28,6 +30,7 @@ fn load_font(spec: &FontSpec) -> Font {
     }
 
     Font {
+        name,
         bitmap,
         nb_chars,
         char_h,
@@ -58,6 +61,7 @@ impl FontFamily {
 }
 
 pub struct Font {
+    pub name: &'static str,
     bitmap: Vec<u8>,
     pub nb_chars: usize,
     pub char_h: usize,
@@ -68,6 +72,7 @@ pub struct Font {
 lazy_static! {
     pub static ref DEFAULT_FONT_FAMILY: FontFamily = FontFamily::from_font_specs(&[
         FontSpec {
+            name: "default",
             bitmap_png: include_bytes!("../../fonts/default.png"),
             nb_chars: 95,
             char_h: 24,
@@ -75,6 +80,7 @@ lazy_static! {
             base_y: 19
         },
         FontSpec {
+            name: "hack_15",
             bitmap_png: include_bytes!("../../fonts/hack_15.png"),
             nb_chars: 95,
             char_h: 18,

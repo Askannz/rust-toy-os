@@ -2,8 +2,11 @@ use alloc::collections::BTreeMap;
 use alloc::string::ToString;
 use alloc::vec;
 use alloc::{borrow::ToOwned, string::String};
+use applib::content::TrackedContent;
 use applib::geometry::Point2D;
 use applib::{BorrowedPixels, Color};
+use applib::content::UuidProvider;
+use core::fmt::Write;
 use core::mem::size_of;
 use smoltcp::iface::SocketHandle;
 
@@ -34,13 +37,14 @@ impl WasmEngine {
     pub fn instantiate_app(
         &self,
         system: &mut System,
+        uuid_provider: &mut UuidProvider,
         input_state: &InputState,
         wasm_code: &[u8],
         app_name: &str,
         init_rect: &Rect,
     ) -> WasmApp {
         let module = Module::new(&self.engine, wasm_code).unwrap();
-        let store_data = StoreData::new(app_name);
+        let store_data = StoreData::new(uuid_provider, app_name);
         let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
         let mut linker = <Linker<StoreData>>::new(&self.engine);
 
@@ -57,7 +61,7 @@ impl WasmEngine {
 
         let mut store_wrapper = StoreWrapper { store };
 
-        store_wrapper.with_context(system, input_state, init_rect, |store| {
+        store_wrapper.with_context(system, uuid_provider, input_state, init_rect, |store| {
             log::info!("Initializing {}", app_name);
             wasm_init
                 .call(store, ())
@@ -156,6 +160,7 @@ impl StoreWrapper {
     fn with_context<F, T>(
         &mut self,
         system: &mut System,
+        uuid_provider: &mut UuidProvider,
         input_state: &InputState,
         win_rect: &Rect,
         mut func: F,
@@ -167,6 +172,7 @@ impl StoreWrapper {
         self.store.as_context_mut().data_mut().step_context = Some(StepContext {
             // reference -> raw pointer conversions here
             system,
+            uuid_provider,
             input_state,
 
             win_rect: win_rect.clone(),
@@ -208,10 +214,12 @@ struct StoreData {
     step_context: Option<StepContext>,
     net_recv: usize,
     net_sent: usize,
+    console_output: TrackedContent<String>,
 }
 
 struct StepContext {
     system: *mut System,
+    uuid_provider: *mut UuidProvider,
     input_state: *const InputState,
     win_rect: Rect,
     timings: BTreeMap<String, u64>,
@@ -219,13 +227,16 @@ struct StepContext {
 
 struct StepContextView<'a> {
     system: &'a mut System,
+    uuid_provider: &'a mut UuidProvider,
     input_state: &'a InputState,
     win_rect: &'a Rect,
     timings: &'a mut BTreeMap<String, u64>,
+
+    console_output: &'a mut TrackedContent<String>,
 }
 
 impl StoreData {
-    fn new(app_name: &str) -> Self {
+    fn new(uuid_provider: &mut UuidProvider,  app_name: &str) -> Self {
         StoreData {
             app_name: app_name.to_owned(),
             framebuffer: None,
@@ -233,6 +244,7 @@ impl StoreData {
             step_context: None,
             net_recv: 0,
             net_sent: 0,
+            console_output: TrackedContent::new(String::new(), uuid_provider),
         }
     }
 
@@ -240,15 +252,21 @@ impl StoreData {
     where
         F: FnMut(StepContextView) -> T,
     {
-        let step_context = self.step_context.as_mut().expect("No StepContext set");
+
+        let Self { step_context, console_output, .. } = self;
+
+        let step_context = step_context.as_mut().expect("No StepContext set");
 
         let step_context_view = StepContextView {
             // Safety: thanks to the StoreDataWrapper scope, those pointers should always be valid
             system: unsafe { step_context.system.as_mut().unwrap() },
+            uuid_provider: unsafe { step_context.uuid_provider.as_mut().unwrap() },
             input_state: unsafe { step_context.input_state.as_ref().unwrap() },
 
             win_rect: &step_context.win_rect,
             timings: &mut step_context.timings,
+
+            console_output
         };
 
         func(step_context_view)
@@ -266,6 +284,7 @@ impl WasmApp {
     pub fn step(
         &mut self,
         system: &mut System,
+        uuid_provider: &mut UuidProvider,
         input_state: &InputState,
         win_rect: &Rect,
         is_foreground: bool,
@@ -292,7 +311,7 @@ impl WasmApp {
         let t0 = system.clock.time();
 
         let step_ret = self.store_wrapper
-            .with_context(system, &relative_input_state, win_rect, |mut store| {
+            .with_context(system, uuid_provider, &relative_input_state, win_rect, |mut store| {
                 self.wasm_step.call(&mut store, ())
             })
             .map_err(|wasm_err| anyhow::format_err!(wasm_err));
@@ -326,6 +345,10 @@ impl WasmApp {
 
     pub fn get_framebuffer(&self) -> Option<Framebuffer<BorrowedPixels>> {
         self.store_wrapper.get_framebuffer(&self.instance)
+    }
+
+    pub fn get_console_output(&self) -> &TrackedContent<String> {
+        &self.store_wrapper.store.data().console_output
     }
 }
 
@@ -630,7 +653,7 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         }
     );
 
-    linker_impl!(m, "host_log", |caller: Caller<StoreData>,
+    linker_impl!(m, "host_log", |mut caller: Caller<StoreData>,
                                  addr: i32,
                                  len: i32,
                                  level| {
@@ -638,7 +661,15 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
 
         let s = core::str::from_utf8(mem_slice)
             .expect("Not UTF-8")
-            .trim_end();
+            .trim_end()
+            .to_owned();
+
+        caller.data_mut().with_step_context(|step_context| {
+            let StepContextView { uuid_provider, console_output, .. } = step_context;
+            let console_output = console_output.mutate(uuid_provider);
+            console_output.write_str(&s).unwrap();
+            console_output.write_char('\n').unwrap();
+        });
 
         match level {
             1 => log::error!("{}", s),

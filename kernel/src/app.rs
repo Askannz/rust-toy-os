@@ -8,10 +8,11 @@ use applib::{BorrowedPixels, StyleSheet};
 
 use crate::shell::{pie_menu, PieDrawCalls, PieMenuEntry};
 use applib::drawing::primitives::draw_rect;
-use applib::drawing::text::{draw_str, Font};
+use applib::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText};
 use applib::geometry::{Point2D, Vec2D};
 use applib::uitk::{self, UiContext};
 use applib::{input::InputState, Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
+use applib::content::UuidProvider;
 
 use crate::{app, resources};
 use crate::system::System;
@@ -73,7 +74,11 @@ pub struct App {
 pub enum AppState {
     Init,
     Running { wasm_app: WasmApp },
-    Paused { wasm_app: WasmApp },
+    Paused { 
+        wasm_app: WasmApp,
+        console_scroll_offsets: (i64, i64),
+        console_dragging: (bool, bool),
+    },
     Crashed { error: anyhow::Error }
 }
 
@@ -276,9 +281,13 @@ pub fn run_apps<F: FbViewMut>(
                         AppState::Running { wasm_app } => {
                             log::info!("Pausing app {}", app.descriptor.name);
                             *is = AppsInteractionState::Idle;
-                            AppState::Paused { wasm_app }
+                            AppState::Paused { 
+                                wasm_app,
+                                console_scroll_offsets: (0, 0),
+                                console_dragging: (false, false),
+                            }
                         },
-                        AppState::Paused { wasm_app } => {
+                        AppState::Paused { wasm_app, .. } => {
                             log::info!("Resuming app {}", app.descriptor.name);
                             *is = AppsInteractionState::Idle;
                             AppState::Running { wasm_app }
@@ -342,7 +351,7 @@ pub fn run_apps<F: FbViewMut>(
     //
     // Step and draw apps
 
-    let UiContext { fb, .. } = uitk_context;
+    // let UiContext { fb, .. } = uitk_context;
 
     let font = uitk_context.font_family.get_default();
 
@@ -367,7 +376,7 @@ pub fn run_apps<F: FbViewMut>(
 
         let is_foreground = i == n - 1;
 
-        draw_decorations(*fb, &stylesheet, font, app_name, &deco, highlight);
+        draw_decorations(uitk_context.fb, &stylesheet, font, app_name, &deco, highlight);
 
         //fb.copy_from_fb(app_fb, deco.content_rect.origin(), false);
     
@@ -380,6 +389,7 @@ pub fn run_apps<F: FbViewMut>(
                 log::info!("Initializing app {}", desc.name);
                 let wasm_app = wasm_engine.instantiate_app(
                     system,
+                    uitk_context.uuid_provider,
                     input_state,
                     desc.data,
                     desc.name,
@@ -391,21 +401,34 @@ pub fn run_apps<F: FbViewMut>(
 
             AppState::Running { wasm_app } => {
                 
-                let wasm_res = wasm_app.step(system, input_state, &app.rect, is_foreground);
+                let wasm_res = wasm_app.step(system, uitk_context.uuid_provider, input_state, &app.rect, is_foreground);
 
                 match wasm_res {
                     Ok(()) => if let Some(app_fb) = wasm_app.get_framebuffer() {
-                        fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false)
+                        uitk_context.fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false)
                     },
                     Err(error) => app.app_state = AppState::Crashed { error },
                 }
             },
 
-            AppState::Paused { wasm_app } => {
+            AppState::Paused { wasm_app, console_scroll_offsets, console_dragging } => {
                 if let Some(app_fb) = wasm_app.get_framebuffer() {
-                    fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false)
+                    uitk_context.fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false)
                 }
-                draw_rect(*fb, &deco.content_rect, Color::rgba(100, 100, 100, 100), true);
+                draw_rect(uitk_context.fb, &deco.content_rect, Color::rgba(100, 100, 100, 100), true);
+
+                let console_text = wasm_app.get_console_output();
+
+                let Rect { x0, y0, w, h } = deco.content_rect;
+                let console_rect = Rect { x0, y0: y0 + (h / 2) as i64, w, h: h / 2 };
+
+                uitk_context.scrollable_text(
+                    &console_rect,
+                    console_text,
+                    console_scroll_offsets,
+                    console_dragging,
+                    false,
+                );
             },
 
             AppState::Crashed { error } => {
@@ -413,7 +436,7 @@ pub fn run_apps<F: FbViewMut>(
                 let font = uitk_context.font_family.get_default();
                 let (x0, y0) = deco.content_rect.origin();
                 draw_str(
-                    *fb,
+                    uitk_context.fb,
                     &format!("{:?}", error),
                     x0, y0,
                     font,
@@ -425,7 +448,7 @@ pub fn run_apps<F: FbViewMut>(
     }
 
     if let Some(draw_calls) = pie_draw_calls {
-        draw_calls.draw(*fb);
+        draw_calls.draw(uitk_context.fb);
     }
 }
 

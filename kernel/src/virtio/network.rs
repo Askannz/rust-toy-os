@@ -22,6 +22,8 @@ pub struct VirtioNetwork {
     pub mac_addr: [u8; 6],
     receiveq1: VirtioQueue<Q_SIZE, BUF_SIZE>,
     transmitq1: VirtioQueue<Q_SIZE, BUF_SIZE>,
+    recv_counter: usize,
+    sent_counter: usize,
 }
 
 #[repr(C)]
@@ -58,6 +60,8 @@ impl VirtioNetwork {
             mac_addr: device_config.mac,
             receiveq1,
             transmitq1,
+            recv_counter: 0,
+            sent_counter: 0,
         }
     }
 
@@ -71,6 +75,8 @@ impl VirtioNetwork {
                 .try_push(&[QueueMessage::<VirtioNetPacket>::DevWriteOnly])
                 .unwrap();
         }
+
+        self.recv_counter += virtio_packet.data.len();
 
         Some(virtio_packet.data)
     }
@@ -110,6 +116,19 @@ impl VirtioNetwork {
                 break;
             }
         }
+
+        self.sent_counter += len;
+    }
+
+    pub fn get_counters(&mut self) -> (usize, usize) {
+
+        let recv_counter = self.recv_counter;
+        let sent_counter = self.sent_counter;
+        
+        self.recv_counter = 0;
+        self.sent_counter = 0;
+
+        (recv_counter, sent_counter)
     }
 }
 

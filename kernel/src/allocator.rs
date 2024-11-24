@@ -36,6 +36,21 @@ impl SimpleAllocator {
             })
         }
     }
+
+    pub fn get_stats(&self) -> (usize, usize) {
+
+        let heap = unsafe {
+            self.heap.get().as_ref().unwrap().as_ref().expect("Allocator not initialized")
+        };
+
+        let p0 = heap.start as usize;
+        let p1 = heap.ptr as usize;
+
+        let used = p1 - p0;
+        let total = heap.size;
+
+        (used, total)
+    }
 }
 
 unsafe impl Sync for SimpleAllocator {}

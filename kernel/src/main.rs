@@ -131,6 +131,9 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     log::info!("Entering main loop");
 
+    let mut recv_counter_total = 0;
+    let mut sent_counter_total = 0;
+
     loop {
         {
             let System {
@@ -182,6 +185,13 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         }
 
         virtio_gpu.flush();
+
+        // let (heap_used, heap_total) = memory::ALLOCATOR.get_stats();
+        // log::debug!("Memory: {}/{} MB", heap_used / 1_000_000, heap_total / 1_000_000);
+        // let (recv_counter, sent_counter) = system.tcp_stack.get_counters();
+        // recv_counter_total += recv_counter;
+        // sent_counter_total += sent_counter;
+        // log::debug!("Network: {} kB down / {} kB up", recv_counter_total / 1_000, sent_counter_total / 1_000);
     }
 
     //loop { x86_64::instructions::hlt(); }

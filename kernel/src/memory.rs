@@ -8,7 +8,7 @@ use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use super::allocator::{SimpleAllocator};
 
 #[global_allocator]
-static ALLOCATOR: SimpleAllocator = SimpleAllocator::new();
+pub static ALLOCATOR: SimpleAllocator = SimpleAllocator::new();
 
 pub static mut MAPPER: OnceCell<MemoryMapper> = OnceCell::new();
 

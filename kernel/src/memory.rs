@@ -29,13 +29,14 @@ pub fn init_allocator(memory_map: &MemoryMap) {
         desc.page_count * 4096,
     );
 
-    // let mapper = get_mapper();
+    let mapper = get_mapper();
 
-    // let ptr_start = PhysAddr::new(desc.phys_start);
+    let heap_addr_phys = PhysAddr::new(desc.phys_start);
+    let heap_add_virt = mapper.phys_to_virt(heap_addr_phys);
 
-    // unsafe {
-    //     ALLOCATOR.init(desc.phys_start as usize, 4096 * desc.page_count as usize);
-    // }
+    let heap_size = 4096 * desc.page_count as usize;
+
+    ALLOCATOR.init(heap_add_virt, heap_size);
 }
 
 

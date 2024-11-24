@@ -64,8 +64,8 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     log::info!("Exited UEFI boot services");
 
-    memory::init_allocator(&memory_map);
     memory::init_mapper();
+    memory::init_allocator(&memory_map);
 
     let mut pci_devices = pci::enumerate();
 

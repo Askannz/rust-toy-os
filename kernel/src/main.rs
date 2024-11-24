@@ -34,6 +34,7 @@ mod virtio;
 mod wasm;
 mod topbar;
 mod allocator;
+mod stats;
 
 use time::SystemClock;
 
@@ -100,11 +101,16 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let mut input_state = InputState::new(w, h);
 
+    let app_names: Vec<&str> = APPLICATIONS.iter().map(|desc| desc.name).collect();
+    let heap_size = memory::ALLOCATOR.size();
+    let system_stats = stats::SystemStats::new(heap_size, &app_names);
+
     let mut system = System {
         clock,
         tcp_stack,
         rng: SmallRng::seed_from_u64(0),
         stylesheet: &STYLESHEET,
+        stats: system_stats,
     };
 
     let apps: Vec<App> = APPLICATIONS
@@ -131,10 +137,10 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     log::info!("Entering main loop");
 
-    let mut recv_counter_total = 0;
-    let mut sent_counter_total = 0;
-
     loop {
+
+        let t0 = system.clock.time();
+
         {
             let System {
                 clock, tcp_stack, ..
@@ -185,6 +191,29 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         }
 
         virtio_gpu.flush();
+
+        let (net_recv, net_sent) = system.tcp_stack.pop_counters();
+
+        let t1 = system.clock.time();
+
+        *system.stats.get_system_point_mut() = stats::SystemDataPoint {
+            heap_usage: memory::ALLOCATOR.get_usage(),
+            frametime_used: t1 - t0,
+            net_recv,
+            net_sent,
+        };
+
+        // DEBUG
+        // let system_stats = system.stats.get_system_point_mut();
+        // log::debug!("{:?}", system_stats);
+        // for app_desc in APPLICATIONS.iter() {
+        //     let app_stats = system.stats.get_app_point_mut(&app_desc.name);
+        //     log::debug!("{}: {:?}", app_desc.name, app_stats);
+        // }
+        let net_recv: usize = system.stats.get_system_history().map(|data_point| data_point.net_recv).sum();
+        log::debug!("Net recv: {} kB", net_recv / 1_000);
+
+        system.stats.next_frame();
 
         // let (heap_used, heap_total) = memory::ALLOCATOR.get_stats();
         // log::debug!("Memory: {}/{} MB", heap_used / 1_000_000, heap_total / 1_000_000);

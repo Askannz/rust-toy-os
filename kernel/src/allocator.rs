@@ -37,19 +37,32 @@ impl SimpleAllocator {
         }
     }
 
-    pub fn get_stats(&self) -> (usize, usize) {
+    pub fn size(&self) -> usize {
+        self.get_heap().size
+    }
 
-        let heap = unsafe {
-            self.heap.get().as_ref().unwrap().as_ref().expect("Allocator not initialized")
-        };
+    pub fn get_usage(&self) -> usize{
+
+        let heap = self.get_heap();
 
         let p0 = heap.start as usize;
         let p1 = heap.ptr as usize;
 
-        let used = p1 - p0;
-        let total = heap.size;
+        let usage = p1 - p0;
 
-        (used, total)
+        usage
+    }
+
+    fn get_heap(&self) -> &SimpleHeap {
+        unsafe {
+            self.heap.get().as_ref().unwrap().as_ref().expect("Allocator not initialized")
+        }
+    }
+
+    fn get_heap_mut(&self) -> &mut SimpleHeap {
+        unsafe {
+            self.heap.get().as_mut().unwrap().as_mut().expect("Allocator not initialized")
+        }
     }
 }
 
@@ -61,7 +74,7 @@ unsafe impl GlobalAlloc for SimpleAllocator {
         let size = layout.size();
         let align = layout.align();
 
-        let heap = self.heap.get().as_mut().unwrap().as_mut().expect("Allocator not initialized");
+        let heap = self.get_heap_mut();
 
         let offset = heap.ptr.align_offset(align);
         heap.ptr = heap.ptr.add(offset);

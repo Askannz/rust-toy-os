@@ -134,7 +134,7 @@ impl TcpStack {
             .poll(elapsed, &mut self.device, &mut self.sockets);
     }
 
-    pub fn get_counters(&mut self) -> (usize, usize) {
+    pub fn pop_counters(&mut self) -> (usize, usize) {
         self.device.virtio_dev.get_counters()
     }
 }

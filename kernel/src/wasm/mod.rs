@@ -16,6 +16,7 @@ use wasmi::{
 
 use applib::{input::InputState, FbViewMut, Framebuffer, Rect};
 
+use crate::stats::AppDataPoint;
 use crate::system::System;
 
 pub struct WasmEngine {
@@ -205,6 +206,8 @@ struct StoreData {
     framebuffer: Option<WasmFramebufferDef>,
     sockets_store: SocketsStore,
     step_context: Option<StepContext>,
+    net_recv: usize,
+    net_sent: usize,
 }
 
 struct StepContext {
@@ -228,6 +231,8 @@ impl StoreData {
             framebuffer: None,
             sockets_store: SocketsStore::new(),
             step_context: None,
+            net_recv: 0,
+            net_sent: 0,
         }
     }
 
@@ -266,6 +271,10 @@ impl WasmApp {
         is_foreground: bool,
     ) -> Result<(), anyhow::Error> {
 
+
+        //
+        // Getting app-local input state
+
         let relative_input_state = {
             let mut input_state = input_state.clone();
             if !is_foreground {
@@ -276,18 +285,43 @@ impl WasmApp {
             input_state
         };
 
-        self.store_wrapper
+
+        //
+        // Stepping WASM app
+
+        let t0 = system.clock.time();
+
+        let step_ret = self.store_wrapper
             .with_context(system, &relative_input_state, win_rect, |mut store| {
                 self.wasm_step.call(&mut store, ())
             })
-            .map_err(|wasm_err| anyhow::format_err!(wasm_err))?;
+            .map_err(|wasm_err| anyhow::format_err!(wasm_err));
+            
+        let t1 = system.clock.time();
 
 
-        // let mem = self.instance.get_memory(&store, "memory").unwrap();
-        // let mem_size = mem.size(store.as_context()) * 65_536;
-        // log::debug!("{}: {}MB", store.data().app_name, mem_size / 1_000_000);
+        //
+        // Filling app stats
 
-        Ok(())
+        let app_name = self.store_wrapper.store.data().app_name.as_str();
+        let app_stats = system.stats.get_app_point_mut(app_name);
+
+        let store = &self.store_wrapper.store;
+        let mem = self.instance.get_memory(store, "memory").unwrap();
+        let mem_size = mem.size(store.as_context()) * 65_536;
+
+        let net_recv = store.data().net_recv;
+        let net_sent = store.data().net_sent;
+
+        *app_stats = AppDataPoint  {
+            net_recv,
+            net_sent,
+            mem_used: mem_size as usize,
+            frametime_used: t1 - t0,
+        };
+
+
+        step_ret
     }
 
     pub fn get_framebuffer(&self) -> Option<Framebuffer<BorrowedPixels>> {
@@ -715,7 +749,7 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                                        len: i32,
                                        handle_id: i32|
      -> i32 {
-        let mut try_write = || -> anyhow::Result<i32> {
+        let mut try_write = || -> anyhow::Result<usize> {
             let buf = get_wasm_mem_slice(&mut caller, addr, len).to_vec();
 
             let socket_handle = caller
@@ -728,13 +762,14 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                 step_context.system.tcp_stack.write(socket_handle, &buf)
             })?;
 
-            let written_len: i32 = written_len.try_into().map_err(anyhow::Error::msg)?;
-
             Ok(written_len)
         };
 
         match try_write() {
-            Ok(written_len) => written_len,
+            Ok(written_len) => {
+                caller.data_mut().net_sent += written_len;
+                written_len as i32
+            },
             Err(err) => {
                 log::error!("{}", err);
                 -1
@@ -769,9 +804,9 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
 
             mem_data[addr..addr + read_len].copy_from_slice(&buf[..read_len]);
 
-            let read_len: i32 = read_len.try_into().unwrap();
+            caller.data_mut().net_recv += read_len;
 
-            Ok(read_len)
+            Ok(read_len as i32)
         };
 
         match try_read() {

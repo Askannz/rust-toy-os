@@ -64,6 +64,12 @@ pub struct AppsManager {
     z_ordered: Vec<App>
 }
 
+impl AppsManager {
+    fn get_by_name(&mut self, app_name: &str) -> &mut App {
+        self.z_ordered.iter_mut().find(|app| app.descriptor.name == app_name).expect("Unknown app")
+    }
+}
+
 pub struct App {
     pub app_state: AppState,
     pub descriptor: AppDescriptor,
@@ -262,20 +268,20 @@ pub fn run_apps<F: FbViewMut>(
             pie_draw_calls.replace(draw_calls);
 
             match selected {
-                Some(0) if pointer.left_click_trigger => {
+                Some("Close") => {
                     app.is_open = false;
                     *is = AppsInteractionState::Idle;
                 },
-                Some(1) if pointer.left_click_trigger => {
+                Some("Move") => {
                     let anchor = get_hold_anchor(pointer, &app.rect);
                     *is = AppsInteractionState::TitlebarHold { app_name, anchor, toggle: true };
                 },
-                Some(2) if pointer.left_click_trigger => {
+                Some("Reload") => {
                     log::info!("De-loading app {}", app.descriptor.name);
                     app.app_state = AppState::Init;
                     *is = AppsInteractionState::Idle;
                 },
-                Some(3) if pointer.left_click_trigger => {
+                Some("Pause") => {
 
                     // AppState::Init is just a placeholder for the swap
                     let tmp = core::mem::replace(&mut app.app_state, AppState::Init);
@@ -284,10 +290,17 @@ pub fn run_apps<F: FbViewMut>(
                         AppState::Running { wasm_app, .. } => {
                             log::info!("Pausing app {}", app.descriptor.name);
                             *is = AppsInteractionState::Idle;
-                            AppState::Paused { 
-                                wasm_app,
-                            }
+                            AppState::Paused { wasm_app }
                         },
+                        _ => tmp,
+                    };
+                },
+                Some("Resume") => {
+
+                    // AppState::Init is just a placeholder for the swap
+                    let tmp = core::mem::replace(&mut app.app_state, AppState::Init);
+
+                    app.app_state = match tmp {
                         AppState::Paused { wasm_app, .. } => {
                             log::info!("Resuming app {}", app.descriptor.name);
                             *is = AppsInteractionState::Idle;
@@ -297,9 +310,10 @@ pub fn run_apps<F: FbViewMut>(
                                 console_dragging: (false, false),
                             }
                         },
-                        _ => tmp
-                    }
-                },
+                        _ => tmp,
+                    };
+                }
+
                 _ if pointer.right_click_trigger || pointer.left_click_trigger => {
                     *is = AppsInteractionState::Idle;
                 }
@@ -324,9 +338,9 @@ pub fn run_apps<F: FbViewMut>(
             pie_draw_calls.replace(draw_calls);
 
             match selected {
-                Some(entry_index) if pointer.left_click_trigger => {
+                Some(selected_app_name) => {
 
-                    let app = &mut apps_manager.z_ordered[entry_index];
+                    let app = apps_manager.get_by_name(selected_app_name);
 
                     let deco = compute_decorations(app, input_state);
 

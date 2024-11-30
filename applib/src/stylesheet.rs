@@ -17,6 +17,7 @@ pub struct StyleSheetColors {
     pub yellow: Color,
     pub green: Color,
     pub blue: Color,
+    pub purple: Color,
     pub element: Color,
     pub text: Color,
     pub accent: Color,

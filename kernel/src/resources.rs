@@ -32,6 +32,8 @@ lazy_static! {
         Framebuffer::from_png(include_bytes!("../icons/play.png"));
     pub static ref PAUSE_ICON: Framebuffer<OwnedPixels> =
         Framebuffer::from_png(include_bytes!("../icons/pause.png"));
+    pub static ref INSPECT_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/inspect.png"));
     pub static ref BLANK_ICON: Framebuffer<OwnedPixels> = Framebuffer::new_owned(32, 32);
 
     //
@@ -41,6 +43,7 @@ lazy_static! {
         colors: StyleSheetColors {
             background: Color::rgb(0x44, 0x44, 0x44),
             blue: Color::rgb(0, 0, 150),
+            purple: Color::rgb(100, 10, 210),
             element: Color::rgb(100, 100, 100),
             green: Color::rgb(0, 180, 0),
             hover_overlay: Color::rgba(150, 150, 150, 100),

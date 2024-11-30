@@ -6,7 +6,7 @@ pub struct SystemStats {
 
     by_app: BTreeMap<&'static str, [AppDataPoint; HISTORY_SIZE]>,
     system: [SystemDataPoint; HISTORY_SIZE],
-    heap_total: usize,
+    pub heap_total: usize,
 
     ring_index: usize,
 }
@@ -72,14 +72,43 @@ impl SystemStats {
         app_history.get_mut(self.ring_index).unwrap()
     }
 
-    pub fn get_system_history(&self) -> impl Iterator<Item = &SystemDataPoint> {
-        get_ring_iterator(&self.system, self.ring_index)
+    pub fn get_system_history<T, F>(&self, selector: F) -> [T; HISTORY_SIZE]
+
+        where F: Fn(&SystemDataPoint) -> T
+    {
+        core::array::from_fn(|t| {
+            let dp = get_history_point(&self.system, self.ring_index, t);
+            selector(dp)
+        })
+
     }
 
-    pub fn get_app_history(&self,  app_name: &str) -> impl Iterator<Item = &AppDataPoint> {
+    pub fn get_app_history<T, F>(&self,  app_name: &str, selector: F) -> [T; HISTORY_SIZE]
+    
+        where F: Fn(&AppDataPoint) -> T
+    {
+
         let app_history = self.by_app.get(app_name).expect("Unknown app");
-        get_ring_iterator(app_history, self.ring_index)
+
+        core::array::from_fn(|t| {
+            let dp = get_history_point(app_history, self.ring_index, t);
+            selector(dp)
+        })
+
     }
+
+}
+
+fn get_history_point<T>(ring_buffer: &[T], ring_index: usize, t: usize) -> &T {
+
+    let ring_size = ring_buffer.len();
+
+    let i = match t <= ring_index {
+        true => ring_index - t,
+        false => ring_size - (t - ring_index),
+    };
+
+    &ring_buffer[i]
 
 }
 

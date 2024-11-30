@@ -7,12 +7,13 @@ use applib::input::PointerState;
 use applib::{BorrowedPixels, StyleSheet};
 
 use crate::shell::{pie_menu, PieDrawCalls, PieMenuEntry};
+use crate::stats::SystemStats;
 use applib::drawing::primitives::draw_rect;
 use applib::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText};
 use applib::geometry::{Point2D, Vec2D};
-use applib::uitk::{self, UiContext};
+use applib::uitk::{self, GraphSeries, UiContext};
 use applib::{input::InputState, Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
-use applib::content::UuidProvider;
+use applib::content::{TrackedContent, UuidProvider};
 
 use crate::{app, resources};
 use crate::system::System;
@@ -73,11 +74,13 @@ pub struct App {
 
 pub enum AppState {
     Init,
-    Running { wasm_app: WasmApp },
-    Paused { 
+    Running { 
         wasm_app: WasmApp,
         console_scroll_offsets: (i64, i64),
         console_dragging: (bool, bool),
+    },
+    Paused { 
+        wasm_app: WasmApp,
     },
     Crashed { error: anyhow::Error }
 }
@@ -278,19 +281,21 @@ pub fn run_apps<F: FbViewMut>(
                     let tmp = core::mem::replace(&mut app.app_state, AppState::Init);
 
                     app.app_state = match tmp {
-                        AppState::Running { wasm_app } => {
+                        AppState::Running { wasm_app, .. } => {
                             log::info!("Pausing app {}", app.descriptor.name);
                             *is = AppsInteractionState::Idle;
                             AppState::Paused { 
                                 wasm_app,
-                                console_scroll_offsets: (0, 0),
-                                console_dragging: (false, false),
                             }
                         },
                         AppState::Paused { wasm_app, .. } => {
                             log::info!("Resuming app {}", app.descriptor.name);
                             *is = AppsInteractionState::Idle;
-                            AppState::Running { wasm_app }
+                            AppState::Running { 
+                                wasm_app,
+                                console_scroll_offsets: (0, 0),
+                                console_dragging: (false, false),
+                            }
                         },
                         _ => tmp
                     }
@@ -396,63 +401,44 @@ pub fn run_apps<F: FbViewMut>(
                     &app.rect,
                 );
 
-                app.app_state = AppState::Running { wasm_app };
+                app.app_state = AppState::Running { 
+                    wasm_app,
+                    console_scroll_offsets: (0, 0),
+                    console_dragging: (false, false),
+                };
             },
 
-            AppState::Running { wasm_app } => {
+            AppState::Running { wasm_app, console_scroll_offsets, console_dragging } => {
                 
                 let wasm_res = wasm_app.step(system, uitk_context.uuid_provider, input_state, &app.rect, is_foreground);
 
                 match wasm_res {
                     Ok(()) => if let Some(app_fb) = wasm_app.get_framebuffer() {
-                        uitk_context.fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false)
+
+                        uitk_context.fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false);
+
+                        let console_log = wasm_app.get_console_output();
+
+                        app_audit_window(
+                            uitk_context,
+                            &app.descriptor.name,
+                            &deco.window_rect,
+                            &system.stats,
+                            console_log,
+                            console_scroll_offsets,
+                            console_dragging
+                        );
+
                     },
                     Err(error) => app.app_state = AppState::Crashed { error },
                 }
-
-
-                //
-                // DEBUG
-
-                let app_history = system.stats.get_app_history(&app.descriptor.name);
-                let graph_data: Vec<f32> = app_history.map(|dp| dp.frametime_used as f32).collect();
-
-                let Rect { x0, y0, w, .. } = deco.content_rect;
-                uitk_context.graph(
-                    &uitk::GraphConfig {
-                        rect: Rect { x0, y0, w, h: 40 },
-                        max_val: 1000.0 / 60.0,
-                        bg_color: Some(Color::BLACK),
-                    },
-                    &[
-                        uitk::GraphSeries {
-                            agg_mode: uitk::GraphAggMode::MAX,
-                            data: &graph_data,
-                            color: Color::YELLOW
-                        }
-                    ]
-                );
             },
 
-            AppState::Paused { wasm_app, console_scroll_offsets, console_dragging } => {
+            AppState::Paused { wasm_app } => {
                 if let Some(app_fb) = wasm_app.get_framebuffer() {
                     uitk_context.fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false)
                 }
                 draw_rect(uitk_context.fb, &deco.content_rect, Color::rgba(100, 100, 100, 100), true);
-
-                let console_text = wasm_app.get_console_output();
-
-                let Rect { x0, y0, w, h } = deco.content_rect;
-                let console_rect = Rect { x0, y0: y0 + (h / 2) as i64, w, h: h / 2 };
-
-                uitk_context.scrollable_text(
-                    &console_rect,
-                    console_text,
-                    console_scroll_offsets,
-                    console_dragging,
-                    false,
-                );
-
             },
 
             AppState::Crashed { error } => {
@@ -486,6 +472,128 @@ struct AppDecorations {
     titlebar_hover: bool,
     resize_hover: bool,
     window_hover: bool,
+}
+
+
+fn app_audit_window<F: FbViewMut>(
+    uitk_context: &mut uitk::UiContext<F>,
+    app_name: &str,
+    win_rect: &Rect,
+    stats: &SystemStats,
+    console_log: &TrackedContent<String>,
+    console_scroll_offsets: &mut (i64, i64),
+    console_dragging: &mut (bool, bool),
+) {
+
+    const ROW_H: u32 = 100;
+    const AUDIT_WIN_W: u32 = 300;
+    const AUDIT_WIN_H: u32 = 600;
+    const MARGIN_H: u32 = 20;
+    const TARGET_FRAMETIME: f32 = 1000.0 / crate::FPS_TARGET as f32;
+
+    let frametime_data = stats.get_app_history(app_name, |dp| dp.frametime_used as f32);
+    let mem_data = stats.get_app_history(app_name, |dp| dp.mem_used as f32);
+    let net_recv_data = stats.get_app_history(app_name, |dp| dp.net_recv as f32);
+    let net_sent_data = stats.get_app_history(app_name, |dp| dp.net_sent as f32);
+
+    let frametime_avg = frametime_data.iter().fold(0.0, |acc, v| acc + v / frametime_data.len() as f32);
+    let frametime_frac = frametime_avg / TARGET_FRAMETIME;
+
+    let mem_avg = mem_data.iter().fold(0.0, |acc, v| acc + v / mem_data.len() as f32);
+    let mem_frac = mem_avg / stats.heap_total as f32;
+
+    let history_duration_sec = TARGET_FRAMETIME * net_recv_data.len() as f32 / 1000.0;
+    let net_recv_rate = net_recv_data.iter().sum::<f32>() / history_duration_sec;
+    let net_sent_rate = net_sent_data.iter().sum::<f32>() / history_duration_sec;
+
+    struct AuditGraph<'a> {
+        name: &'a str,
+        max_val: f32,
+        series: &'a [GraphSeries<'a>],
+    }
+
+    let graph_specs = [
+        AuditGraph {
+            name: &format!("Frametime used ({:.1}%)", frametime_frac * 100.0),
+            max_val: 1000.0 / 60.0,
+            series: &[
+                uitk::GraphSeries {
+                    agg_mode: uitk::GraphAggMode::MAX,
+                    data: &frametime_data,
+                    color: Color::RED
+                }
+            ]
+        },
+        AuditGraph {
+            name: &format!("Memory usage ({:.1}%)", mem_frac * 100.0),
+            max_val: 10_000_000.0,
+            series: &[
+                uitk::GraphSeries {
+                    agg_mode: uitk::GraphAggMode::MAX,
+                    data: &mem_data,
+                    color: Color::GREEN
+                }
+            ]
+        },
+        AuditGraph {
+            name: &format!(
+                "Network (up/down {:.1}/{:.1} kB/s)",
+                net_sent_rate / 1000.0, net_recv_rate / 1000.0, 
+            ),
+            max_val: 1_000.0,
+            series: &[
+                uitk::GraphSeries {
+                    agg_mode: uitk::GraphAggMode::SUM,
+                    data: &net_recv_data,
+                    color: Color::BLUE
+                },
+                uitk::GraphSeries {
+                    agg_mode: uitk::GraphAggMode::SUM,
+                    data: &net_sent_data,
+                    color: Color::YELLOW
+                },
+            ]
+        },
+    ];
+
+    let mut y = win_rect.y0;
+    let x = win_rect.x0 + win_rect.w as i64;
+    for spec in graph_specs {
+
+        y += MARGIN_H as i64;
+
+        let font = uitk_context.font_family.get_default();
+        let stylesheet = &uitk_context.stylesheet;
+        draw_str(uitk_context.fb, spec.name, x, y, font, stylesheet.colors.text, None);
+
+        y += font.char_h as i64;
+
+        let graph_h = ROW_H - font.char_h as u32 - MARGIN_H;
+
+        uitk_context.graph(
+            &uitk::GraphConfig {
+                rect: Rect { x0: x, y0: y, w: AUDIT_WIN_W, h: graph_h },
+                max_val: spec.max_val,
+                bg_color: Some(uitk_context.stylesheet.colors.element),
+            },
+            spec.series,
+        );
+
+        y += graph_h as i64;
+    }
+
+    y += MARGIN_H as i64;
+
+    let console_rect = Rect { x0: x, y0: y, w: AUDIT_WIN_W, h: AUDIT_WIN_H - (y - win_rect.y0) as u32 };
+
+    uitk_context.scrollable_text(
+        &console_rect,
+        console_log,
+        console_scroll_offsets,
+        console_dragging,
+        false,
+    );
+
 }
 
 

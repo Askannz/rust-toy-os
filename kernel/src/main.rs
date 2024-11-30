@@ -48,7 +48,7 @@ use resources::{APPLICATIONS, WALLPAPER, STYLESHEET};
 use system::System;
 use wasm::WasmEngine;
 
-const FPS_TARGET: f64 = 60.0;
+pub const FPS_TARGET: f64 = 60.0;
 const LIMIT_FPS: bool = true;
 
 static LOGGER: logging::SerialLogger = logging::SerialLogger;
@@ -203,15 +203,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             net_sent,
         };
 
-        // DEBUG
-        // let system_stats = system.stats.get_system_point_mut();
-        // log::debug!("{:?}", system_stats);
-        // for app_desc in APPLICATIONS.iter() {
-        //     let app_stats = system.stats.get_app_point_mut(&app_desc.name);
-        //     log::debug!("{}: {:?}", app_desc.name, app_stats);
-        // }
-        let net_recv: usize = system.stats.get_system_history().map(|data_point| data_point.net_recv).sum();
-        log::debug!("Net recv: {} kB", net_recv / 1_000);
 
         system.stats.next_frame();
 

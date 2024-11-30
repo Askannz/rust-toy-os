@@ -312,6 +312,10 @@ impl WasmApp {
 
         let step_ret = self.store_wrapper
             .with_context(system, uuid_provider, &relative_input_state, win_rect, |mut store| {
+
+                store.data_mut().net_recv = 0;
+                store.data_mut().net_sent = 0;
+
                 self.wasm_step.call(&mut store, ())
             })
             .map_err(|wasm_err| anyhow::format_err!(wasm_err));

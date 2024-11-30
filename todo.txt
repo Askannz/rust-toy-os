@@ -4,6 +4,7 @@
 * gpu crash after a while
 * clicks go through scrollbars
 * scrollbars interfere with resize button
+* resizing paused apps is broken
 
 # Refactorings
 
@@ -19,6 +20,7 @@
 * app crash demo
 * app log stream
 * resumable tile rendering
+* allow to disable caching in dyn canvas
 * nested pie menus
 * choose proper style for UI (color, fonts, etc)
 * selectable color palette

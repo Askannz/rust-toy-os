@@ -9,7 +9,7 @@ use applib::{BorrowedPixels, StyleSheet};
 use crate::shell::{pie_menu, PieDrawCalls, PieMenuEntry};
 use crate::stats::SystemStats;
 use applib::drawing::primitives::draw_rect;
-use applib::drawing::text::{draw_rich_slice, draw_str, format_rich_lines, Font, RichText};
+use applib::drawing::text::{draw_line_in_rect, draw_rich_slice, draw_str, format_rich_lines, Font, RichText, TextJustification};
 use applib::geometry::{Point2D, Vec2D};
 use applib::uitk::{self, GraphSeries, UiContext};
 use applib::{input::InputState, Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
@@ -104,7 +104,7 @@ impl AppAuditMode {
         &mut self,
         uitk_context: &mut uitk::UiContext<F>,
         app_name: &str,
-        win_rect: &Rect,
+        deco: &AppDecorations,
         stats: &SystemStats,
         console_log: &TrackedContent<String>,
     ) {
@@ -115,7 +115,7 @@ impl AppAuditMode {
                 app_audit_window(
                     uitk_context,
                     app_name,
-                    win_rect,
+                    deco,
                     stats,
                     console_log,
                     console_scroll_offsets,
@@ -512,7 +512,7 @@ pub fn run_apps<F: FbViewMut>(
                         audit_mode.audit_window(
                             uitk_context,
                             &app.descriptor.name,
-                            &deco.window_rect,
+                            &deco,
                             &system.stats,
                             wasm_app.get_console_output(),
                         );
@@ -532,7 +532,7 @@ pub fn run_apps<F: FbViewMut>(
                 audit_mode.audit_window(
                     uitk_context,
                     &app.descriptor.name,
-                    &deco.window_rect,
+                    &deco,
                     &system.stats,
                     wasm_app.get_console_output(),
                 );
@@ -575,7 +575,7 @@ struct AppDecorations {
 fn app_audit_window<F: FbViewMut>(
     uitk_context: &mut uitk::UiContext<F>,
     app_name: &str,
-    win_rect: &Rect,
+    deco: &AppDecorations,
     stats: &SystemStats,
     console_log: &TrackedContent<String>,
     console_scroll_offsets: &mut (i64, i64),
@@ -584,7 +584,7 @@ fn app_audit_window<F: FbViewMut>(
 
     const ROW_H: u32 = 70;
     const AUDIT_WIN_W: u32 = 300;
-    const AUDIT_WIN_H: u32 = 600;
+    const MIN_AUDIT_WIN_H: u32 = 400;
     const MARGIN_H: u32 = 20;
     const TARGET_FRAMETIME: f32 = 1000.0 / crate::FPS_TARGET as f32;
 
@@ -653,8 +653,35 @@ fn app_audit_window<F: FbViewMut>(
         },
     ];
 
-    let mut y = win_rect.y0;
-    let x = win_rect.x0 + win_rect.w as i64;
+    let audit_win_h = u32::max(MIN_AUDIT_WIN_H, deco.window_rect.h);
+    let mut y = deco.window_rect.y0;
+    let x = deco.window_rect.x0 + deco.window_rect.w as i64;
+
+    let draw_section_header = |uitk_context: &mut uitk::UiContext<F>, y: &mut i64, title: &str| {
+
+        let stylesheet = &uitk_context.stylesheet;
+        let font = uitk_context.font_family.get_default();
+
+        let bar_rect_1 = Rect { x0: x, y0: *y, w: AUDIT_WIN_W / 2, h: deco.titlebar_rect.h };
+        draw_rect(
+            uitk_context.fb,
+            &bar_rect_1,
+            stylesheet.colors.background,
+            false
+        );
+        draw_line_in_rect(
+            uitk_context.fb,
+            title,
+            &bar_rect_1,
+            font,
+            stylesheet.colors.text,
+            TextJustification::Left
+        );
+        *y = *y + deco.titlebar_rect.h as i64;
+    };
+
+    draw_section_header(uitk_context, &mut y, "Resources");
+
     for spec in graph_specs {
 
         y += MARGIN_H as i64;
@@ -679,9 +706,15 @@ fn app_audit_window<F: FbViewMut>(
         y += graph_h as i64;
     }
 
-    y += MARGIN_H as i64;
+    y += 2 * MARGIN_H as i64;
 
-    let console_rect = Rect { x0: x, y0: y, w: AUDIT_WIN_W, h: AUDIT_WIN_H - (y - win_rect.y0) as u32 };
+    draw_section_header(uitk_context, &mut y, "Console log");
+
+    let console_rect = Rect { 
+        x0: x, y0: y,
+        w: AUDIT_WIN_W,
+        h: audit_win_h - (y - deco.window_rect.y0) as u32
+    };
 
     uitk_context.scrollable_text(
         &console_rect,

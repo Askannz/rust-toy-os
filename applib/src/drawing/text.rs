@@ -4,6 +4,8 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
 
+use super::primitives::draw_rect;
+
 struct FontSpec {
     name: &'static str,
     bitmap_png: &'static [u8],
@@ -90,6 +92,36 @@ lazy_static! {
     ]);
 }
 
+#[derive(Clone, Copy)]
+pub enum TextJustification { Left, Center, Right }
+
+pub fn draw_line_in_rect<F: FbViewMut>(
+    fb: &mut F,
+    s: &str,
+    rect: &Rect,
+    font: &Font,
+    color: Color,
+    justif: TextJustification
+) {
+
+    let text_w = (font.char_w * s.len()) as i64;
+    let (xc, yc) = rect.center();
+
+    let text_y0 = yc - font.char_h as i64 / 2;
+    let pad = match text_y0 > rect.y0 {
+        true => text_y0 - rect.y0,
+        false => 0
+    };
+
+    let text_x0 = match justif {
+        TextJustification::Left => rect.x0 + pad,
+        TextJustification::Center => xc - text_w / 2,
+        TextJustification::Right => rect.x0 - rect.w as i64 - pad,
+    };
+
+    draw_str(fb, s, text_x0, text_y0, font, color, None);
+}
+
 pub fn draw_str<F: FbViewMut>(
     fb: &mut F,
     s: &str,
@@ -99,9 +131,16 @@ pub fn draw_str<F: FbViewMut>(
     color: Color,
     bg_color: Option<Color>,
 ) {
+
+    if let Some(bg_color) = bg_color {
+        let text_w = (font.char_w * s.len()) as u32;
+        let rect = Rect { x0, y0, w: text_w, h: font.char_h as u32 };
+        draw_rect(fb, &rect, bg_color, true);
+    }
+
     let mut x = x0;
     for c in s.chars() {
-        draw_char(fb, c, x, y0, font, color, bg_color, true);
+        draw_char(fb, c, x, y0, font, color, true);
         x += font.char_w as i64;
     }
 }
@@ -113,7 +152,6 @@ pub fn draw_char<F: FbViewMut>(
     y0: i64,
     font: &Font,
     color: Color,
-    bg_color: Option<Color>,
     blend: bool,
 ) {
     let mut c = c as u8;
@@ -148,24 +186,14 @@ pub fn draw_char<F: FbViewMut>(
             let val_font = font.bitmap[i_font];
             let is_in_font = val_font > 0;
 
-            let txt_color = Color::rgba(r, g, b, val_font);
+            if !is_in_font { continue; }
 
-            let new_color = match blend {
-                true => match fb.get_pixel(x, y) {
-                    Some(curr_color) => match is_in_font {
-                        true => Some(blend_colors(txt_color, curr_color)),
-                        false => bg_color.map(|bg_color| blend_colors(bg_color, curr_color)),
-                    },
-                    None => None,
-                },
-
-                false => match is_in_font {
-                    true => Some(txt_color),
-                    false => bg_color,
-                },
-            };
-
-            if let Some(new_color) = new_color {
+            if let Some(curr_color) = fb.get_pixel(x, y) {
+                let txt_color = Color::rgba(r, g, b, val_font);
+                let new_color = match blend {
+                    true => blend_colors(txt_color, curr_color),
+                    false => txt_color,
+                };
                 fb.set_pixel(x, y, new_color);
             }
         }
@@ -185,19 +213,17 @@ impl RichText {
         s: &str,
         color: Color,
         font: &'static Font,
-        bg_color: Option<Color>,
     ) {
         self.0.extend(s.chars().map(|c| RichChar {
             c,
             color,
             font,
-            bg_color,
         }));
     }
 
-    pub fn from_str(s: &str, color: Color, font: &'static Font, bg_color: Option<Color>) -> Self {
+    pub fn from_str(s: &str, color: Color, font: &'static Font) -> Self {
         let mut t = Self::new();
-        t.add_part(s, color, font, bg_color);
+        t.add_part(s, color, font);
         t
     }
 
@@ -219,7 +245,6 @@ pub struct RichChar {
     c: char,
     color: Color,
     font: &'static Font,
-    bg_color: Option<Color>,
 }
 
 pub struct FormattedRichLine {
@@ -322,7 +347,6 @@ pub fn draw_rich_slice<F: FbViewMut>(fb: &mut F, rich_slice: &[RichChar], x0: i6
             y0 + dy,
             rich_char.font,
             rich_char.color,
-            rich_char.bg_color,
             true,
         );
         x += rich_char.font.char_w as i64;

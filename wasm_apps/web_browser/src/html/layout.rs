@@ -202,7 +202,7 @@ fn parse_node<'b>(
             let color = if link { Color::BLUE } else { Color::BLACK };
 
             let text_max_w = i64::max(10, page_max_w as i64 - x0) as u32;
-            let rich_text = RichText::from_str(text, color, font, None);
+            let rich_text = RichText::from_str(text, color, font);
             let formatted = format_rich_lines(&rich_text, text_max_w);
 
             let w = formatted.w + m.left + m.right;

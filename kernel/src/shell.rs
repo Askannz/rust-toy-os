@@ -190,7 +190,7 @@ pub fn pie_menu<'a, F: FbViewMut>(
                     y0: y0_text,
                     font: font,
                     color: *text_color,
-                    bg_color: None
+                    bg_color: Some(stylesheet.colors.background)
                 });
             }
         }

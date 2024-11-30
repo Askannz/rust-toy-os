@@ -158,8 +158,8 @@ fn get_rich_text(
     let mut console_rich_text = RichText::new();
 
     for res in console_buffer.as_ref().iter() {
-        console_rich_text.add_part(">>> ", stylesheet.colors.yellow, font, None);
-        console_rich_text.add_part(&res.cmd, stylesheet.colors.text, font, None);
+        console_rich_text.add_part(">>> ", stylesheet.colors.yellow, font);
+        console_rich_text.add_part(&res.cmd, stylesheet.colors.text, font);
 
         let color = match &res.pyres {
             python::EvalResult::Failure(_) => stylesheet.colors.red,
@@ -171,12 +171,12 @@ fn get_rich_text(
             python::EvalResult::Success(repr) => format!("\n{}", repr),
         };
 
-        console_rich_text.add_part(&text, color, font, None);
-        console_rich_text.add_part("\n", stylesheet.colors.text, font, None)
+        console_rich_text.add_part(&text, color, font);
+        console_rich_text.add_part("\n", stylesheet.colors.text, font)
     }
 
-    console_rich_text.add_part(">>> ", stylesheet.colors.text, font, None);
-    console_rich_text.add_part(input_buffer.as_ref(), stylesheet.colors.text, font, None);
+    console_rich_text.add_part(">>> ", stylesheet.colors.text, font);
+    console_rich_text.add_part(input_buffer.as_ref(), stylesheet.colors.text, font);
 
     let new_cid = ContentId::from_hash((
         input_buffer.get_id(),

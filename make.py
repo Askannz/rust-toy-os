@@ -99,6 +99,7 @@ def _run():
             # Debugging
             "-monitor stdio",
             "-serial file:log.txt",
+            #"--trace \"virt*\"",
             # "-object filter-dump,id=f1,netdev=network0,file=dump.dat",
         ]
     )

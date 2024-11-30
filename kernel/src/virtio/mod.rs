@@ -92,7 +92,7 @@ impl<const Q_SIZE: usize> VirtQStorage<Q_SIZE> {
         let avail_desc = [true; Q_SIZE];
 
         VirtQStorage {
-            descriptor_area: desc_table,
+            descriptor_area: VirtqDescTable(desc_table),
             driver_area: available_ring,
             device_area: used_ring,
             avail_desc,
@@ -190,7 +190,7 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
         for (i, msg) in messages.into_iter().enumerate() {
             let desc_index = desc_indices[i];
 
-            let descriptor = self.storage.descriptor_area.get_mut(desc_index).unwrap();
+            let descriptor = self.storage.descriptor_area.0.get_mut(desc_index).unwrap();
 
             let buffer = match msg {
                 QueueMessage::DevReadOnly { data, len } => {
@@ -258,7 +258,7 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
         let mut desc_index: usize = it.id.try_into().unwrap();
 
         loop {
-            let descriptor = self.storage.descriptor_area.get(desc_index).unwrap();
+            let descriptor = self.storage.descriptor_area.0.get(desc_index).unwrap();
             //log::debug!("Received descriptor: {:?}", descriptor);
             unsafe {
                 let virt_addr = mapper.phys_to_virt(PhysAddr::new(descriptor.addr));
@@ -398,7 +398,7 @@ impl VirtioDevice {
 
         let mut storage = Box::new(VirtQStorage::new());
 
-        for descriptor in storage.descriptor_area.iter_mut() {
+        for descriptor in storage.descriptor_area.0.iter_mut() {
             let buffer = Box::new([0u8; BUF_SIZE]);
             let buf_ref = Box::leak(buffer);
             let pys_addr = memory::get_mapper().ref_to_phys(buf_ref);
@@ -408,7 +408,7 @@ impl VirtioDevice {
         // Calculating addresses
 
         let descr_area_addr = mapper
-            .ref_to_phys(storage.descriptor_area.as_ref())
+            .ref_to_phys(storage.descriptor_area.0.as_ref())
             .as_u64();
         let driver_area_addr = mapper.ref_to_phys(&storage.driver_area).as_u64();
         let dev_area_addr = mapper.ref_to_phys(&storage.device_area).as_u64();
@@ -514,9 +514,11 @@ impl VirtioDevice {
     }
 }
 
-pub type VirtqDescTable<const Q_SIZE: usize> = [VirtqDesc; Q_SIZE];
 
-#[repr(C)]
+#[repr(C, align(16))]
+pub struct VirtqDescTable<const Q_SIZE: usize>([VirtqDesc; Q_SIZE]);
+
+
 #[derive(Clone, Copy, Debug)]
 pub struct VirtqDesc {
     addr: u64,

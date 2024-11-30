@@ -20,44 +20,76 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
             let n = series.data.len();
 
-            if n < w as usize { unimplemented!() }
             let w_f = w as f32;
             let h_f = h as f32;
-
             let win_size: f32 = n as f32 / w_f;
 
             for x in 0..(w as i64) {
-                let x_f = x as f32;
-                let i1_f = x_f * win_size;
-                let i2_f = i1_f + win_size;
 
-                let i1 = f32::round(i1_f);
-                let i2 = f32::round(i2_f);
+                let val = match win_size < 1.0 {
 
-                let real_win_size = i2 - i1;
+                    true => {
+                        let x_f = x as f32;
+                        let i_f = x_f * win_size;
+                        let i1_f = f32::floor(i_f);
+                        let i2_f = f32::ceil(i_f);
 
-                let i1 = i1 as usize;
-                let i2 = i2 as usize;
+                        let i1 = i1_f as usize;
+                        let i2 = usize::min(n - 1, i2_f as usize);
 
-                let window = &series.data[i1..i2];
+                        let val = match i1 == i2 {
+                            true => series.data[i1],
+                            false => {
+                                let val_1 = series.data[i1];
+                                let val_2 = series.data[i2];
+                                (i_f - i1_f) * val_2 + (i2_f - i_f) * val_1
+                            }
+                        };
 
-                let agg_val = match series.agg_mode {
-                    GraphAggMode::MIN => window.iter().fold(0.0, |acc, v| f32::min(acc, *v)),
-                    GraphAggMode::MAX => window.iter().fold(0.0, |acc, v| f32::max(acc, *v)),
-                    GraphAggMode::AVG => window.iter().fold(0.0, |acc, v| acc + v / real_win_size),
-                    GraphAggMode::SUM => window.iter().sum(),
+                        val
+                    },
+
+                    false => {
+                        let x_f = x as f32;
+                        let i1_f = x_f * win_size;
+                        let i2_f = i1_f + win_size;
+        
+                        let i1 = f32::round(i1_f);
+                        let i2 = f32::round(i2_f);
+        
+                        let real_win_size = i2 - i1;
+        
+                        let i1 = i1 as usize;
+                        let i2 = i2 as usize;
+        
+                        let window = &series.data[i1..i2];
+        
+                        let agg_val = match series.agg_mode {
+                            GraphAggMode::MIN => window.iter().fold(0.0, |acc, v| f32::min(acc, *v)),
+                            GraphAggMode::MAX => window.iter().fold(0.0, |acc, v| f32::max(acc, *v)),
+                            GraphAggMode::AVG => window.iter().fold(0.0, |acc, v| acc + v / real_win_size),
+                            GraphAggMode::SUM => window.iter().sum(),
+                        };
+    
+                        agg_val
+                    }
                 };
 
-                let dy = f32::round(h_f * agg_val / config.max_val) as u32;
 
-                let graph_rect = Rect { 
-                    x0: x + x0,
-                    y0: y0 + (h - dy) as i64,
-                    w: 1,
-                    h: dy,
-                };
+                let val = f32::max(0.0, f32::min(config.max_val, val));
+                let dy = f32::round((h_f - 1.0) * val / config.max_val) as u32;
 
-                draw_rect(self.fb, &graph_rect, series.color, false);
+                if dy > 0 {
+
+                    let graph_rect = Rect { 
+                        x0: x + x0,
+                        y0: y0 + (h - 1 - dy) as i64,
+                        w: 1,
+                        h: dy,
+                    };
+    
+                    draw_rect(self.fb, &graph_rect, series.color, false);
+                }
             }
         };
 

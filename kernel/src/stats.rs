@@ -89,9 +89,9 @@ fn get_ring_iterator<T>(ring_buffer: &[T], ring_index: usize) -> impl Iterator<I
 
     (0..ring_size).map(move |t| {
 
-        let i = match t > ring_index {
-            false => ring_index - t,
-            true => ring_size - 1 - (t - ring_index),
+        let i = match t <= ring_index {
+            true => ring_index - t,
+            false => ring_size - (t - ring_index),
         };
 
         &ring_buffer[i]

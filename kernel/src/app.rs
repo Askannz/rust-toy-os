@@ -409,6 +409,29 @@ pub fn run_apps<F: FbViewMut>(
                     },
                     Err(error) => app.app_state = AppState::Crashed { error },
                 }
+
+
+                //
+                // DEBUG
+
+                let app_history = system.stats.get_app_history(&app.descriptor.name);
+                let graph_data: Vec<f32> = app_history.map(|dp| dp.frametime_used as f32).collect();
+
+                let Rect { x0, y0, w, .. } = deco.content_rect;
+                uitk_context.graph(
+                    &uitk::GraphConfig {
+                        rect: Rect { x0, y0, w, h: 40 },
+                        max_val: 1000.0 / 60.0,
+                        bg_color: Some(Color::BLACK),
+                    },
+                    &[
+                        uitk::GraphSeries {
+                            agg_mode: uitk::GraphAggMode::MAX,
+                            data: &graph_data,
+                            color: Color::YELLOW
+                        }
+                    ]
+                );
             },
 
             AppState::Paused { wasm_app, console_scroll_offsets, console_dragging } => {
@@ -429,6 +452,7 @@ pub fn run_apps<F: FbViewMut>(
                     console_dragging,
                     false,
                 );
+
             },
 
             AppState::Crashed { error } => {

@@ -162,7 +162,7 @@ fn get_rich_text(
         console_rich_text.add_part(&res.cmd, stylesheet.colors.text, font);
 
         let color = match &res.pyres {
-            python::EvalResult::Failure(_) => stylesheet.colors.red,
+            python::EvalResult::Failure(_) => Color::rgb(200, 150, 25),
             _ => stylesheet.colors.text,
         };
 

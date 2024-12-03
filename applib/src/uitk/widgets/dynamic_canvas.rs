@@ -202,7 +202,7 @@ fn draw_tiles<F: FbViewMut, T: TileRenderer>(
             let mut dst_fb = tile_fb.subregion_mut(&tile_fb.shape_as_rect());
             renderer.render(&mut dst_fb, &tile_region.tile_rect); 
 
-            draw_tile_border(&mut tile_fb);
+            //draw_tile_border(&mut tile_fb);
 
             tile_fb
         });

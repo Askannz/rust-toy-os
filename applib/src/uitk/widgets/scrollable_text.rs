@@ -38,7 +38,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             TrackedContent::new_with_id(formatted, content_id)
         };
 
-        let renderer = TextRenderer { formatted };
+        let renderer = TextRenderer { formatted, bg_color: self.stylesheet.colors.element };
 
         if autoscroll {
             let (_, scroll_y0) = offsets;
@@ -84,6 +84,7 @@ impl FormattableText for TrackedContent<RichText> {
 
 struct TextRenderer {
     formatted: TrackedContent<FormattedRichText>,
+    bg_color: Color,
 }
 
 
@@ -119,6 +120,8 @@ impl TileRenderer for TextRenderer {
     fn render<F: FbViewMut>(&self, dst_fb: &mut F, tile_rect: &Rect) {
 
         let Rect { x0: ox, y0: oy, .. } = *tile_rect;
+
+        dst_fb.fill(self.bg_color);
 
         if ox != 0 {
             return;

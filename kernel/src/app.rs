@@ -45,7 +45,7 @@ pub enum AppsInteractionState {
         app_name: &'static str,
         anchor: Point2D<i64>,
 
-        // In "toggle" mode, another click is required to get out of this mode
+        // In "toggle" mode, another click is required to get out of the TitlebarHold state
         toggle: bool,  
     },
     ResizeHold {
@@ -569,6 +569,7 @@ struct AppDecorations {
     titlebar_hover: bool,
     resize_hover: bool,
     window_hover: bool,
+    handle_h: u32,
 }
 
 
@@ -582,10 +583,10 @@ fn app_audit_window<F: FbViewMut>(
     console_dragging: &mut (bool, bool),
 ) {
 
-    const ROW_H: u32 = 70;
+    const ROW_H: u32 = 50;
     const AUDIT_WIN_W: u32 = 300;
-    const MIN_AUDIT_WIN_H: u32 = 400;
-    const MARGIN_H: u32 = 20;
+    const MIN_AUDIT_WIN_H: u32 = 100;
+    const MARGIN_H: u32 = 5;
     const TARGET_FRAMETIME: f32 = 1000.0 / crate::FPS_TARGET as f32;
 
     let frametime_data = stats.get_app_history(app_name, |dp| dp.frametime_used as f32);
@@ -653,43 +654,14 @@ fn app_audit_window<F: FbViewMut>(
         },
     ];
 
-    let audit_win_h = u32::max(MIN_AUDIT_WIN_H, deco.window_rect.h);
-    let mut y = deco.window_rect.y0;
-    let x = deco.window_rect.x0 + deco.window_rect.w as i64;
-
-    let draw_section_header = |uitk_context: &mut uitk::UiContext<F>, y: &mut i64, title: &str| {
-
-        let stylesheet = &uitk_context.stylesheet;
-        let font = uitk_context.font_family.get_default();
-
-        let bar_rect_1 = Rect { x0: x, y0: *y, w: AUDIT_WIN_W / 2, h: deco.titlebar_rect.h };
-        draw_rect(
-            uitk_context.fb,
-            &bar_rect_1,
-            stylesheet.colors.background,
-            false
-        );
-        draw_line_in_rect(
-            uitk_context.fb,
-            title,
-            &bar_rect_1,
-            font,
-            stylesheet.colors.text,
-            TextJustification::Left
-        );
-        *y = *y + deco.titlebar_rect.h as i64;
-    };
-
-    draw_section_header(uitk_context, &mut y, "Resources");
+    let mut y = deco.window_rect.y0 + deco.handle_h as i64;
+    let x = deco.window_rect.x0 + deco.window_rect.w as i64 + 10;
 
     for spec in graph_specs {
-
-        y += MARGIN_H as i64;
 
         let font = uitk_context.font_family.get_default();
         let stylesheet = &uitk_context.stylesheet;
         draw_str(uitk_context.fb, spec.name, x, y, font, stylesheet.colors.text, None);
-
         y += font.char_h as i64;
 
         let graph_h = ROW_H - font.char_h as u32 - MARGIN_H;
@@ -703,18 +675,22 @@ fn app_audit_window<F: FbViewMut>(
             spec.series,
         );
 
-        y += graph_h as i64;
+        y += ROW_H as i64;
     }
 
-    y += 2 * MARGIN_H as i64;
+    
+    let font = uitk_context.font_family.get_default();
+    let stylesheet = &uitk_context.stylesheet;
+    draw_str(uitk_context.fb, "Console log", x, y, font, stylesheet.colors.text, None);
+    y += font.char_h as i64;
 
-    draw_section_header(uitk_context, &mut y, "Console log");
+    let [_, _, _, win_y] = deco.window_rect.as_xyxy();
 
-    let console_rect = Rect { 
-        x0: x, y0: y,
-        w: AUDIT_WIN_W,
-        h: audit_win_h - (y - deco.window_rect.y0) as u32
-    };
+    let console_rect = Rect::from_xyxy([
+        x, y,
+        x + AUDIT_WIN_W as i64,
+        i64::max(y + MIN_AUDIT_WIN_H as i64, win_y - deco.handle_h as i64 - 1),
+    ]);
 
     uitk_context.scrollable_text(
         &console_rect,
@@ -835,6 +811,7 @@ fn compute_decorations(app: &App, input_state: &InputState) -> AppDecorations {
         border_rects: [left_border_rect, right_border_rect, bottom_border_rect],
         handle_rects: [handle_rect_1, handle_rect_2],
         resize_zone_rect,
+        handle_h: RESIZE_HANDLE_LEN + RESIZE_HANDLE_GAP,
     }
 }
 

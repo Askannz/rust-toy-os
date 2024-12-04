@@ -5,3 +5,4 @@ pub mod dynamic_canvas;
 pub mod static_canvas;
 pub mod graph;
 pub mod scrollable_text;
+pub mod horiz_bar;

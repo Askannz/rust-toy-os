@@ -116,7 +116,7 @@ pub fn draw_line_in_rect<F: FbViewMut>(
     let text_x0 = match justif {
         TextJustification::Left => rect.x0 + pad,
         TextJustification::Center => xc - text_w / 2,
-        TextJustification::Right => rect.x0 - rect.w as i64 - pad,
+        TextJustification::Right => rect.x0 + rect.w as i64 - text_w - pad,
     };
 
     draw_str(fb, s, text_x0, text_y0, font, color, None);

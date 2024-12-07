@@ -4,7 +4,7 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use applib::input::PointerState;
-use applib::{BorrowedPixels, StyleSheet};
+use applib::{BorrowedPixels, FbView, StyleSheet};
 
 use crate::shell::{pie_menu, PieDrawCalls, PieMenuEntry};
 use crate::stats::SystemStats;
@@ -80,11 +80,8 @@ pub struct App {
 
 pub enum AppState {
     Init,
-    Running { 
-        wasm_app: WasmApp,
-        audit_mode: AppAuditMode,
-    },
-    Paused { 
+    Active { 
+        paused: bool,
         wasm_app: WasmApp,
         audit_mode: AppAuditMode,
     },
@@ -248,7 +245,7 @@ pub fn run_apps<F: FbViewMut>(
 
             let entries = [
                 match &app.app_state {
-                    AppState::Running { audit_mode, .. } | AppState::Paused { audit_mode, .. } => {
+                    AppState::Active { audit_mode, .. } => {
                         match audit_mode {
                             AppAuditMode::Disabled => PieMenuEntry::Button {
                                 icon: &resources::INSPECT_ICON,
@@ -283,14 +280,14 @@ pub fn run_apps<F: FbViewMut>(
                     weight: 1.0,
                 },
                 match &app.app_state {
-                    AppState::Running { .. } => PieMenuEntry::Button {
+                    AppState::Active { paused, .. } if !paused => PieMenuEntry::Button {
                         icon: &resources::PAUSE_ICON,
                         color: stylesheet.colors.yellow,
                         text: "Pause".to_owned(),
                         text_color: stylesheet.colors.text,
                         weight: 1.0,
                     },
-                    AppState::Paused { .. } => PieMenuEntry::Button {
+                    AppState::Active { paused, .. } if *paused => PieMenuEntry::Button {
                         icon: &resources::PLAY_ICON,
                         color: stylesheet.colors.green,
                         text: "Resume".to_owned(),
@@ -327,58 +324,24 @@ pub fn run_apps<F: FbViewMut>(
                     app.app_state = AppState::Init;
                     *is = AppsInteractionState::Idle;
                 },
-                Some("Pause") => {
-
-                    // AppState::Init is just a placeholder for the swap
-                    let tmp = core::mem::replace(&mut app.app_state, AppState::Init);
-
-                    app.app_state = match tmp {
-                        AppState::Running { wasm_app, audit_mode, .. } => {
-                            log::info!("Pausing app {}", app.descriptor.name);
-                            *is = AppsInteractionState::Idle;
-                            AppState::Paused { wasm_app, audit_mode }
-                        },
-                        _ => tmp,
-                    };
-                },
-                Some("Resume") => {
-
-                    // AppState::Init is just a placeholder for the swap
-                    let tmp = core::mem::replace(&mut app.app_state, AppState::Init);
-
-                    app.app_state = match tmp {
-                        AppState::Paused { wasm_app, audit_mode, .. } => {
-                            log::info!("Resuming app {}", app.descriptor.name);
-                            *is = AppsInteractionState::Idle;
-                            AppState::Running { wasm_app, audit_mode }
-                        },
-                        _ => tmp,
-                    };
-                },
-
-                Some("Open audit") => {
-                    let audit_mode = match &mut app.app_state {
-                        AppState::Paused { audit_mode, .. } => Some(audit_mode),
-                        AppState::Running { audit_mode, .. } => Some(audit_mode),
-                        _ => None,
-                    };
-                    if let Some(audit_mode) = audit_mode {
-                        *audit_mode = AppAuditMode::Enabled { 
-                            scrollable_text_state: ScrollableTextState::new()
-                        }
-                    }
+                Some("Pause") => if let AppState::Active { paused, .. } = &mut app.app_state {
+                    *paused = true;
                     *is = AppsInteractionState::Idle;
                 },
-
-                Some("Close audit") => {
-                    let audit_mode = match &mut app.app_state {
-                        AppState::Paused { audit_mode, .. } => Some(audit_mode),
-                        AppState::Running { audit_mode, .. } => Some(audit_mode),
-                        _ => None,
+                Some("Resume") => if let AppState::Active { paused, .. } = &mut app.app_state {
+                    *paused = false;
+                    *is = AppsInteractionState::Idle;
+                },
+                Some("Open audit") => if let AppState::Active { audit_mode, .. } = &mut app.app_state {
+                    *audit_mode = AppAuditMode::Enabled { 
+                        scrollable_text_state: ScrollableTextState::new()
                     };
-                    if let Some(audit_mode) = audit_mode {
-                        *audit_mode = AppAuditMode::Disabled;
-                    }
+                    *is = AppsInteractionState::Idle;
+                },
+                Some("Close audit") => if let AppState::Active { audit_mode, .. } = &mut app.app_state {
+                    *audit_mode = AppAuditMode::Enabled { 
+                        scrollable_text_state: ScrollableTextState::new()
+                    };
                     *is = AppsInteractionState::Idle;
                 },
 
@@ -430,15 +393,9 @@ pub fn run_apps<F: FbViewMut>(
         }
     }
 
-    //
-    // DEBUG
-
-    //log::debug!("{:?}", is);
 
     //
     // Step and draw apps
-
-    // let UiContext { fb, .. } = uitk_context;
 
     let font = uitk_context.font_family.get_default();
 
@@ -464,8 +421,6 @@ pub fn run_apps<F: FbViewMut>(
         let is_foreground = i == n - 1;
 
         draw_decorations(uitk_context.fb, &stylesheet, font, app_name, &deco, highlight);
-
-        //fb.copy_from_fb(app_fb, deco.content_rect.origin(), false);
     
         match &mut app.app_state {
 
@@ -483,18 +438,43 @@ pub fn run_apps<F: FbViewMut>(
                     &app.rect,
                 );
 
-                app.app_state = AppState::Running { wasm_app, audit_mode: AppAuditMode::Disabled };
+                app.app_state = AppState::Active { wasm_app, audit_mode: AppAuditMode::Disabled, paused: false };
             },
 
-            AppState::Running { wasm_app, audit_mode } => {
+            AppState::Active { wasm_app, audit_mode, paused } => {
+
+                if *paused {
+                    let font = uitk_context.font_family.get_default();
+                    draw_line_in_rect(
+                        uitk_context.fb,
+                        "PAUSED",
+                        &deco.titlebar_rect,
+                        font,
+                        Color::YELLOW,
+                        TextJustification::Center,
+                    );
+                }
                 
-                let is_paused = false;
-                let wasm_res = wasm_app.step(system, uitk_context.uuid_provider, input_state, &app.rect, is_foreground, is_paused);
+                let wasm_res = wasm_app.step(system, uitk_context.uuid_provider, input_state, &app.rect, is_foreground, *paused);
 
                 match wasm_res {
                     Ok(()) => if let Some(app_fb) = wasm_app.get_framebuffer() {
 
-                        uitk_context.fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false);
+                        // To avoid visual glitches when resizing a paused app
+                        let (src_w, src_h) = app_fb.shape();
+                        let Rect { w: dst_w, h: dst_h, .. } = deco.content_rect;
+                        if src_w < dst_w || src_h < dst_h {
+                            draw_rect(
+                                uitk_context.fb,
+                                &deco.content_rect,
+                                Color::rgba(0, 0, 0, 200),
+                                true
+                            );
+                        }
+
+                        let src = app_fb.subregion(&Rect { x0: 0, y0: 0, w: dst_w, h: dst_h});
+
+                        uitk_context.fb.copy_from_fb(&src, deco.content_rect.origin(), false);
 
                         audit_mode.audit_window(
                             uitk_context,
@@ -507,36 +487,6 @@ pub fn run_apps<F: FbViewMut>(
                     },
                     Err(error) => app.app_state = AppState::Crashed { error },
                 }
-            },
-
-            AppState::Paused { wasm_app, audit_mode } => {
-
-                let is_paused = true;
-                let _ = wasm_app.step(system, uitk_context.uuid_provider, input_state, &app.rect, is_foreground, is_paused);
-
-                if let Some(app_fb) = wasm_app.get_framebuffer() {
-                    uitk_context.fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false)
-                }
-
-                draw_rect(uitk_context.fb, &deco.content_rect, Color::rgba(100, 100, 100, 100), true);
-
-                audit_mode.audit_window(
-                    uitk_context,
-                    &app.descriptor.name,
-                    &deco,
-                    &system.stats,
-                    wasm_app.get_console_output(),
-                );
-
-                let font = uitk_context.font_family.get_default();
-                draw_line_in_rect(
-                    uitk_context.fb,
-                    "PAUSED",
-                    &deco.titlebar_rect,
-                    font,
-                    Color::YELLOW,
-                    TextJustification::Center,
-                );
             },
 
             AppState::Crashed { error } => {

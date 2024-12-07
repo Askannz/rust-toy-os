@@ -57,7 +57,7 @@ pub fn init() -> () {
         input_buffer: TrackedContent::new(String::new(), &mut uuid_provider),
         console_buffer: TrackedContent::new(Vec::new(), &mut uuid_provider),
         ui_store: uitk::UiStore::new(),
-        uuid_provider: UuidProvider::new(),
+        uuid_provider,
         scrollable_text_state: ScrollableTextState::new(),
         python: python::Python::new(),
     };

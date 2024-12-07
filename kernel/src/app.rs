@@ -339,9 +339,7 @@ pub fn run_apps<F: FbViewMut>(
                     *is = AppsInteractionState::Idle;
                 },
                 Some("Close audit") => if let AppState::Active { audit_mode, .. } = &mut app.app_state {
-                    *audit_mode = AppAuditMode::Enabled { 
-                        scrollable_text_state: ScrollableTextState::new()
-                    };
+                    *audit_mode = AppAuditMode::Disabled;
                     *is = AppsInteractionState::Idle;
                 },
 

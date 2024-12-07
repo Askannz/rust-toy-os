@@ -7,7 +7,7 @@ use super::dynamic_canvas::TileRenderer;
 
 struct BufferCopyRenderer<'a, F: FbView> {
     src_fb: &'a TrackedContent<F>,
-    bg_fill: Color,
+    fill_color: Color,
 }
 
 impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
@@ -28,7 +28,7 @@ impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
 
     fn render<F: FbViewMut>(&self, dst_fb: &mut F, viewport_rect: &Rect) {
         let src_fb = self.src_fb.as_ref().subregion(viewport_rect);
-        dst_fb.fill(self.bg_fill);
+        dst_fb.fill(self.fill_color);
         dst_fb.copy_from_fb(&src_fb, (0, 0), false);
     }
 }
@@ -40,9 +40,10 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         src_fb: &TrackedContent<F1>,
         offsets: &mut (i64, i64),
         dragging: &mut (bool, bool),
+        fill_color: Color,
     ) {
-        let bg_fill = self.stylesheet.colors.background;
-        let renderer = BufferCopyRenderer { src_fb, bg_fill };
+
+        let renderer = BufferCopyRenderer { src_fb, fill_color };
 
         self.dynamic_canvas(dst_rect, &renderer, offsets, dragging)
     }

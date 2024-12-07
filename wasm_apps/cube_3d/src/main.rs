@@ -76,11 +76,13 @@ pub fn step() {
         }
     };
 
+    let bg_color = stylesheet.colors.element;
+
     if redraw {
         let xf = (pointer.x as f32) / ((W - 1) as f32);
         let yf = (pointer.y as f32) / ((H - 1) as f32);
         let render_fb = state.render_fb.mutate(&mut state.uuid_provider);
-        render_fb.fill(stylesheet.colors.background);
+        render_fb.fill(bg_color);
         draw_scene(render_fb, &state.scene, xf, yf);
     }
 
@@ -97,5 +99,6 @@ pub fn step() {
         &state.render_fb,
         &mut state.scroll_offsets,
         &mut state.dragging_sbar,
+        bg_color,
     );
 }

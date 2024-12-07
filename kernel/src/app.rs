@@ -247,12 +247,26 @@ pub fn run_apps<F: FbViewMut>(
             let app = apps_manager.get_mut(app_name);
 
             let entries = [
-                PieMenuEntry::Button {
-                    icon: &resources::CLOSE_ICON,
-                    color: stylesheet.colors.red,
-                    text: "Close".to_owned(),
-                    text_color: stylesheet.colors.text,
-                    weight: 1.0,
+                match &app.app_state {
+                    AppState::Running { audit_mode, .. } | AppState::Paused { audit_mode, .. } => {
+                        match audit_mode {
+                            AppAuditMode::Disabled => PieMenuEntry::Button {
+                                icon: &resources::INSPECT_ICON,
+                                color: stylesheet.colors.purple,
+                                text: "Open audit".to_owned(),
+                                text_color: stylesheet.colors.text,
+                                weight: 1.0,
+                            },
+                            AppAuditMode::Enabled { .. } => PieMenuEntry::Button {
+                                icon: &resources::INSPECT_ICON,
+                                color: stylesheet.colors.purple,
+                                text: "Close audit".to_owned(),
+                                text_color: stylesheet.colors.text,
+                                weight: 1.0,
+                            },
+                        }
+                    },
+                    _ => PieMenuEntry::Spacer { weight: 1.0 },
                 },
                 PieMenuEntry::Button {
                     icon: &resources::MOVE_ICON,
@@ -285,26 +299,12 @@ pub fn run_apps<F: FbViewMut>(
                     },
                     _ => PieMenuEntry::Spacer { weight: 1.0 },
                 },
-                match &app.app_state {
-                    AppState::Running { audit_mode, .. } | AppState::Paused { audit_mode, .. } => {
-                        match audit_mode {
-                            AppAuditMode::Disabled => PieMenuEntry::Button {
-                                icon: &resources::INSPECT_ICON,
-                                color: stylesheet.colors.purple,
-                                text: "Open audit".to_owned(),
-                                text_color: stylesheet.colors.text,
-                                weight: 1.0,
-                            },
-                            AppAuditMode::Enabled { .. } => PieMenuEntry::Button {
-                                icon: &resources::INSPECT_ICON,
-                                color: stylesheet.colors.purple,
-                                text: "Close audit".to_owned(),
-                                text_color: stylesheet.colors.text,
-                                weight: 1.0,
-                            },
-                        }
-                    },
-                    _ => PieMenuEntry::Spacer { weight: 1.0 },
+                PieMenuEntry::Button {
+                    icon: &resources::CLOSE_ICON,
+                    color: stylesheet.colors.red,
+                    text: "Close".to_owned(),
+                    text_color: stylesheet.colors.text,
+                    weight: 1.0,
                 },
                 PieMenuEntry::Spacer { weight: 3.0 }
             ];
@@ -488,7 +488,8 @@ pub fn run_apps<F: FbViewMut>(
 
             AppState::Running { wasm_app, audit_mode } => {
                 
-                let wasm_res = wasm_app.step(system, uitk_context.uuid_provider, input_state, &app.rect, is_foreground);
+                let is_paused = false;
+                let wasm_res = wasm_app.step(system, uitk_context.uuid_provider, input_state, &app.rect, is_foreground, is_paused);
 
                 match wasm_res {
                     Ok(()) => if let Some(app_fb) = wasm_app.get_framebuffer() {
@@ -510,9 +511,13 @@ pub fn run_apps<F: FbViewMut>(
 
             AppState::Paused { wasm_app, audit_mode } => {
 
+                let is_paused = true;
+                let _ = wasm_app.step(system, uitk_context.uuid_provider, input_state, &app.rect, is_foreground, is_paused);
+
                 if let Some(app_fb) = wasm_app.get_framebuffer() {
                     uitk_context.fb.copy_from_fb(&app_fb, deco.content_rect.origin(), false)
                 }
+
                 draw_rect(uitk_context.fb, &deco.content_rect, Color::rgba(100, 100, 100, 100), true);
 
                 audit_mode.audit_window(
@@ -521,6 +526,16 @@ pub fn run_apps<F: FbViewMut>(
                     &deco,
                     &system.stats,
                     wasm_app.get_console_output(),
+                );
+
+                let font = uitk_context.font_family.get_default();
+                draw_line_in_rect(
+                    uitk_context.fb,
+                    "PAUSED",
+                    &deco.titlebar_rect,
+                    font,
+                    Color::YELLOW,
+                    TextJustification::Center,
                 );
             },
 

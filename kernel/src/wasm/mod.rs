@@ -288,6 +288,7 @@ impl WasmApp {
         input_state: &InputState,
         win_rect: &Rect,
         is_foreground: bool,
+        is_paused: bool,
     ) -> Result<(), anyhow::Error> {
 
 
@@ -316,7 +317,10 @@ impl WasmApp {
                 store.data_mut().net_recv = 0;
                 store.data_mut().net_sent = 0;
 
-                self.wasm_step.call(&mut store, ())
+                match is_paused {
+                    false => self.wasm_step.call(&mut store, ()),
+                    true => Ok(())
+                }
             })
             .map_err(|wasm_err| anyhow::format_err!(wasm_err));
             

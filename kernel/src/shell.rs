@@ -71,8 +71,14 @@ pub fn pie_menu<'a, F: FbViewMut>(
 
     let total_weight: f32 = entries.iter().map(|entry| entry.weight()).sum();
 
+
+    assert!(!entries.is_empty());
+
+    
+
     let mut selected_entry = None;
-    let mut a0 = 0.0;
+    //let mut a0 = 0.0;
+    let mut a0 = -PI * entries[0].weight() / total_weight;
     let mut draw_calls  = PieDrawCalls { calls: Vec::new() };
 
     for entry in entries.iter() {

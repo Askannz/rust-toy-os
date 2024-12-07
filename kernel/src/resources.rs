@@ -72,12 +72,12 @@ lazy_static! {
     pub static ref APPLICATIONS: [AppDescriptor; 4] = [
         AppDescriptor {
             data: include_bytes!("../wasm/cube_3d.wasm"),
-            name: "3D Cube",
+            name: "3D Demo",
             init_win_rect: Rect {
                 x0: 200,
                 y0: 200,
-                w: 200,
-                h: 200
+                w: 400,
+                h: 400
             },
             icon: &CUBE_ICON,
         },

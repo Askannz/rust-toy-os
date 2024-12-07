@@ -54,6 +54,8 @@ const LIMIT_FPS: bool = true;
 static LOGGER: logging::SerialLogger = logging::SerialLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
+pub const TOPBAR_H: u32 = 40;
+
 #[entry]
 fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
     log::set_max_level(LOGGING_LEVEL);

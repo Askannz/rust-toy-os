@@ -10,14 +10,13 @@ use num_traits::float::FloatCore;
 
 use crate::resources;
 use crate::stats::SystemStats;
+use crate::TOPBAR_H;
 
 pub fn topbar<'a, F: FbViewMut>(
     uitk_context: &mut uitk::UiContext<F>,
     system_stats: &SystemStats,
     datetime: DateTime<Utc>,
 ) {
-
-    const TOPBAR_H: u32 = 40;
 
     let font = uitk_context.font_family.get_default();
 
@@ -71,9 +70,10 @@ pub fn topbar<'a, F: FbViewMut>(
 
     const FRAMETIME_WINDOW_LEN: usize = 50;
     const RESOURCES_BAR_W: u32 = 100;
-    const RESOURCES_BAR_H: u32 = 10;
+    const RESOURCES_BAR_H: u32 = 15;
     const SEP_MARGIN_W: u32 = 30;
-    const ICON_MARGIN_W: u32 = 5;
+    const ICON_MARGIN_W1: u32 = 5;
+    const ICON_MARGIN_W2: u32 = 5;
 
     struct ResourceMonitor<'a> {
         bar_values: &'a [BarValue],
@@ -81,11 +81,11 @@ pub fn topbar<'a, F: FbViewMut>(
         icon: &'a Framebuffer<OwnedPixels>,
     }
 
-    let mut x = 0;
+    let mut x = ICON_MARGIN_W1 as i64;
 
     let mut draw_monitor = |monitor: &ResourceMonitor| {
 
-        x += ICON_MARGIN_W as i64;
+        x += ICON_MARGIN_W1 as i64;
         let (icon_w, icon_h) = monitor.icon.shape();
         let icon_rect = Rect { 
             x0: x, y0: 0,
@@ -98,7 +98,7 @@ pub fn topbar<'a, F: FbViewMut>(
         );
     
         x += icon_rect.w as i64;
-        x += ICON_MARGIN_W as i64;
+        x += ICON_MARGIN_W2 as i64;
     
         let res_bar_rect = Rect { 
             x0: x, y0: 0,

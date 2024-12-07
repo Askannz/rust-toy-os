@@ -19,7 +19,6 @@ pub enum PieMenuEntry {
         weight: f32,
     },
     Spacer {
-        color: Color,
         weight: f32,
     },
 }
@@ -31,12 +30,12 @@ impl PieMenuEntry {
             PieMenuEntry::Spacer { weight, .. } => *weight,
         }
     }
-    fn color(&self) -> Color {
-        match self {
-            PieMenuEntry::Button { color, .. } => *color,
-            PieMenuEntry::Spacer { color, .. } => *color,
-        }
-    }
+    // fn color(&self) -> Color {
+    //     match self {
+    //         PieMenuEntry::Button { color, .. } => *color,
+    //         PieMenuEntry::Spacer { color, .. } => *color,
+    //     }
+    // }
 }
 
 // We have to defer the draw operation of the pie menu,
@@ -130,34 +129,20 @@ pub fn pie_menu<'a, F: FbViewMut>(
             outer: (a0 + outer_angle_gap, a1 - outer_angle_gap),
         };
 
-        draw_calls.calls.push(DrawCall::Arc {
-            center: p_arc,
-            r_inner: INNER_RADIUS,
-            r_outer: OUTER_RADIUS,
-            mode: arc_mode,
-            px_per_pt: ARC_PX_PER_PT,
-            color: entry.color(),
-            blend: false
-        });
 
-        if let PieMenuEntry::Button {
-            icon,
-            text,
-            text_color,
-            ..
-        } = entry
-        {
-            let (icon_w, icon_h) = icon.shape();
-            let x0_icon = p_icon.x - (icon_w / 2) as i64;
-            let y0_icon = p_icon.y - (icon_h / 2) as i64;
+        match entry {
 
-            draw_calls.calls.push(DrawCall::Icon {
-                icon: *icon,
-                x0: x0_icon,
-                y0: y0_icon
-            });
+            PieMenuEntry::Spacer { .. } => draw_calls.calls.push(DrawCall::Arc {
+                center: p_arc,
+                r_inner: INNER_RADIUS,
+                r_outer: OUTER_RADIUS,
+                mode: arc_mode,
+                px_per_pt: ARC_PX_PER_PT,
+                color: stylesheet.colors.background,
+                blend: false
+            }),
 
-            if is_hovered {
+            PieMenuEntry::Button { icon, color, text, text_color, .. } => {
 
                 draw_calls.calls.push(DrawCall::Arc {
                     center: p_arc,
@@ -165,33 +150,56 @@ pub fn pie_menu<'a, F: FbViewMut>(
                     r_outer: OUTER_RADIUS,
                     mode: arc_mode,
                     px_per_pt: ARC_PX_PER_PT,
-                    color: stylesheet.colors.hover_overlay,
-                    blend: true
+                    color: *color,
+                    blend: false
                 });
 
-                let p_text =
-                    center + (v_bisect * (OUTER_RADIUS + TEXT_OFFSET)).round_to_int() + v_offset;
-                let (text_w, text_h) = compute_text_bbox(text, font);
+                let (icon_w, icon_h) = icon.shape();
+                let x0_icon = p_icon.x - (icon_w / 2) as i64;
+                let y0_icon = p_icon.y - (icon_h / 2) as i64;
 
-                let x0_text = {
-
-                    const EPSILON: f32 = 0.1;
-                    
-                    if v_bisect.x > EPSILON { p_text.x }
-                    else if v_bisect.x < -EPSILON { p_text.x - text_w as i64 }
-                    else { p_text.x - (text_w / 2) as i64 }
-                };
-
-                let y0_text = p_text.y - (text_h / 2) as i64;
-
-                draw_calls.calls.push(DrawCall::Text { 
-                    s: text.to_owned(),
-                    x0: x0_text,
-                    y0: y0_text,
-                    font: font,
-                    color: *text_color,
-                    bg_color: Some(stylesheet.colors.background)
+                draw_calls.calls.push(DrawCall::Icon {
+                    icon: *icon,
+                    x0: x0_icon,
+                    y0: y0_icon
                 });
+
+                if is_hovered {
+
+                    draw_calls.calls.push(DrawCall::Arc {
+                        center: p_arc,
+                        r_inner: INNER_RADIUS,
+                        r_outer: OUTER_RADIUS,
+                        mode: arc_mode,
+                        px_per_pt: ARC_PX_PER_PT,
+                        color: stylesheet.colors.hover_overlay,
+                        blend: true
+                    });
+
+                    let p_text =
+                        center + (v_bisect * (OUTER_RADIUS + TEXT_OFFSET)).round_to_int() + v_offset;
+                    let (text_w, text_h) = compute_text_bbox(text, font);
+
+                    let x0_text = {
+
+                        const EPSILON: f32 = 0.1;
+                        
+                        if v_bisect.x > EPSILON { p_text.x }
+                        else if v_bisect.x < -EPSILON { p_text.x - text_w as i64 }
+                        else { p_text.x - (text_w / 2) as i64 }
+                    };
+
+                    let y0_text = p_text.y - (text_h / 2) as i64;
+
+                    draw_calls.calls.push(DrawCall::Text { 
+                        s: text.to_owned(),
+                        x0: x0_text,
+                        y0: y0_text,
+                        font: font,
+                        color: *text_color,
+                        bg_color: Some(stylesheet.colors.background)
+                    });
+                }
             }
         }
 

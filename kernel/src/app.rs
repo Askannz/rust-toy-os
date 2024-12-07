@@ -15,7 +15,7 @@ use applib::uitk::{self, GraphSeries, UiContext};
 use applib::{input::InputState, Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use applib::content::{TrackedContent, UuidProvider};
 
-use crate::{app, resources};
+use crate::{app, resources, TOPBAR_H};
 use crate::system::System;
 use crate::wasm::{WasmApp, WasmEngine};
 
@@ -287,10 +287,7 @@ pub fn run_apps<F: FbViewMut>(
                         text_color: stylesheet.colors.text,
                         weight: 1.0,
                     },
-                    _ => PieMenuEntry::Spacer { 
-                        color: stylesheet.colors.background,
-                        weight: 1.0
-                    },
+                    _ => PieMenuEntry::Spacer { weight: 1.0 },
                 },
                 match &app.app_state {
                     AppState::Running { audit_mode, .. } | AppState::Paused { audit_mode, .. } => {
@@ -311,15 +308,9 @@ pub fn run_apps<F: FbViewMut>(
                             },
                         }
                     },
-                    _ => PieMenuEntry::Spacer { 
-                        color: stylesheet.colors.background,
-                        weight: 1.0
-                    },
+                    _ => PieMenuEntry::Spacer { weight: 1.0 },
                 },
-                PieMenuEntry::Spacer { 
-                    color: stylesheet.colors.background,
-                    weight: 3.0
-                }
+                PieMenuEntry::Spacer { weight: 3.0 }
             ];
 
             let (selected, draw_calls) = pie_menu(uitk_context, &entries, anchor);
@@ -612,7 +603,10 @@ fn app_audit_window<F: FbViewMut>(
 
     let graph_specs = [
         AuditGraph {
-            name: &format!("Frametime used ({:.1}%)", frametime_frac * 100.0),
+            name: &format!(
+                "Frametime used: {:.1}ms ({:.1}% of system)",
+                frametime_avg, frametime_frac * 100.0
+            ),
             max_val: 1000.0 / 60.0,
             series: &[
                 uitk::GraphSeries {
@@ -623,7 +617,10 @@ fn app_audit_window<F: FbViewMut>(
             ]
         },
         AuditGraph {
-            name: &format!("Memory usage ({:.1}%)", mem_frac * 100.0),
+            name: &format!(
+                "Memory usage: {:.0}MB ({:.1}% of system)",
+                mem_avg / 1_000_000.0, mem_frac * 100.0
+            ),
             max_val: 10_000_000.0,
             series: &[
                 uitk::GraphSeries {
@@ -710,6 +707,9 @@ fn get_hold_anchor(pointer: &PointerState, rect: &Rect) -> Point2D<i64> {
 }
 
 fn position_window(preferred_rect: &Rect, fb_shape: (u32, u32), deco: &AppDecorations) -> Rect {
+
+    const TOPBAR_GAP: u32 = 5;
+
     let (fb_w, fb_h) = fb_shape;
     let Rect {
         mut x0,
@@ -718,8 +718,10 @@ fn position_window(preferred_rect: &Rect, fb_shape: (u32, u32), deco: &AppDecora
         h,
     } = *preferred_rect;
 
+    let min_y0 = TOPBAR_H + TOPBAR_GAP + deco.titlebar_rect.h;
+
     x0 = i64::max(0, x0);
-    y0 = i64::max(deco.titlebar_rect.h as i64, y0);
+    y0 = i64::max(min_y0 as i64, y0);
     x0 = i64::min((fb_w - w - 1) as i64, x0);
     y0 = i64::min((fb_h - h - 1) as i64, y0);
 

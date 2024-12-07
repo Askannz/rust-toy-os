@@ -1,5 +1,5 @@
 use crate::uitk::UiContext;
-use crate::Rect;
+use crate::{Rect, Color};
 use crate::{FbView, FbViewMut};
 use crate::content::{TrackedContent, ContentId};
 
@@ -7,6 +7,7 @@ use super::dynamic_canvas::TileRenderer;
 
 struct BufferCopyRenderer<'a, F: FbView> {
     src_fb: &'a TrackedContent<F>,
+    bg_fill: Color,
 }
 
 impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
@@ -27,6 +28,7 @@ impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
 
     fn render<F: FbViewMut>(&self, dst_fb: &mut F, viewport_rect: &Rect) {
         let src_fb = self.src_fb.as_ref().subregion(viewport_rect);
+        dst_fb.fill(self.bg_fill);
         dst_fb.copy_from_fb(&src_fb, (0, 0), false);
     }
 }
@@ -39,7 +41,8 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         offsets: &mut (i64, i64),
         dragging: &mut (bool, bool),
     ) {
-        let renderer = BufferCopyRenderer { src_fb };
+        let bg_fill = self.stylesheet.colors.background;
+        let renderer = BufferCopyRenderer { src_fb, bg_fill };
 
         self.dynamic_canvas(dst_rect, &renderer, offsets, dragging)
     }

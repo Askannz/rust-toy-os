@@ -160,7 +160,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
         let wallpaper: &Framebuffer<OwnedPixels> = &WALLPAPER;
         framebuffer.copy_from_fb(wallpaper, (0, 0), false);
 
-        //log::debug!("{:?}", system_state);
 
         let mut uitk_context = ui_store.get_context(
             &mut framebuffer,

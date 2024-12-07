@@ -133,18 +133,18 @@ pub fn topbar<'a, F: FbViewMut>(
     draw_monitor(&ResourceMonitor { 
         bar_values: &[BarValue { color: bar_color, val: agg_frametime }],
         max_val: 1000.0 / 60.0,
-        icon: &resources::CUBE_ICON,
+        icon: &resources::SPEEDOMETER_ICON,
     });
 
 
     let mem_data = system_stats.get_system_history(|dp| dp.heap_usage as f32);
-    let agg_frametime = mem_data.iter()
+    let agg_mem = mem_data.iter()
         .fold(0.0, |acc, v| acc + v / mem_data.len() as f32);
 
     draw_monitor(&ResourceMonitor { 
-        bar_values: &[BarValue { color: Color::AQUA, val: agg_frametime }],
+        bar_values: &[BarValue { color: Color::AQUA, val: agg_mem }],
         max_val: system_stats.heap_total as f32,
-        icon: &resources::CUBE_ICON,
+        icon: &resources::CHIP_ICON,
     });
 
 
@@ -159,6 +159,6 @@ pub fn topbar<'a, F: FbViewMut>(
             BarValue { color: Color::BLUE, val: agg_net_recv },
         ],
         max_val: 1000.0,
-        icon: &resources::CUBE_ICON,
+        icon: &resources::NETWORK_ICON,
     });
 }

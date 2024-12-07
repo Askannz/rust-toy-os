@@ -1,5 +1,14 @@
 Icons:
 
-https://www.flaticon.com/free-icon/cube_645928?term=cube&page=1&position=15&origin=search&related_id=645928
-https://www.flaticon.com/free-icon/code_6680874?term=terminal&page=1&position=37&origin=search&related_id=6680874
-https://www.flaticon.com/free-icon/chronometer_850960?term=chronometer&page=1&position=13&origin=search&related_id=850960
+https://www.flaticon.com/free-icon/cube_645928
+https://www.flaticon.com/free-icon/code_6680874
+https://www.flaticon.com/free-icon/chronometer_850960
+https://www.flaticon.com/free-icon/speedometer_16329148
+https://www.flaticon.com/free-icon/cpu_3076431
+
+
+https://www.flaticon.com/free-icon/mobile-data_8017182
+https://www.flaticon.com/free-icon/website_10398263
+https://www.flaticon.com/free-icon/terminal_11743790
+https://www.flaticon.com/free-icon/python_1822920
+https://www.flaticon.com/free-icon/3d-cube_2641415

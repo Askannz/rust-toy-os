@@ -34,6 +34,16 @@ lazy_static! {
         Framebuffer::from_png(include_bytes!("../icons/pause.png"));
     pub static ref INSPECT_ICON: Framebuffer<OwnedPixels> =
         Framebuffer::from_png(include_bytes!("../icons/inspect.png"));
+    pub static ref SPEEDOMETER_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/speedometer.png"));
+    pub static ref CHIP_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/chip.png"));
+    pub static ref NETWORK_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/network.png"));
+    pub static ref WEB_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/web.png"));
+    pub static ref PYTHON_ICON: Framebuffer<OwnedPixels> =
+        Framebuffer::from_png(include_bytes!("../icons/python.png"));
     pub static ref BLANK_ICON: Framebuffer<OwnedPixels> = Framebuffer::new_owned(32, 32);
 
     //
@@ -84,14 +94,14 @@ lazy_static! {
         },
         AppDescriptor {
             data: include_bytes!("../wasm/terminal.wasm"),
-            name: "Terminal",
+            name: "Python terminal",
             init_win_rect: Rect {
                 x0: 400,
                 y0: 300,
                 w: 600,
                 h: 300
             },
-            icon: &TERMINAL_ICON,
+            icon: &PYTHON_ICON,
         },
         AppDescriptor {
             data: include_bytes!("../wasm/web_browser.wasm"),
@@ -102,7 +112,7 @@ lazy_static! {
                 w: 800,
                 h: 600
             },
-            icon: &TERMINAL_ICON,
+            icon: &WEB_ICON,
         },
     ];
 }

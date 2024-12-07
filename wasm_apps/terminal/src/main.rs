@@ -11,7 +11,7 @@ use applib::drawing::text::{
 };
 use applib::input::InputEvent;
 use applib::input::{InputState, Keycode};
-use applib::uitk::{self, UiStore, UuidProvider};
+use applib::uitk::{self, UiStore, UuidProvider, ScrollableTextState};
 use applib::{Color, FbViewMut, Rect, StyleSheet};
 use core::cell::OnceCell;
 use guestlib::PixelData;
@@ -36,8 +36,7 @@ struct AppState {
 
     ui_store: UiStore,
     uuid_provider: uitk::UuidProvider,
-    scroll_offsets: (i64, i64),
-    dragging: (bool, bool),
+    scrollable_text_state: ScrollableTextState,
 
     python: python::Python,
 }
@@ -59,8 +58,7 @@ pub fn init() -> () {
         console_buffer: TrackedContent::new(Vec::new(), &mut uuid_provider),
         ui_store: uitk::UiStore::new(),
         uuid_provider: UuidProvider::new(),
-        scroll_offsets: (0, 0),
-        dragging: (false, false),
+        scrollable_text_state: ScrollableTextState::new(),
         python: python::Python::new(),
     };
     unsafe {
@@ -89,7 +87,6 @@ pub fn step() {
         &mut state.uuid_provider,
     );
 
-    let mut autoscroll = false;
     if check_enter_pressed(&input_state) && !state.input_buffer.as_ref().is_empty() {
         let cmd = state.input_buffer.as_ref().to_owned();
         let pyres = state.python.run_code(&cmd);
@@ -98,7 +95,6 @@ pub fn step() {
             .mutate(&mut state.uuid_provider)
             .push(EvalResult { cmd, pyres });
         state.input_buffer.mutate(&mut state.uuid_provider).clear();
-        autoscroll = true;
     }
 
     let Rect {
@@ -126,9 +122,8 @@ pub fn step() {
     uitk_context.scrollable_text(
         &rect_console,
         &rich_text,
-        &mut state.scroll_offsets,
-        &mut state.dragging,
-        autoscroll,
+        &mut state.scrollable_text_state,
+        true,
     );
 }
 

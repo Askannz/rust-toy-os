@@ -18,8 +18,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         &mut self,
         dst_rect: &Rect,
         text: &T,
-        offsets: &mut (i64, i64),
-        dragging: &mut (bool, bool),
+        state: &mut ScrollableTextState,
         autoscroll: bool,
     ) {
 
@@ -38,24 +37,49 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             TrackedContent::new_with_id(formatted, content_id)
         };
 
+        let formatted_content_id = formatted.get_id();
+
         let renderer = TextRenderer { formatted, bg_color: self.stylesheet.colors.element };
 
         if autoscroll {
-            let (_, scroll_y0) = offsets;
-            let (_, max_h) = renderer.shape();
-            *scroll_y0 = (max_h - dst_rect.h - 1).into();
+            let ScrollableTextState { content_id, scroll_offsets, .. } = state;
+            match content_id {
+                Some(content_id) if *content_id == formatted_content_id => (),
+                _ => {
+                    let (_, scroll_y0) = scroll_offsets;
+                    let (_, max_h) = renderer.shape();
+                    *scroll_y0 = (max_h - dst_rect.h - 1).into();
+                    *content_id = Some(formatted_content_id);
+                }
+            }
         }
 
         self.dynamic_canvas(
             dst_rect,
             &renderer,
-            offsets,
-            dragging,
+            &mut state.scroll_offsets,
+            &mut state.scroll_dragging,
         );
 
         
     }
 
+}
+
+pub struct ScrollableTextState {
+    pub content_id: Option<ContentId>,
+    pub scroll_offsets: (i64, i64),
+    pub scroll_dragging: (bool, bool),
+}
+
+impl ScrollableTextState {
+    pub fn new() -> Self {
+        Self { 
+            content_id: None,
+            scroll_offsets: (0, 0),
+            scroll_dragging: (false, false)
+        }
+    }
 }
 
 pub trait FormattableText {

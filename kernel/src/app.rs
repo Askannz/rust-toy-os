@@ -11,7 +11,7 @@ use crate::stats::SystemStats;
 use applib::drawing::primitives::draw_rect;
 use applib::drawing::text::{draw_line_in_rect, draw_rich_slice, draw_str, format_rich_lines, Font, RichText, TextJustification};
 use applib::geometry::{Point2D, Vec2D};
-use applib::uitk::{self, GraphSeries, UiContext};
+use applib::uitk::{self, GraphSeries, UiContext, ScrollableTextState};
 use applib::{input::InputState, Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use applib::content::{TrackedContent, UuidProvider};
 
@@ -93,10 +93,7 @@ pub enum AppState {
 
 pub enum AppAuditMode {
     Disabled,
-    Enabled { 
-        console_scroll_offsets: (i64, i64),
-        console_dragging: (bool, bool),
-    }
+    Enabled { scrollable_text_state: ScrollableTextState },
 }
 
 impl AppAuditMode {
@@ -111,15 +108,14 @@ impl AppAuditMode {
 
         match self {
             AppAuditMode::Disabled => return,
-            AppAuditMode::Enabled { console_scroll_offsets, console_dragging } => {
+            AppAuditMode::Enabled { scrollable_text_state } => {
                 app_audit_window(
                     uitk_context,
                     app_name,
                     deco,
                     stats,
                     console_log,
-                    console_scroll_offsets,
-                    console_dragging
+                    scrollable_text_state,
                 );
             }
         }
@@ -368,8 +364,7 @@ pub fn run_apps<F: FbViewMut>(
                     };
                     if let Some(audit_mode) = audit_mode {
                         *audit_mode = AppAuditMode::Enabled { 
-                            console_scroll_offsets: (0, 0),
-                            console_dragging: (true, true)
+                            scrollable_text_state: ScrollableTextState::new()
                         }
                     }
                     *is = AppsInteractionState::Idle;
@@ -570,8 +565,7 @@ fn app_audit_window<F: FbViewMut>(
     deco: &AppDecorations,
     stats: &SystemStats,
     console_log: &TrackedContent<String>,
-    console_scroll_offsets: &mut (i64, i64),
-    console_dragging: &mut (bool, bool),
+    scrollable_text_state: &mut ScrollableTextState,
 ) {
 
     const ROW_H: u32 = 50;
@@ -692,9 +686,8 @@ fn app_audit_window<F: FbViewMut>(
     uitk_context.scrollable_text(
         &console_rect,
         console_log,
-        console_scroll_offsets,
-        console_dragging,
-        false,
+        scrollable_text_state,
+        true,
     );
 
 }

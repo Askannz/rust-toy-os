@@ -74,11 +74,13 @@ pub fn topbar<'a, F: FbViewMut>(
     const SEP_MARGIN_W: u32 = 30;
     const ICON_MARGIN_W1: u32 = 5;
     const ICON_MARGIN_W2: u32 = 5;
+    const TOOLTIP_OFFSET_Y: i64 = 30;
 
     struct ResourceMonitor<'a> {
         bar_values: &'a [BarValue],
         max_val: f32,
         icon: &'a Framebuffer<OwnedPixels>,
+        text: &'a str,
     }
 
     let mut x = ICON_MARGIN_W1 as i64;
@@ -96,6 +98,8 @@ pub fn topbar<'a, F: FbViewMut>(
             (icon_rect.x0, icon_rect.y0),
             true
         );
+
+        uitk_context.tooltip(&icon_rect, (0, TOOLTIP_OFFSET_Y), monitor.text);
     
         x += icon_rect.w as i64;
         x += ICON_MARGIN_W2 as i64;
@@ -118,7 +122,7 @@ pub fn topbar<'a, F: FbViewMut>(
     let frametime_data = system_stats.get_system_history(|dp| dp.frametime_used as f32);
     let agg_frametime = frametime_data.iter()
         .take(FRAMETIME_WINDOW_LEN)
-        .fold(0.0, |acc, v| acc + v / frametime_data.len() as f32);
+        .fold(0.0, |acc, v| acc + v / FRAMETIME_WINDOW_LEN as f32);
 
     let bar_color = {
         if agg_frametime < 5.0 {
@@ -130,10 +134,12 @@ pub fn topbar<'a, F: FbViewMut>(
         }
     };
 
+    let max_frametime = 1000.0 / 60.0;
     draw_monitor(&ResourceMonitor { 
         bar_values: &[BarValue { color: bar_color, val: agg_frametime }],
-        max_val: 1000.0 / 60.0,
+        max_val: max_frametime,
         icon: &resources::SPEEDOMETER_ICON,
+        text: &format!("{:.1}/{:.1}ms", agg_frametime, max_frametime),
     });
 
 
@@ -141,10 +147,16 @@ pub fn topbar<'a, F: FbViewMut>(
     let agg_mem = mem_data.iter()
         .fold(0.0, |acc, v| acc + v / mem_data.len() as f32);
 
+    let heap_total = system_stats.heap_total as f32;
     draw_monitor(&ResourceMonitor { 
         bar_values: &[BarValue { color: Color::AQUA, val: agg_mem }],
-        max_val: system_stats.heap_total as f32,
+        max_val: heap_total,
         icon: &resources::CHIP_ICON,
+        text: &format!(
+            "{:.0}/{:.0}MB",
+            agg_mem / 1_000_000.0,
+            heap_total / 1_000_000.0
+        ),
     });
 
 
@@ -153,6 +165,11 @@ pub fn topbar<'a, F: FbViewMut>(
     let agg_net_sent = net_sent_data.iter().sum::<f32>();
     let agg_net_recv = net_recv_data.iter().sum::<f32>();
 
+    let target_frametime: f32 = 1000.0 / crate::FPS_TARGET as f32;
+    let history_duration_sec = target_frametime * net_recv_data.len() as f32 / 1000.0;
+    let net_recv_rate = net_recv_data.iter().sum::<f32>() / history_duration_sec;
+    let net_sent_rate = net_sent_data.iter().sum::<f32>() / history_duration_sec;
+
     draw_monitor(&ResourceMonitor { 
         bar_values: &[
             BarValue { color: Color::YELLOW, val: agg_net_sent },
@@ -160,5 +177,6 @@ pub fn topbar<'a, F: FbViewMut>(
         ],
         max_val: 1000.0,
         icon: &resources::NETWORK_ICON,
+        text: &format!("{:.1}/{:.1} kB/s", net_sent_rate / 1000.0, net_recv_rate / 1000.0),
     });
 }

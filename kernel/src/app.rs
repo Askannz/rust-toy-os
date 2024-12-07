@@ -537,7 +537,8 @@ fn app_audit_window<F: FbViewMut>(
     const AUDIT_WIN_W: u32 = 300;
     const MIN_AUDIT_WIN_H: u32 = 100;
     const MARGIN_H: u32 = 5;
-    const TARGET_FRAMETIME: f32 = 1000.0 / crate::FPS_TARGET as f32;
+
+    let target_frametime: f32 = 1000.0 / crate::FPS_TARGET as f32;
 
     let frametime_data = stats.get_app_history(app_name, |dp| dp.frametime_used as f32);
     let mem_data = stats.get_app_history(app_name, |dp| dp.mem_used as f32);
@@ -545,12 +546,12 @@ fn app_audit_window<F: FbViewMut>(
     let net_sent_data = stats.get_app_history(app_name, |dp| dp.net_sent as f32);
 
     let frametime_avg = frametime_data.iter().fold(0.0, |acc, v| acc + v / frametime_data.len() as f32);
-    let frametime_frac = frametime_avg / TARGET_FRAMETIME;
+    let frametime_frac = frametime_avg / target_frametime;
 
     let mem_avg = mem_data.iter().fold(0.0, |acc, v| acc + v / mem_data.len() as f32);
     let mem_frac = mem_avg / stats.heap_total as f32;
 
-    let history_duration_sec = TARGET_FRAMETIME * net_recv_data.len() as f32 / 1000.0;
+    let history_duration_sec = target_frametime * net_recv_data.len() as f32 / 1000.0;
     let net_recv_rate = net_recv_data.iter().sum::<f32>() / history_duration_sec;
     let net_sent_rate = net_sent_data.iter().sum::<f32>() / history_duration_sec;
 

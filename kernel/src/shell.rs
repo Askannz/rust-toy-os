@@ -2,7 +2,7 @@ use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::vec::Vec;
 use applib::drawing::primitives::{draw_arc, ArcMode};
-use applib::drawing::text::{draw_str, Font};
+use applib::drawing::text::{draw_str, Font, compute_text_bbox};
 use applib::geometry::{Point2D, Vec2D};
 use applib::uitk::{self};
 use applib::{Color, FbView, FbViewMut, Framebuffer, OwnedPixels, StyleSheet};
@@ -213,12 +213,6 @@ pub fn pie_menu<'a, F: FbViewMut>(
     }
 
     (selected_entry, draw_calls)
-}
-
-fn compute_text_bbox(s: &str, font: &Font) -> (u32, u32) {
-    let w = font.char_w * s.len();
-    let h = font.char_h;
-    (w as u32, h as u32)
 }
 
 impl PieDrawCalls {

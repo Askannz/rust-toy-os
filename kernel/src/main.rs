@@ -171,8 +171,6 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             time
         );
 
-        topbar::topbar(&mut uitk_context, &system.stats, datetime);
-
         run_apps(
             &mut uitk_context,
             &mut system,
@@ -182,7 +180,7 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             &mut apps_interaction_state,
         );
 
-        //applications.iter().for_each(|app| log::debug!("{}: {}ms", app.descriptor.name, app.time_used));
+        topbar::topbar(&mut uitk_context, &system.stats, datetime);
 
         draw_cursor(uitk_context.fb, &input_state);
 
@@ -197,22 +195,9 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
             net_sent,
         };
 
-
         system.stats.next_frame();
-
-        {
-            let System { clock, .. } = &mut system;
-            fps_manager.end_frame(&mut uitk_context, clock);
-        }
-
+        fps_manager.end_frame(&system.clock);
         virtio_gpu.flush();
-
-        // let (heap_used, heap_total) = memory::ALLOCATOR.get_stats();
-        // log::debug!("Memory: {}/{} MB", heap_used / 1_000_000, heap_total / 1_000_000);
-        // let (recv_counter, sent_counter) = system.tcp_stack.get_counters();
-        // recv_counter_total += recv_counter;
-        // sent_counter_total += sent_counter;
-        // log::debug!("Network: {} kB down / {} kB up", recv_counter_total / 1_000, sent_counter_total / 1_000);
     }
 
     //loop { x86_64::instructions::hlt(); }
@@ -349,73 +334,11 @@ impl FpsManager {
         self.frame_start_t = clock.time();
     }
 
-    fn end_frame<F: FbViewMut>(&mut self, 
-        uitk_context: &mut uitk::UiContext<F>,
-        clock: &SystemClock,
-    ) {
+    fn end_frame(&mut self, clock: &SystemClock) {
+
         const SMOOTHING: f64 = 0.8;
 
-        // let UiContext { fb, font_family, .. } = uitk_context;
-        // let font = font_family.get_default();
-
         let frametime_target = 1000.0 / self.fps_target;
-
-        // let fps = 1000.0 / self.frametime;
-        // let s = format!("{:.2} FPS", fps);
-        // draw_str(*fb, &s, 0, 0, font, Color::WHITE, None);
-
-        // let char_h = font.char_h as u32;
-        // let graph_w = 12 * 9;
-        // let graph_h = 6;
-        // let used_frac = self.used / frametime_target;
-        // let used_w = (used_frac * graph_w as f64) as u32;
-        // let graph_color = {
-        //     if 0.0 <= used_frac && used_frac < 0.50 {
-        //         Color::GREEN
-        //     } else if 0.50 <= used_frac && used_frac < 0.75 {
-        //         Color::YELLOW
-        //     } else {
-        //         Color::RED
-        //     }
-        // };
-        // draw_rect(
-        //     *fb,
-        //     &Rect {
-        //         x0: 0,
-        //         y0: char_h as i64,
-        //         w: graph_w,
-        //         h: 12,
-        //     },
-        //     Color::BLACK,
-        //     false,
-        // );
-        // draw_rect(
-        //     *fb,
-        //     &Rect {
-        //         x0: 0,
-        //         y0: char_h as i64 + 3,
-        //         w: used_w,
-        //         h: graph_h,
-        //     },
-        //     graph_color,
-        //     false,
-        // );
-
-        // let budget_color = if self.used < frametime_target {
-        //     Color::WHITE
-        // } else {
-        //     Color::RED
-        // };
-        // let budget_txt = format!("{:>6.2} ms", self.used);
-        // draw_str(
-        //     *fb,
-        //     &budget_txt,
-        //     0,
-        //     (char_h + graph_h + 6) as i64,
-        //     font,
-        //     budget_color,
-        //     None,
-        // );
 
         let frame_end_t = clock.time();
 

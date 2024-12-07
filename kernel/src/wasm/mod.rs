@@ -347,7 +347,6 @@ impl WasmApp {
             frametime_used: t1 - t0,
         };
 
-
         step_ret
     }
 

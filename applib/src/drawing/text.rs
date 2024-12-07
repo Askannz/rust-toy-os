@@ -352,3 +352,9 @@ pub fn draw_rich_slice<F: FbViewMut>(fb: &mut F, rich_slice: &[RichChar], x0: i6
         x += rich_char.font.char_w as i64;
     }
 }
+
+pub fn compute_text_bbox(s: &str, font: &Font) -> (u32, u32) {
+    let w = font.char_w * s.len();
+    let h = font.char_h;
+    (w as u32, h as u32)
+}

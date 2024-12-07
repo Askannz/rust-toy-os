@@ -1,10 +1,9 @@
 # Bugs
 
 * resize handle "jumps" to cursor when resizing
-* gpu crash after a while
+* random crashes after a while
 * clicks go through scrollbars
 * scrollbars interfere with resize button
-* resizing paused apps is broken
 
 # Refactorings
 
@@ -18,7 +17,6 @@
 # Features
 
 * app crash demo
-* app log stream
 * resumable tile rendering
 * allow to disable caching in dyn canvas
 * nested pie menus
@@ -28,9 +26,7 @@
 * web browser: navigation controls (back/reload/home)
 * web browser: use proper fonts for HN
 * web browser: home page with example links
-* system taskbar
 * system settings window
-* app audit window
 * file editor + "fake" filesystem
 * better memory allocator
 

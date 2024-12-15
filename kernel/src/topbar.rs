@@ -74,7 +74,8 @@ pub fn topbar<'a, F: FbViewMut>(
     const SEP_MARGIN_W: u32 = 30;
     const ICON_MARGIN_W1: u32 = 5;
     const ICON_MARGIN_W2: u32 = 5;
-    const TOOLTIP_OFFSET_Y: i64 = 30;
+    const TOOLTIP_OFFSET_GAP_H: u32 = 5;
+    const FPS_COUNTER_W: u32 = 100;
 
     struct ResourceMonitor<'a> {
         bar_values: &'a [BarValue],
@@ -83,14 +84,14 @@ pub fn topbar<'a, F: FbViewMut>(
         text: &'a str,
     }
 
-    let mut x = ICON_MARGIN_W1 as i64;
+    let mut x = 0;
 
-    let mut draw_monitor = |monitor: &ResourceMonitor| {
+    let draw_monitor = |uitk_context: &mut uitk::UiContext<F>, x: &mut i64, monitor: &ResourceMonitor| {
 
-        x += ICON_MARGIN_W1 as i64;
+        *x += ICON_MARGIN_W1 as i64;
         let (icon_w, icon_h) = monitor.icon.shape();
         let icon_rect = Rect { 
-            x0: x, y0: 0,
+            x0: *x, y0: 0,
             w: icon_w, h: icon_h
         }.align_to_rect_vert(&topbar_rect);
         uitk_context.fb.copy_from_fb(
@@ -98,31 +99,52 @@ pub fn topbar<'a, F: FbViewMut>(
             (icon_rect.x0, icon_rect.y0),
             true
         );
-
-        uitk_context.tooltip(&icon_rect, (0, TOOLTIP_OFFSET_Y), monitor.text);
     
-        x += icon_rect.w as i64;
-        x += ICON_MARGIN_W2 as i64;
+        *x += icon_rect.w as i64;
+        *x += ICON_MARGIN_W2 as i64;
     
         let res_bar_rect = Rect { 
-            x0: x, y0: 0,
+            x0: *x, y0: 0,
             w: RESOURCES_BAR_W, h: RESOURCES_BAR_H
         }.align_to_rect_vert(&topbar_rect);
+
+        let tooltip_rect = icon_rect.bounding_box(&res_bar_rect);
+        let dy = (TOPBAR_H + TOOLTIP_OFFSET_GAP_H) as i64;
+        uitk_context.tooltip(&tooltip_rect, (0, dy), monitor.text);
     
         uitk_context.horiz_bar(
             &HorizBarConfig { max_val: monitor.max_val, rect: res_bar_rect },
             monitor.bar_values,
         );
 
-        x += RESOURCES_BAR_W as i64;
-        x += SEP_MARGIN_W as i64;
+        *x += RESOURCES_BAR_W as i64;
+        *x += SEP_MARGIN_W as i64;
 
+    };
+
+    let draw_text_box = |uitk_context: &mut uitk::UiContext<F>, x: &mut i64, text: &str, w: u32| {
+
+        let fps_rect = Rect { x0: *x, y0: 0, w, h: TOPBAR_H };
+        let font = uitk_context.font_family.get_default();
+        draw_rect(uitk_context.fb, &fps_rect, uitk_context.stylesheet.colors.element, false);
+        draw_line_in_rect(
+            uitk_context.fb,
+            text,
+            &fps_rect, font, uitk_context.stylesheet.colors.text,
+            TextJustification::Center,
+        );
+        *x += fps_rect.w as i64;
+        *x += SEP_MARGIN_W as i64;
     };
 
     let frametime_data = system_stats.get_system_history(|dp| dp.frametime_used as f32);
     let agg_frametime = frametime_data.iter()
         .take(FRAMETIME_WINDOW_LEN)
         .fold(0.0, |acc, v| acc + v / FRAMETIME_WINDOW_LEN as f32);
+
+    draw_text_box(uitk_context, &mut x, &format!("{:.0} FPS", 1000.0 / agg_frametime), FPS_COUNTER_W);
+
+    let max_frametime = 1000.0 / 60.0;
 
     let bar_color = {
         if agg_frametime < 5.0 {
@@ -134,8 +156,7 @@ pub fn topbar<'a, F: FbViewMut>(
         }
     };
 
-    let max_frametime = 1000.0 / 60.0;
-    draw_monitor(&ResourceMonitor { 
+    draw_monitor(uitk_context, &mut x, &ResourceMonitor { 
         bar_values: &[BarValue { color: bar_color, val: agg_frametime }],
         max_val: max_frametime,
         icon: &resources::SPEEDOMETER_ICON,
@@ -148,7 +169,7 @@ pub fn topbar<'a, F: FbViewMut>(
         .fold(0.0, |acc, v| acc + v / mem_data.len() as f32);
 
     let heap_total = system_stats.heap_total as f32;
-    draw_monitor(&ResourceMonitor { 
+    draw_monitor(uitk_context, &mut x, &ResourceMonitor { 
         bar_values: &[BarValue { color: Color::AQUA, val: agg_mem }],
         max_val: heap_total,
         icon: &resources::CHIP_ICON,
@@ -170,7 +191,7 @@ pub fn topbar<'a, F: FbViewMut>(
     let net_recv_rate = net_recv_data.iter().sum::<f32>() / history_duration_sec;
     let net_sent_rate = net_sent_data.iter().sum::<f32>() / history_duration_sec;
 
-    draw_monitor(&ResourceMonitor { 
+    draw_monitor(uitk_context, &mut x, &ResourceMonitor { 
         bar_values: &[
             BarValue { color: Color::YELLOW, val: agg_net_sent },
             BarValue { color: Color::BLUE, val: agg_net_recv },

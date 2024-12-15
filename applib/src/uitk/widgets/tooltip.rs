@@ -19,12 +19,13 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             let color = self.stylesheet.colors.text;
 
             let (dx, dy) = offset;
-            let (x, y) = trigger.center();
-            let (text_w, text_h) = compute_text_bbox(text, font);
-            let rect = Rect { x0: x + dx, y0: y + dy, w: text_w, h: text_h };
+            let rect = Rect { 
+                x0: trigger.x0 + dx, y0: trigger.y0 + dy,
+                w: trigger.w, h: trigger.h,
+            };
     
             draw_rect(self.fb, &rect, self.stylesheet.colors.element, false);
-            draw_line_in_rect(self.fb, text, &rect, font, color, TextJustification::Left);
+            draw_line_in_rect(self.fb, text, &rect, font, color, TextJustification::Center);
         }
     }
 }

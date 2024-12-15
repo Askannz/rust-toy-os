@@ -909,6 +909,7 @@ dependencies = [
  "guestlib",
  "hex",
  "html-escape",
+ "lazy_static",
  "log",
  "rustls",
  "scraper",

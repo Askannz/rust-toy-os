@@ -9,6 +9,7 @@ use std::fmt::Debug;
 use alloc::collections::BTreeMap;
 use alloc::format;
 use anyhow::Context;
+use lazy_static::lazy_static;
 use applib::{Color, Rect, StyleSheet};
 use core::cell::OnceCell;
 use guestlib::{PixelData, WasmLogger};
@@ -16,8 +17,8 @@ use guestlib::{PixelData, WasmLogger};
 use applib::content::TrackedContent;
 use applib::input::Keycode;
 use applib::input::{InputEvent, InputState};
-use applib::uitk::{self, UuidProvider};
-use applib::FbViewMut;
+use applib::uitk::{self, ButtonConfig, UuidProvider};
+use applib::{Framebuffer, OwnedPixels};
 
 mod dns;
 mod html;
@@ -34,6 +35,15 @@ use tls::TlsClient;
 
 static LOGGER: WasmLogger = WasmLogger;
 const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
+
+lazy_static! {
+    pub static ref HN_ICON: Framebuffer<OwnedPixels> = 
+        Framebuffer::from_png(include_bytes!("../icons/websites/hackernews.png"));
+    pub static ref MF_WEBSITE_ICON: Framebuffer<OwnedPixels> = 
+        Framebuffer::from_png(include_bytes!("../icons/websites/mfwebsite.png"));
+    pub static ref EX_WEBSITE_ICON: Framebuffer<OwnedPixels> = 
+        Framebuffer::from_png(include_bytes!("../icons/websites/example.png"));
+}
 
 struct AppState {
     pixel_data: PixelData,
@@ -67,6 +77,7 @@ struct HttpTarget {
 }
 
 enum RequestState {
+    Home,
     Idle {
         http_target: Option<HttpTarget>,
         layout: TrackedContent<LayoutNode>,
@@ -105,6 +116,7 @@ enum HttpsState {
 impl Debug for RequestState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            RequestState::Home => write!(f, "Home"),
             RequestState::Idle { .. } => write!(f, "Idle"),
             RequestState::Dns {
                 http_target, dns_state, ..
@@ -117,6 +129,7 @@ impl Debug for RequestState {
 
 fn get_progress_repr(request_state: &RequestState) -> (u64, Cow<str>) {
     match request_state {
+        RequestState::Home => (0, Cow::Borrowed("Home")),
         RequestState::Dns { dns_state, .. } => match dns_state {
             DnsState::Connecting => (0, Cow::Borrowed("DNS: connecting")),
             DnsState::Sending { out_count } => {
@@ -154,7 +167,7 @@ pub fn init() -> () {
     log::set_max_level(LOGGING_LEVEL);
     log::set_logger(&LOGGER).unwrap();
 
-    let url_text = String::from("https://motherfuckingwebsite.com/");
+    let url_text = String::from("https://example.com/");
     let url_len = url_text.len();
 
     let mut uuid_provider = uitk::UuidProvider::new();
@@ -169,14 +182,7 @@ pub fn init() -> () {
         uuid_provider: UuidProvider::new(),
         webview_scroll_offsets: (0, 0),
         webview_scroll_dragging: (false, false),
-        request_state: RequestState::Render {
-            http_target: None,
-            html: format!(
-                "<html>\n\
-                <p bgcolor=\"#0000ff\">WELCOME</p>\n\
-                </html>\n",
-            ),
-        },
+        request_state: RequestState::Home,
     };
     unsafe {
         APP_STATE
@@ -366,6 +372,75 @@ fn update_request_state(
     time: f64,
 ) -> anyhow::Result<()> {
     match &mut state.request_state {
+
+        RequestState::Home => {
+
+            const BUTTON_H: u32 = 50;
+            const BUTTON_W: u32 = 400;
+
+            struct Favorite {
+                link: &'static str,
+                icon: &'static Framebuffer<OwnedPixels>,
+            }
+
+            let favorites = [
+                Favorite {
+                    link: "https://motherfuckingwebsite.com",
+                    icon: &MF_WEBSITE_ICON
+                },
+                Favorite {
+                    link: "https://news.ycombinator.com",
+                    icon: &HN_ICON
+                },
+                Favorite {
+                    link: "https://example.com",
+                    icon: &EX_WEBSITE_ICON
+                },
+            ];
+            let canvas_rect = &ui_layout.canvas_rect;
+
+            let row_h = canvas_rect.h / (2 * favorites.len() + 1) as u32;
+
+            let x0 = {
+                let r = Rect { x0: 0, y0: 0, w: BUTTON_W, h: BUTTON_H };
+                r.align_to_rect_horiz(&ui_layout.canvas_rect).x0
+            };
+    
+            let mut framebuffer = state.pixel_data.get_framebuffer();
+            let mut uitk_context = state.ui_store.get_context(
+                &mut framebuffer,
+                &stylesheet,
+                input_state,
+                &mut state.uuid_provider,
+                time
+            );
+
+            let mut y = canvas_rect.y0 + row_h as i64;
+            let mut clicked_url = None;
+
+            for fav in favorites {
+
+                let row_rect = Rect { x0, y0: y, w: BUTTON_W, h: row_h };
+                let button_rect = Rect { x0, y0: y, w: BUTTON_W, h: BUTTON_H }
+                    .align_to_rect_vert(&row_rect);
+                let clicked = uitk_context.button(&ButtonConfig { 
+                    rect: button_rect,
+                    text: fav.link.to_string(),
+                    icon: Some(fav.icon),
+                });
+                y += (2 * row_h) as i64;
+
+                if clicked {
+                    clicked_url = Some(fav.link);
+                }
+            }
+
+            if let Some(url) = clicked_url {
+                let http_target = parse_url(url)?;
+                initiate_redirect(state, http_target)?;
+            }
+        },
+
         RequestState::Idle {
             http_target,
             layout,
@@ -414,14 +489,7 @@ fn update_request_state(
             };
 
             if let Some(new_http_target) = new_http_target {
-                let s_ref = state.url_text.mutate(&mut state.uuid_provider);
-                let _ = core::mem::replace(s_ref, format!("{}{}{}", SCHEME, new_http_target.host, new_http_target.path));
-                let dns_socket = Socket::new(DNS_SERVER_IP, 53)?;
-                state.request_state = RequestState::Dns {
-                    http_target: new_http_target,
-                    dns_socket,
-                    dns_state: DnsState::Connecting,
-                };
+                initiate_redirect(state, new_http_target)?;
             }
         }
 
@@ -557,6 +625,19 @@ fn update_request_state(
         }
     };
 
+    Ok(())
+}
+
+fn initiate_redirect(state: &mut AppState, http_target: HttpTarget)  -> anyhow::Result<()> {
+
+    let s_ref = state.url_text.mutate(&mut state.uuid_provider);
+    let _ = core::mem::replace(s_ref, format!("{}{}{}", SCHEME, http_target.host, http_target.path));
+    let dns_socket = Socket::new(DNS_SERVER_IP, 53)?;
+    state.request_state = RequestState::Dns {
+        http_target: http_target,
+        dns_socket,
+        dns_state: DnsState::Connecting,
+    };
     Ok(())
 }
 

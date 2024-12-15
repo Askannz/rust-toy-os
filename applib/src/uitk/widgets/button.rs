@@ -1,5 +1,5 @@
 use crate::drawing::primitives::draw_rect;
-use crate::drawing::text::{draw_str, Font};
+use crate::drawing::text::{draw_str, Font, TextJustification, draw_line_in_rect};
 use crate::uitk::{UiContext};
 use crate::{Color, FbView, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use alloc::borrow::ToOwned;
@@ -45,40 +45,32 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
         draw_rect(*fb, &button_rect, button_color, false);
 
-        let font = font_family.get_default();
-        let &Font { char_h, char_w, .. } = font;
-        let text_h = char_h as u32;
-        let text_w = (config.text.len() * char_w) as u32;
-
-        let (text_x0, text_y0) = match &config.icon {
+        let text_x0 = match &config.icon {
+            None => button_rect.x0,
             Some(icon) => {
                 let (icon_w, icon_h) = icon.shape();
+                let m = i64::max(0, (button_rect.h - icon_h) as i64 / 2);
 
-                let rect = Rect {
-                    x0: 0, y0: 0,
-                    w: icon_w + text_w,
-                    h: u32::max(icon_h, text_h)
-                }.align_to_rect(&config.rect);
+                let icon_x0 = button_rect.x0 + m;
+                let icon_y0 = button_rect.y0 + m;
 
-                fb.copy_from_fb(*icon, (rect.x0, rect.y0), true);
+                fb.copy_from_fb(*icon, (icon_x0, icon_y0), true);
 
-                (rect.x0 + icon_w as i64, rect.y0)
-            },
-
-            None => {
-                let rect = Rect { x0: 0, y0: 0, w: text_w, h: text_h }.align_to_rect(&config.rect);
-                (rect.x0, rect.y0)
+                icon_x0 + icon_w as i64
             }
         };
 
-        draw_str(
-            *fb,
-            &config.text,
-            text_x0,
-            text_y0,
+        let text_rect = {
+            let [_x0, y0, x1, y1] = button_rect.as_xyxy();
+            Rect::from_xyxy([text_x0, y0, x1, y1])
+        };
+
+        let font = font_family.get_default();
+        draw_line_in_rect(
+            *fb, &config.text, &text_rect,
             font,
             colorsheet.text,
-            None,
+            TextJustification::Left
         );
 
         interaction_state == InteractionState::Clicked

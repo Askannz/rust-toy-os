@@ -59,6 +59,13 @@ impl InputState {
         self.pointer.y -= origin.y;
     }
 
+    pub fn check_key_pressed(&self, kc: Keycode) -> bool {
+        self.events.iter().any(|event| match event {
+            Some(InputEvent::KeyPress { keycode }) if *keycode == kc => true,
+            _ => false,
+        })
+    }
+
     fn update_shift_key_state(&mut self, event: &InputEvent) {
         let check_is_shift =
             |&keycode| keycode == Keycode::KEY_LEFTSHIFT || keycode == Keycode::KEY_RIGHTSHIFT;

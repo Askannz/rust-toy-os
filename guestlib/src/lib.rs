@@ -15,7 +15,6 @@ static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
 
 extern "C" {
 
-    fn host_print_console(addr: i32, len: i32);
     fn host_log(addr: i32, len: i32, level: i32);
     fn host_get_input_state(addr: i32);
     fn host_get_win_rect(addr: i32);
@@ -66,13 +65,6 @@ impl FramebufferHandle {
         let data = unsafe { Vec::from_raw_parts(self.ptr, n, n) };
         core::mem::drop(data)
     }
-}
-
-pub fn print_console(s: &str) {
-    let buf = s.as_bytes();
-    let addr = buf.as_ptr() as i32;
-    let len = buf.len() as i32;
-    unsafe { host_print_console(addr, len) };
 }
 
 pub fn get_input_state() -> InputState {

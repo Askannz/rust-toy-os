@@ -87,7 +87,7 @@ pub fn step() {
         &mut state.uuid_provider,
     );
 
-    if check_enter_pressed(&input_state) && !state.input_buffer.as_ref().is_empty() {
+    if input_state.check_key_pressed(Keycode::KEY_ENTER) && !state.input_buffer.as_ref().is_empty() {
         let cmd = state.input_buffer.as_ref().to_owned();
         let pyres = state.python.run_code(&cmd);
         state
@@ -126,20 +126,6 @@ pub fn step() {
         true,
     );
 }
-
-fn check_enter_pressed(input_state: &InputState) -> bool {
-    input_state.events.iter().any(|event| {
-        if let Some(InputEvent::KeyPress {
-            keycode: Keycode::KEY_ENTER,
-        }) = event
-        {
-            true
-        } else {
-            false
-        }
-    })
-}
-
 
 fn get_rich_text(
     stylesheet: &StyleSheet,

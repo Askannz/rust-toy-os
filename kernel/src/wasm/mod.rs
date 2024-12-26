@@ -1,6 +1,6 @@
 use alloc::collections::BTreeMap;
 use alloc::string::ToString;
-use alloc::vec;
+use alloc::{format, vec};
 use alloc::{borrow::ToOwned, string::String};
 use applib::content::TrackedContent;
 use applib::geometry::Point2D;
@@ -19,6 +19,7 @@ use wasmi::{
 
 use applib::{input::InputState, FbViewMut, Framebuffer, Rect};
 
+use crate::serial_println;
 use crate::stats::AppDataPoint;
 use crate::system::System;
 
@@ -455,6 +456,7 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
     linker_stub!(m, "poll_oneoff", [i32, i32, i32, i32], i32);
     linker_stub!(m, "sched_yield", [], i32);
     linker_stub!(m, "fd_close", [i32], i32);
+    linker_stub!(m, "fd_write", [i32, i32, i32, i32], i32);
     linker_stub!(m, "fd_filestat_get", [i32, i32], i32);
     linker_stub!(m, "fd_prestat_dir_name", [i32, i32, i32], i32);
     linker_stub!(m, "fd_sync", [i32], i32);
@@ -613,52 +615,10 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
         0
     });
 
-    linker_impl!(m, "fd_write", |mut caller: Caller<StoreData>,
-                                 _fd: i32,
-                                 iovs: i32,
-                                 _iovs_len: i32,
-                                 nwritten: i32|
-     -> i32 {
-        //log::debug!("Function fd_write() called (fd {} iovs_len {})", fd, iovs_len);
-
-        let mem = get_linear_memory(&caller);
-        let mem_data = mem.data_mut(&mut caller);
-
-        let iovs = iovs as usize;
-        let nwritten = nwritten as usize;
-
-        let buf_ptr = u32::from_le_bytes(mem_data[iovs..iovs + 4].try_into().unwrap()) as usize;
-        let buf_len = u32::from_le_bytes(mem_data[iovs + 4..iovs + 8].try_into().unwrap()) as usize;
-
-        let s = core::str::from_utf8(&mem_data[buf_ptr..buf_ptr + buf_len]).unwrap();
-
-        log::debug!("{}", s);
-
-        mem_data[nwritten..nwritten + 4].copy_from_slice((buf_len as u32).to_le_bytes().as_slice());
-
-        0
-    });
-
     //
     // APIs specific to this particular WASM environment
 
     let m = "env";
-
-    linker_impl!(
-        m,
-        "host_print_console",
-        |caller: Caller<StoreData>, addr: i32, len: i32| {
-            let ctx = caller.as_context();
-            let app_name = &ctx.data().app_name;
-            let mem_slice = get_wasm_mem_slice(&caller, addr, len);
-
-            let s = core::str::from_utf8(mem_slice)
-                .expect("Not UTF-8")
-                .trim_end();
-
-            log::debug!("{}: {}", app_name, s);
-        }
-    );
 
     linker_impl!(m, "host_log", |mut caller: Caller<StoreData>,
                                  addr: i32,
@@ -666,25 +626,14 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
                                  level| {
         let mem_slice = get_wasm_mem_slice(&caller, addr, len);
 
-        let s = core::str::from_utf8(mem_slice)
+        let msg = core::str::from_utf8(mem_slice)
             .expect("Not UTF-8")
             .trim_end()
             .to_owned();
 
-        caller.data_mut().with_step_context(|step_context| {
-            let StepContextView { uuid_provider, console_output, .. } = step_context;
-            let console_output = console_output.mutate(uuid_provider);
-            console_output.write_str(&s).unwrap();
-            console_output.write_char('\n').unwrap();
+        caller.data_mut().with_step_context(|mut step_context| {
+            log_message(&msg, level, &mut step_context);
         });
-
-        match level {
-            1 => log::error!("{}", s),
-            2 => log::warn!("{}", s),
-            3 => log::info!("{}", s),
-            4 => log::debug!("{}", s),
-            _ => log::trace!("{}", s),
-        };
     });
 
     linker_impl!(
@@ -948,6 +897,23 @@ fn add_host_apis(mut store: &mut Store<StoreData>, linker: &mut Linker<StoreData
             );
         }
     );
+}
+
+fn log_message(msg: &str, level: i32, step_context: &mut StepContextView) {
+
+    let StepContextView { uuid_provider, console_output, .. } = step_context;
+    let console_output = console_output.mutate(uuid_provider);
+    console_output.write_str(&msg).unwrap();
+    console_output.write_char('\n').unwrap();
+
+    match level {
+        1 => log::error!("{}", msg),
+        2 => log::warn!("{}", msg),
+        3 => log::info!("{}", msg),
+        4 => log::debug!("{}", msg),
+        _ => log::trace!("{}", msg),
+    };
+
 }
 
 #[repr(i32)]

@@ -1,11 +1,12 @@
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
+use core::borrow::BorrowMut;
 use core::convert::TryInto;
 use core::hash::Hasher;
+use core::ptr::{read_volatile, write_volatile};
 
 use core::{mem, usize};
 use tinyvec::ArrayVec;
-use volatile::Volatile;
 use x86_64::{PhysAddr, VirtAddr};
 
 use crate::memory;
@@ -25,7 +26,7 @@ pub enum FeatureBits {
 
 #[allow(dead_code)]
 pub struct VirtioInterruptAck {
-    isr_ptr: Volatile<&'static mut u8>,
+    isr_ptr: &'static mut u8,
     pub latest_status: Option<IsrStatus>,
 }
 
@@ -37,7 +38,7 @@ pub struct VirtioDevice {
     common_config_cap: VirtioCapability,
     notification_cap: VirtioCapability,
     device_specific_config_cap: Option<VirtioCapability>,
-    pub common_config: Volatile<&'static mut VirtioPciCommonCfg>,
+    pub common_config: &'static mut VirtioPciCommonCfg,
 }
 
 #[repr(u8)]
@@ -55,10 +56,10 @@ struct VirtQStorage<const Q_SIZE: usize> {
     descriptor_area: VirtqDescTable<Q_SIZE>,
     driver_area: VirtqAvail<Q_SIZE>,
     device_area: VirtqUsed<Q_SIZE>,
-    avail_desc: [bool; Q_SIZE],
 }
 
 impl<const Q_SIZE: usize> VirtQStorage<Q_SIZE> {
+
     const fn new() -> Self {
         let desc_table = {
             let zero_desc = VirtqDesc {
@@ -89,13 +90,10 @@ impl<const Q_SIZE: usize> VirtQStorage<Q_SIZE> {
             }
         };
 
-        let avail_desc = [true; Q_SIZE];
-
         VirtQStorage {
             descriptor_area: VirtqDescTable(desc_table),
             driver_area: available_ring,
             device_area: used_ring,
-            avail_desc,
         }
     }
 }
@@ -105,6 +103,7 @@ pub struct VirtioQueue<const Q_SIZE: usize, const BUF_SIZE: usize> {
     storage: Box<VirtQStorage<Q_SIZE>>,
     pop_index: usize,
     notify_ptr: VirtAddr,
+    avail_desc: [bool; Q_SIZE],
 }
 
 pub trait VirtqSerializable: Clone + Default {}
@@ -147,8 +146,9 @@ pub struct VirtioPciCommonCfg {
 }
 
 impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
+
     fn take_descriptor(&mut self) -> Option<usize> {
-        for (desc_index, available) in self.storage.avail_desc.iter_mut().enumerate() {
+        for (desc_index, available) in self.avail_desc.iter_mut().enumerate() {
             if *available {
                 *available = false;
                 return Some(desc_index);
@@ -158,7 +158,7 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
     }
 
     fn return_descriptor(&mut self, desc_index: usize) {
-        self.storage.avail_desc[desc_index] = true;
+        self.avail_desc[desc_index] = true;
     }
 
     pub unsafe fn try_push<T: VirtqSerializable, const N: usize>(
@@ -190,7 +190,9 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
         for (i, msg) in messages.into_iter().enumerate() {
             let desc_index = desc_indices[i];
 
-            let descriptor = self.storage.descriptor_area.0.get_mut(desc_index).unwrap();
+            let desc_ref = self.storage.descriptor_area.0.get_mut(desc_index).unwrap();
+
+            let mut descriptor = read_volatile(desc_ref);
 
             let buffer = match msg {
                 QueueMessage::DevReadOnly { data, len } => {
@@ -221,44 +223,53 @@ impl<const Q_SIZE: usize, const BUF_SIZE: usize> VirtioQueue<Q_SIZE, BUF_SIZE> {
                 descriptor.next = desc_indices[i + 1] as u16;
                 descriptor.flags |= 0x1;
             }
+
+            write_volatile(desc_ref, descriptor);
         }
 
-        let ring_index: usize = self.storage.driver_area.idx.into();
-        self.storage.driver_area.ring[ring_index % Q_SIZE] = desc_indices[0] as u16;
+    
+        let ring_index = read_volatile(&self.storage.driver_area.idx) as usize;
 
-        self.storage.driver_area.idx += 1;
+        write_volatile(
+            self.storage.driver_area.ring.get_mut(ring_index % Q_SIZE).unwrap(),
+            desc_indices[0] as u16
+        );
+
+        let old_idx = read_volatile(&self.storage.driver_area.idx);
+        write_volatile(&mut self.storage.driver_area.idx, old_idx + 1);
 
         Some(())
     }
 
     pub unsafe fn notify_device(&self) {
         let q_index: u8 = self.q_index.try_into().unwrap();
-
-        let mut ptr = {
-            let ptr: *mut u16 = self.notify_ptr.as_mut_ptr();
-            Volatile::new(unsafe { ptr.as_mut().unwrap() })
-        };
-
-        ptr.write(q_index as u16);
+        let ptr = self.notify_ptr.as_mut_ptr();
+        write_volatile(ptr, q_index as u16);
     }
 
     pub unsafe fn try_pop<T: VirtqSerializable, const N: usize>(&mut self) -> Option<[T; N]> {
         let mapper = memory::get_mapper();
 
-        let new_index: usize = self.storage.device_area.idx.into();
+        let new_index = read_volatile(&self.storage.device_area.idx) as usize;
+
         if new_index == self.pop_index {
             return None;
         }
 
         let idx: usize = self.pop_index.try_into().unwrap();
-        let it: VirtqUsedElem = self.storage.device_area.ring[idx % Q_SIZE];
+    
+        let it: VirtqUsedElem = read_volatile(
+            self.storage.device_area.ring.get(idx % Q_SIZE).unwrap()
+        );
         //log::debug!("Received element: {:?}", it);
 
         let mut out = ArrayVec::<[T; N]>::new();
         let mut desc_index: usize = it.id.try_into().unwrap();
 
         loop {
-            let descriptor = self.storage.descriptor_area.0.get(desc_index).unwrap();
+            let descriptor = read_volatile(
+                self.storage.descriptor_area.0.get(desc_index).unwrap()
+            );
             //log::debug!("Received descriptor: {:?}", descriptor);
             unsafe {
                 let virt_addr = mapper.phys_to_virt(PhysAddr::new(descriptor.addr));
@@ -351,7 +362,7 @@ impl VirtioDevice {
         let common_config = {
             let addr = get_addr_in_bar(&pci_device, &common_config_cap.virtio_cap);
             let ptr = addr.as_mut_ptr() as *mut VirtioPciCommonCfg;
-            Volatile::new(unsafe { ptr.as_mut().unwrap() })
+            unsafe { ptr.as_mut().unwrap() }
         };
 
         let mut dev = VirtioDevice {
@@ -402,7 +413,8 @@ impl VirtioDevice {
             let buffer = Box::new([0u8; BUF_SIZE]);
             let buf_ref = Box::leak(buffer);
             let pys_addr = memory::get_mapper().ref_to_phys(buf_ref);
-            descriptor.addr = pys_addr.as_u64();
+
+            unsafe { write_volatile(&mut descriptor.addr, pys_addr.as_u64()); }
         }
 
         // Calculating addresses
@@ -417,25 +429,20 @@ impl VirtioDevice {
         // log::debug!("driver_area_addr={:x}", driver_area_addr);
         // log::debug!("dev_area_addr={:x}", dev_area_addr);
 
-        {
-            self.common_config
-                .map_mut(|c| &mut c.queue_select)
-                .update(|v| *v = q_index);
-            self.common_config
-                .map_mut(|c| &mut c.queue_desc)
-                .update(|v| *v = descr_area_addr);
-            self.common_config
-                .map_mut(|c| &mut c.queue_driver)
-                .update(|v| *v = driver_area_addr);
-            self.common_config
-                .map_mut(|c| &mut c.queue_device)
-                .update(|v| *v = dev_area_addr);
-            self.common_config
-                .map_mut(|c| &mut c.queue_enable)
-                .update(|v| *v = 1);
+        unsafe {
+
+            let c = &mut self.common_config;
+
+
+            write_volatile(&mut c.queue_select, q_index);
+            write_volatile(&mut c.queue_desc, descr_area_addr);
+            write_volatile(&mut c.queue_driver, driver_area_addr);
+            write_volatile(&mut c.queue_device, dev_area_addr);
+            write_volatile(&mut c.queue_enable, 1);
 
             // Reading back queue size
-            let q_size: usize = self.common_config.map(|s| &s.queue_size).read().into();
+            let q_size = read_volatile(&c.queue_size) as usize;
+
             assert_eq!(q_size, Q_SIZE);
         }
 
@@ -446,6 +453,7 @@ impl VirtioDevice {
             storage,
             pop_index: 0,
             notify_ptr,
+            avail_desc: [true; Q_SIZE],
         }
     }
 
@@ -461,15 +469,10 @@ impl VirtioDevice {
     fn get_queue_notify_ptr(&mut self, q_index: u16) -> VirtAddr {
         let mut pci_config_space = PciConfigSpace::new();
 
-        let queue_notify_off: u64 = {
-            self.common_config
-                .map_mut(|s| &mut s.queue_select)
-                .update(|queue_select| *queue_select = q_index);
-
-            self.common_config
-                .map(|s| &s.queue_notify_off)
-                .read()
-                .into()
+        let queue_notify_off: u64 = unsafe {
+            write_volatile(&mut self.common_config.queue_select, q_index);
+            let offset = read_volatile(&self.common_config.queue_notify_off);
+            offset as u64
         };
 
         let notify_off_multiplier: u64 = unsafe {
@@ -485,32 +488,29 @@ impl VirtioDevice {
     }
 
     pub fn write_status(&mut self, val: u8) {
-        self.common_config
-            .map_mut(|s| &mut s.device_status)
-            .write(val);
+        unsafe { write_volatile(&mut self.common_config.device_status, val) };
     }
 
     pub fn read_status(&self) -> u8 {
-        self.common_config.map(|s| &s.device_status).read()
+        unsafe { read_volatile(&self.common_config.device_status) }
     }
 
     fn write_feature_bits(&mut self, select: u32, val: u32) {
-        self.common_config
-            .map_mut(|s| &mut s.driver_feature_select)
-            .update(|sel_val| *sel_val = select);
 
-        self.common_config
-            .map_mut(|s| &mut s.driver_feature)
-            .update(|feat_val| *feat_val = val);
+        unsafe {
+            write_volatile(&mut self.common_config.driver_feature_select, select);
+            write_volatile(&mut self.common_config.driver_feature, val);
+
+        }
     }
 
     #[allow(dead_code)]
     fn read_feature_bits(&mut self, select: u32) -> u32 {
-        self.common_config
-            .map_mut(|s| &mut s.device_feature_select)
-            .update(|sel_val| *sel_val = select);
 
-        self.common_config.map(|s| &s.device_feature).read()
+        unsafe {
+            write_volatile(&mut self.common_config.device_feature_select, select);
+            read_volatile(&self.common_config.device_feature)
+        }
     }
 }
 

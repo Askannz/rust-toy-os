@@ -12,7 +12,6 @@ lazy_static = { version = "1.0", features = ["spin_no_std"] }
 x86_64 = "0.14.3"
 #linked_list_allocator = "0.9.0"
 bitvec = { version = "1", features = ["alloc"], default-features = false }
-volatile = "0.4"
 pic8259 = "0.11.0"
 applib = { path = "../applib" }
 smoltcp = { version = "0.10.0", default-features = false, features = ["log", "proto-ipv4", "socket-tcp", "medium-ethernet", "alloc"] }

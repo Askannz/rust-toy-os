@@ -114,13 +114,6 @@ impl PixelData {
     }
 }
 
-fn register_framebuffer_data(data: Vec<u32>, w: u32, h: u32) -> *mut u32 {
-    assert_eq!(data.len(), (w * h) as usize);
-    let ptr = vec![0u32; (w * h) as usize].leak().as_mut_ptr();
-    unsafe { host_set_framebuffer(ptr as i32, w as i32, h as i32) };
-    ptr
-}
-
 pub fn tcp_connect(ip_addr: [u8; 4], port: u16) -> anyhow::Result<i32> {
     let ip_addr: i32 = i32::from_le_bytes(ip_addr);
     let port: i32 = port.into();
@@ -177,15 +170,9 @@ pub fn tcp_close(handle_id: i32) {
 }
 
 pub fn get_time() -> f64 {
-    let ptr = vec![0u8; 8].leak().as_mut_ptr();
-
-    unsafe {
-        host_get_time(ptr as i32);
-    }
-
-    let s: &[u8; 8] = unsafe { core::slice::from_raw_parts(ptr, 8).try_into().unwrap() };
-
-    f64::from_le_bytes(*s)
+    let mut buf = [0u8; 8];
+    unsafe { host_get_time(buf.as_mut_ptr() as i32);}
+    f64::from_le_bytes(buf)
 }
 
 pub fn get_stylesheet() -> StyleSheet {
@@ -198,15 +185,9 @@ pub fn get_stylesheet() -> StyleSheet {
 }
 
 pub fn get_consumed_fuel() -> u64 {
-    let ptr = vec![0u8; 8].leak().as_mut_ptr();
-
-    unsafe {
-        host_get_consumed_fuel(ptr as i32);
-    }
-
-    let s: &[u8; 8] = unsafe { core::slice::from_raw_parts(ptr, 8).try_into().unwrap() };
-
-    u64::from_le_bytes(*s)
+    let mut buf = [0u8; 8];
+    unsafe { host_get_consumed_fuel(buf.as_mut_ptr() as i32);}
+    u64::from_le_bytes(buf)
 }
 
 #[macro_export]

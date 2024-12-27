@@ -23,16 +23,13 @@ use crate::serial_println;
 use crate::stats::AppDataPoint;
 use crate::system::System;
 
-pub struct WasmEngine {
-    engine: Engine,
-}
+pub struct WasmEngine;
 
 const STEP_FUEL: u64 = u64::MAX;
 
 impl WasmEngine {
     pub fn new() -> Self {
-        let engine = Engine::new(&Config::default().consume_fuel(true));
-        WasmEngine { engine }
+        WasmEngine
     }
 
     pub fn instantiate_app(
@@ -44,10 +41,14 @@ impl WasmEngine {
         app_name: &str,
         init_rect: &Rect,
     ) -> WasmApp {
-        let module = Module::new(&self.engine, wasm_code).unwrap();
+
+
+        let engine = Engine::new(&Config::default().consume_fuel(true));
+
+        let module = Module::new(&engine, wasm_code).unwrap();
         let store_data = StoreData::new(uuid_provider, app_name);
-        let mut store: Store<StoreData> = Store::new(&self.engine, store_data);
-        let mut linker = <Linker<StoreData>>::new(&self.engine);
+        let mut store: Store<StoreData> = Store::new(&engine, store_data);
+        let mut linker = <Linker<StoreData>>::new(&engine);
 
         add_host_apis(&mut store, &mut linker);
 

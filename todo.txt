@@ -5,30 +5,33 @@
 * clicks go through scrollbars
 * scrollbars interfere with resize button
 * mouse scrolling captured by multiple scrollbars
+* HTML rendering breaks down
 
 # Refactorings
 
 * integrate Rect with geometry module
 * tidy up applib
 * better names for applib/guestlib?
-* html layouting (proper tree structure?)
 * better tile cache
 * proper text layouting utilities
 
 # Features
 
 * app crash demo
-* resumable tile rendering
-* allow to disable caching in dyn canvas
-* nested pie menus
 * choose proper style for UI (color, fonts, etc)
-* selectable color palette
-* web browser: improve compatibility (be able to load wikipedia for ex)
 * web browser: navigation controls (back/reload/home)
 * web browser: use proper fonts for HN
-* system settings window
 * file editor + "fake" filesystem
 * better memory allocator
 
+
+# Low priority
+
+* html layouting (proper tree structure?)
+* web browser: improve compatibility
+* resumable tile rendering
+* nested pie menus
+* selectable color palette
+* system settings window
 * Tiling windows
 * convenience macros for wasm apps

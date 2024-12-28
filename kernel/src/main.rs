@@ -105,9 +105,9 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
     let app_names: Vec<&str> = APPLICATIONS.iter().map(|desc| desc.name).collect();
     
-    let heap_size = memory::ALLOCATOR.size();
+    let alloc_stats = memory::ALLOCATOR.get_stats();
 
-    let system_stats = stats::SystemStats::new(heap_size, &app_names);
+    let system_stats = stats::SystemStats::new(&alloc_stats, &app_names);
 
     let mut system = System {
         clock,
@@ -190,11 +190,10 @@ fn main(image: Handle, system_table: SystemTable<Boot>) -> Status {
 
         let t1 = system.clock.time();
 
-        let (heap_allocated, heap_reserved) = memory::ALLOCATOR.get_usage();
+        let heap_stats = memory::ALLOCATOR.get_stats();
 
         *system.stats.get_system_point_mut() = stats::SystemDataPoint {
-            heap_allocated,
-            heap_reserved,
+            alloc: heap_stats,
             frametime_used: t1 - t0,
             net_recv,
             net_sent,

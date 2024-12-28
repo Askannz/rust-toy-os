@@ -1,12 +1,14 @@
 use alloc::collections::BTreeMap;
+use crate::allocator::AllocStats;
 
 const HISTORY_SIZE: usize = 256; // In number of frames
 
 pub struct SystemStats {
 
+    pub heap_total: usize,
+
     by_app: BTreeMap<&'static str, [AppDataPoint; HISTORY_SIZE]>,
     system: [SystemDataPoint; HISTORY_SIZE],
-    pub heap_total: usize,
 
     ring_index: usize,
 }
@@ -15,7 +17,7 @@ pub struct SystemStats {
 pub struct SystemDataPoint {
     pub net_recv: usize,
     pub net_sent: usize,
-    pub heap_usage: usize,
+    pub alloc: AllocStats,
     pub frametime_used: f64,
 }
 
@@ -29,7 +31,7 @@ pub struct AppDataPoint {
 
 impl SystemStats {
 
-    pub fn new(heap_total: usize, app_names: &[&'static str]) -> Self {
+    pub fn new(alloc_stats: &AllocStats, app_names: &[&'static str]) -> Self {
 
         let by_app = app_names.iter().map(|app_name| {
 
@@ -47,14 +49,14 @@ impl SystemStats {
         let system_history: [SystemDataPoint; HISTORY_SIZE] = core::array::from_fn(|_| SystemDataPoint {
             net_recv: 0,
             net_sent: 0,
-            heap_usage: 0,
+            alloc: alloc_stats.clone(),
             frametime_used: 0.0,
         });
 
         SystemStats {
+            heap_total: alloc_stats.total,
             by_app,
             system: system_history,
-            heap_total,
             ring_index: 0,
         }
     }

@@ -81,7 +81,7 @@ def _run():
     qemu_args = " ".join(
         [
             "-enable-kvm",
-            "-m 4G",
+            "-m 1G",
             "-rtc base=utc",
             "-display sdl",
 

@@ -72,6 +72,10 @@ impl Rect {
         (self.x0 + (self.w / 2) as i64, self.y0 + (self.h / 2) as i64)
     }
 
+    pub fn shape(&self) -> (u32, u32) {
+        (self.w, self.h)
+    }
+
     pub fn from_center(xc: i64, yc: i64, w: u32, h: u32) -> Self {
         Self {
             x0: xc - (w / 2) as i64,

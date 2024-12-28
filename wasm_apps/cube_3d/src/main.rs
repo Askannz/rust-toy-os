@@ -1,5 +1,6 @@
-use applib::uitk::{UiStore, UuidProvider};
-use applib::{Color, FbViewMut, Framebuffer, OwnedPixels};
+use applib::input::PointerState;
+use applib::uitk::{ContentId, TileRenderer, UiContext, UiStore, UuidProvider};
+use applib::{Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use applib::content::TrackedContent;
 use core::cell::OnceCell;
 use guestlib::PixelData;
@@ -13,19 +14,17 @@ const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
 
 struct AppState {
     pixel_data: PixelData,
-    render_fb: TrackedContent<Framebuffer<OwnedPixels>>,
     ui_store: UiStore,
     uuid_provider: UuidProvider,
     scroll_offsets: (i64, i64),
     dragging_sbar: (bool, bool),
-    prev_pointer: Option<(i64, i64)>,
     scene: Scene,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
-const W: usize = 400;
-const H: usize = 400;
+const W: u32 = 400;
+const H: u32 = 400;
 
 fn main() {}
 
@@ -34,17 +33,14 @@ pub fn init() -> () {
     log::set_max_level(LOGGING_LEVEL);
     log::set_logger(&LOGGER).unwrap();
 
-    let mut uuid_provider = UuidProvider::new();
-    let render_fb = Framebuffer::new_owned(W as u32, H as u32);
+    let uuid_provider = UuidProvider::new();
 
     let state = AppState {
         pixel_data: PixelData::new(),
-        render_fb: TrackedContent::new(render_fb, &mut uuid_provider),
         ui_store: UiStore::new(),
         uuid_provider,
         scroll_offsets: (0, 0),
         dragging_sbar: (false, false),
-        prev_pointer: None,
         scene: load_scene(),
     };
     unsafe {
@@ -66,26 +62,6 @@ pub fn step() {
 
     let mut framebuffer = state.pixel_data.get_framebuffer();
 
-    let pointer = &input_state.pointer;
-
-    let redraw = match state.prev_pointer {
-        Some((px, py)) if (pointer.x, pointer.y) == (px, py) => false,
-        _ => {
-            state.prev_pointer = Some((pointer.x, pointer.y));
-            true
-        }
-    };
-
-    let bg_color = stylesheet.colors.element;
-
-    if redraw {
-        let xf = (pointer.x as f32) / ((W - 1) as f32);
-        let yf = (pointer.y as f32) / ((H - 1) as f32);
-        let render_fb = state.render_fb.mutate(&mut state.uuid_provider);
-        render_fb.fill(bg_color);
-        draw_scene(render_fb, &state.scene, xf, yf);
-    }
-
     let mut uitk_context = state.ui_store.get_context(
         &mut framebuffer,
         &stylesheet,
@@ -94,11 +70,67 @@ pub fn step() {
         time,
     );
 
-    uitk_context.static_canvas(
+    let renderer = SceneRenderer {
+        canvas_shape: win_rect.shape(),
+        scene: &state.scene,
+        pointer: &input_state.pointer,
+        bg_color: stylesheet.colors.element,
+    };
+
+    uitk_context.dynamic_canvas(
         &win_rect.zero_origin(),
-        &state.render_fb,
+        &renderer,
         &mut state.scroll_offsets,
         &mut state.dragging_sbar,
-        bg_color,
     );
+}
+
+
+struct SceneRenderer<'a> {
+    canvas_shape: (u32, u32),
+    scene: &'a Scene,
+    pointer: &'a PointerState,
+    bg_color: Color,
+}
+
+impl<'a> TileRenderer for SceneRenderer<'a> {
+
+    fn shape(&self) -> (u32, u32) {
+        self.canvas_shape
+    }
+
+    fn tile_shape(&self) -> (u32, u32) {
+        (W, H)
+    }
+
+    fn content_id(&self, viewport_rect: &Rect) -> ContentId {
+
+        let Rect { x0, y0, .. } = *viewport_rect;
+
+        let is_scene_tile = x0 == 0 && y0 == 0;
+
+        // Technically depends on the scene too, but we assume it doesn´t change
+        ContentId::from_hash((
+            is_scene_tile,
+            self.pointer.x,
+            self.pointer.y,
+        ))
+    }
+
+    fn render<F: FbViewMut>(&self, dst_fb: &mut F, viewport_rect: &Rect) {
+
+        let Rect { x0, y0, w, h } = *viewport_rect;
+        
+
+        dst_fb.fill(self.bg_color);
+
+        let is_scene_tile = x0 == 0 && y0 == 0;
+
+        if is_scene_tile {
+            assert_eq!((w, h), (W, H));
+            let xf = (self.pointer.x as f32) / ((W - 1) as f32);
+            let yf = (self.pointer.y as f32) / ((H - 1) as f32);
+            draw_scene(dst_fb, self.scene, xf, yf);
+        }
+    }
 }

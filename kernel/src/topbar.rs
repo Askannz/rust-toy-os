@@ -164,18 +164,24 @@ pub fn topbar<'a, F: FbViewMut>(
     });
 
 
-    let mem_data = system_stats.get_system_history(|dp| dp.heap_usage as f32);
-    let agg_mem = mem_data.iter()
-        .fold(0.0, |acc, v| acc + v / mem_data.len() as f32);
+    let heap_allocated_data = system_stats.get_system_history(|dp| dp.heap_allocated as f32);
+    let heap_reserved_data = system_stats.get_system_history(|dp| dp.heap_reserved as f32);
+
+    let agg_allocated = heap_allocated_data.iter().fold(0.0, |acc, v| acc + v / heap_allocated_data.len() as f32);
+    let agg_reserved = heap_reserved_data.iter().fold(0.0, |acc, v| acc + v / heap_reserved_data.len() as f32);
 
     let heap_total = system_stats.heap_total as f32;
     draw_monitor(uitk_context, &mut x, &ResourceMonitor { 
-        bar_values: &[BarValue { color: Color::AQUA, val: agg_mem }],
+        bar_values: &[
+            BarValue { color: Color::AQUA, val: agg_allocated },
+            BarValue { color: Color::BLUE, val: agg_reserved },
+        ],
         max_val: heap_total,
         icon: &resources::CHIP_ICON,
         text: &format!(
-            "{:.0}/{:.0}MB",
-            agg_mem / 1_000_000.0,
+            "{:.0}/{:.0}/{:.0}MB",
+            agg_allocated / 1_000_000.0,
+            agg_reserved / 1_000_000.0,
             heap_total / 1_000_000.0
         ),
     });

@@ -14,6 +14,7 @@ pub struct SimpleHeap {
     start: *mut u8,
     ptr: *mut u8,
     size: usize,
+    allocated: usize,
     next_report: usize,
 } 
 
@@ -32,6 +33,7 @@ impl SimpleAllocator {
                 start: heap_addr.as_mut_ptr(),
                 ptr: heap_addr.as_mut_ptr(),
                 size: heap_size,
+                allocated: 0,
                 next_report: INCREMENT,
             })
         }
@@ -41,16 +43,16 @@ impl SimpleAllocator {
         self.get_heap().size
     }
 
-    pub fn get_usage(&self) -> usize{
+    pub fn get_usage(&self) -> (usize, usize) {
 
         let heap = self.get_heap();
 
         let p0 = heap.start as usize;
         let p1 = heap.ptr as usize;
 
-        let usage = p1 - p0;
+        let reserved = p1 - p0;
 
-        usage
+        (heap.allocated, reserved)
     }
 
     fn get_heap(&self) -> &SimpleHeap {
@@ -91,7 +93,12 @@ unsafe impl GlobalAlloc for SimpleAllocator {
         //     heap.next_report += INCREMENT;
         // }
 
+        heap.allocated += size;
+
         alloc_ptr
     }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
+    unsafe fn dealloc(&self, _ptr: *mut u8, layout: Layout) {
+        let heap = self.get_heap_mut();
+        heap.allocated -= layout.size();
+    }
 }

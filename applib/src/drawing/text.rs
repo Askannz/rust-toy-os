@@ -242,9 +242,23 @@ impl RichText {
 
 #[derive(Clone)]
 pub struct RichChar {
-    c: char,
-    color: Color,
-    font: &'static Font,
+    pub c: char,
+    pub color: Color,
+    pub font: &'static Font,
+}
+
+impl RichChar {
+    fn width(&self) -> u32 {
+        if self.c == '\n' {
+            0
+        } else {
+            self.font.char_w as u32
+        }
+    }
+
+    fn height(&self) -> u32 {
+        self.font.char_h as u32
+    }
 }
 
 pub struct FormattedRichLine {
@@ -252,78 +266,99 @@ pub struct FormattedRichLine {
     pub w: u32,
     pub h: u32,
 }
-
 pub struct FormattedRichText {
     pub lines: Vec<FormattedRichLine>,
     pub w: u32,
     pub h: u32,
 }
 
+impl FormattedRichText {
+
+    pub fn index_to_xy(&self, index: usize) -> (i64, i64, &RichChar) {
+
+        let mut y = 0;
+        let mut i = 0;
+
+        let (line, y, remainder) = self.lines.iter()
+            .find_map(|line| {
+                if index <= i + line.chars.len() { 
+                    Some((line, y, index - i))
+                } else {
+                    y += line.h;
+                    i += line.chars.len();
+                    None
+                }
+            })
+            .expect("Index out of bounds for FormattedRichText");
+
+        let x = line.chars[0..remainder].iter().map(|c| c.font.char_w).sum::<usize>();
+        let c = &line.chars[if remainder == 0 { 0 } else { remainder - 1 }];
+
+        (x as i64, y as i64, c)
+    }
+
+}
+
 pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
-    let rich_vec = &text.0;
 
-    if rich_vec.is_empty() {
-        return FormattedRichText {
-            lines: Vec::new(),
-            w: 0,
-            h: 0,
-        };
-    }
-    let max_char_w = rich_vec
-        .iter()
-        .map(|rich_char| rich_char.font.char_w)
-        .max()
-        .unwrap();
+    let RichText(chars) = text;
 
-    let max_per_line = max_w as usize / max_char_w;
+    let lines: Vec<FormattedRichLine> = chars
+        .split_inclusive(|rc| rc.c == '\n')
+        .flat_map(|explicit_line| {
+            let mut segments = Vec::new();
+            let mut x = 0;
+            let mut i = 0;
+            loop {
 
-    let mut formatted_lines = Vec::new();
-    let (mut text_w, mut text_h) = (0, 0);
-    let mut i0 = 0;
+                let ended = i == explicit_line.len();
 
-    for (i, rich_char) in rich_vec.iter().enumerate() {
-        let i1 = {
-            if rich_char.c == '\n' {
-                Some(i)
-            } else if i - i0 + 1 >= max_per_line || i == rich_vec.len() - 1 {
-                Some(i + 1)
-            } else {
-                None
+                let push_line = {
+                    if ended {
+                        true
+                    } else {
+                        let rc = &explicit_line[i];
+                        let char_w = rc.width();
+                        if x + char_w > max_w {
+                            true
+                        } else {
+                            x += char_w;
+                            i += 1;
+                            false
+                        }
+                    }
+                };
+
+                if push_line {
+
+                    let s = &explicit_line[..i];
+                    let line_w = s.iter().map(|rc| rc.width()).sum();
+                    let line_h = s.iter().map(|rc| rc.height()).max().unwrap();
+                    segments.push(FormattedRichLine {
+                        chars: s.to_vec(),
+                        w: line_w,
+                        h: line_h,
+                    });
+
+                    x = 0;
+                }
+
+                if ended { break; }
             }
-        };
 
-        if let Some(i1) = i1 {
-            let rich_slice = &rich_vec[i0..i1];
+            segments
+        })
+        .collect();
 
-            let line_h = rich_slice
-                .iter()
-                .map(|rich_char| rich_char.font.char_h)
-                .max()
-                .unwrap_or(0) as u32;
-
-            let line_w = rich_slice
-                .iter()
-                .map(|rich_char| rich_char.font.char_w)
-                .sum::<usize>() as u32;
-
-            formatted_lines.push(FormattedRichLine {
-                chars: rich_slice.to_vec(),
-                w: line_w,
-                h: line_h,
-            });
-
-            text_w = u32::max(text_w, line_w);
-            text_h += line_h;
-
-            i0 = i + 1;
-        }
-    }
+    let text_w = lines.iter().map(|line| line.w).max().unwrap();
+    let text_h = lines.iter().map(|line| line.h).sum();
 
     FormattedRichText {
-        lines: formatted_lines,
+        lines,
         w: text_w,
         h: text_h,
     }
+
 }
 
 pub fn draw_rich_slice<F: FbViewMut>(fb: &mut F, rich_slice: &[RichChar], x0: i64, y0: i64) {

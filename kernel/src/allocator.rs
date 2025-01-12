@@ -179,6 +179,14 @@ fn get_tracker(size: usize, align: usize) -> (usize, usize) {
     let size_index = usize::ilog2(block_size) as usize;
     let align_index = usize::ilog2(align) as usize;
 
+    if size_index >= NB_BLOCK_SIZES {
+        panic!("Cannot allocate block of size 2^{} bytes", size_index);
+    }
+
+    if align_index >= NB_BLOCK_SIZES {
+        panic!("Cannot allocate block of alignment 2^{} bytes", align_index);
+    }
+
     let tracker_index = size_index * NB_BLOCK_SIZES + align_index;
 
     (tracker_index, block_size)

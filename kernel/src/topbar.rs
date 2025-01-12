@@ -37,7 +37,7 @@ pub fn topbar<'a, F: FbViewMut>(
     //
     // Date and time
 
-    let month_str = Month::try_from(datetime.month0() as u8).unwrap().name();
+    let month_str = Month::try_from(datetime.month() as u8).unwrap().name();
 
     let day_suffix = match datetime.day() % 10 {
         1 => "st",

@@ -14,6 +14,10 @@ pub struct SimpleHeap {
     start: *mut u8,
     ptr: *mut u8,
 
+    // This represents a matrix
+    // <nb of possible block sizes> x <nb of possible block alignments>
+    // Alignment cannot be larger than size, so half the matrix is unused.
+    // But this keeps the code simple and doesn't waste that much memory.
     trackers: [Option<*mut u8>; NB_BLOCK_SIZES * NB_BLOCK_SIZES],
 
     stats: AllocStats,
@@ -169,7 +173,9 @@ unsafe impl GlobalAlloc for SimpleAllocator {
 
 fn get_tracker(size: usize, align: usize) -> (usize, usize) {
 
+    // Block needs to be big enough to contain a linked list pointer
     let block_size = usize::max(8, size.next_power_of_two());
+
     let size_index = usize::ilog2(block_size) as usize;
     let align_index = usize::ilog2(align) as usize;
 

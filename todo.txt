@@ -1,11 +1,23 @@
 # Bugs
 
+* web browser: cannot use URL bar on home page
+* mouse scrolling captured by multiple scrollbars
+* HTML rendering broken on page with large width
+* scrollbars interfere with resize button
+
 * resize handle "jumps" to cursor when resizing
 * random crashes after a while
 * clicks go through scrollbars
-* scrollbars interfere with resize button
-* mouse scrolling captured by multiple scrollbars
-* HTML rendering breaks down
+
+
+# Cosmetic
+
+* web browser: proper button icons
+* web browser: proper fonts for HN
+* better pie menu icons
+* multiple font sizes
+* choose proper style for UI (color, fonts, etc)
+
 
 # Refactorings
 
@@ -15,14 +27,22 @@
 * better tile cache
 * proper text layouting utilities
 
+
 # Features
 
-* app crash demo
-* choose proper style for UI (color, fonts, etc)
+* proper hover tooltips for resources topbar
+* guid demo app (with crash demo)
 * web browser: navigation controls (back/reload/home)
-* web browser: use proper fonts for HN
 * file editor + "fake" filesystem
-* better memory allocator
+
+
+# Meta
+
+* Readme and architecture doc
+* Demo videos
+* Project icon
+* MunalOS renaming
+* Icon credits script + doc
 
 
 # Low priority

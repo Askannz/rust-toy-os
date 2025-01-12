@@ -252,10 +252,13 @@ pub fn step() {
         &progress_str,
     );
 
-    let url_go = is_go_button_fired || check_enter_pressed(&input_state);
+    let url_bar_go = match is_go_button_fired || check_enter_pressed(&input_state) {
+        false => None,
+        true => Some(state.url_text.as_ref().to_owned())
+    };
 
     let prev_state_debug = format!("{:?}", state.request_state);
-    try_update_request_state(state, &stylesheet, url_go, is_reload_button_fired, &ui_layout, &input_state, time);
+    try_update_request_state(state, &stylesheet, url_bar_go, is_reload_button_fired, &ui_layout, &input_state, time);
     let new_state_debug = format!("{:?}", state.request_state);
 
     if new_state_debug != prev_state_debug {
@@ -322,13 +325,13 @@ fn check_enter_pressed(input_state: &InputState) -> bool {
 fn try_update_request_state(
     state: &mut AppState,
     stylesheet: &StyleSheet,
-    url_go: bool,
+    url_bar_go: Option<String>,
     is_reload_button_fired: bool,
     ui_layout: &UiLayout,
     input_state: &InputState,
     time: f64,
 ) {
-    match update_request_state(state, stylesheet,url_go, is_reload_button_fired, ui_layout, input_state, time) {
+    match update_request_state(state, stylesheet, url_bar_go, is_reload_button_fired, ui_layout, input_state, time) {
         Ok(_) => (),
         Err(err) => {
             log::error!("{}", err);
@@ -365,7 +368,7 @@ fn make_error_html(error: anyhow::Error) -> String {
 fn update_request_state(
     state: &mut AppState,
     stylesheet: &StyleSheet,
-    url_go: bool,
+    url_bar_go: Option<String>,
     is_reload_button_fired: bool,
     ui_layout: &UiLayout,
     input_state: &InputState,
@@ -435,8 +438,14 @@ fn update_request_state(
                 }
             }
 
-            if let Some(url) = clicked_url {
-                let http_target = parse_url(url)?;
+            let url = {
+                if let Some(url) = clicked_url { Some(url.to_owned()) }
+                else if let Some(url) = url_bar_go { Some(url) }
+                else { None }
+            };
+
+            if let Some(url) = url {
+                let http_target = parse_url(&url)?;
                 initiate_redirect(state, http_target)?;
             }
         },
@@ -463,8 +472,8 @@ fn update_request_state(
             );
 
             let new_http_target = {
-                if url_go {
-                    let new_http_target = parse_url(state.url_text.as_ref())?;
+                if let Some(url_text) = url_bar_go {
+                    let new_http_target = parse_url(&url_text)?;
                     Some(new_http_target)
                 } else if is_reload_button_fired {
                     http_target.clone()

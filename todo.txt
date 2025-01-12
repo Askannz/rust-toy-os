@@ -1,6 +1,5 @@
 # Bugs
 
-* web browser: cannot use URL bar on home page
 * mouse scrolling captured by multiple scrollbars
 * HTML rendering broken on page with large width
 * scrollbars interfere with resize button

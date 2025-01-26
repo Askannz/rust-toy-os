@@ -7,4 +7,4 @@ pub mod graph;
 pub mod scrollable_text;
 pub mod horiz_bar;
 pub mod tooltip;
-
+pub mod text_box;

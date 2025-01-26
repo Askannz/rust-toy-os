@@ -5,7 +5,6 @@
 * scrollbars interfere with resize button
 
 * resize handle "jumps" to cursor when resizing
-* random crashes after a while
 * clicks go through scrollbars
 
 
@@ -16,6 +15,7 @@
 * better pie menu icons
 * multiple font sizes
 * choose proper style for UI (color, fonts, etc)
+* desktop wallpaper
 
 
 # Refactorings
@@ -29,8 +29,9 @@
 
 # Features
 
+* wasm: restart button in window on crash
 * proper hover tooltips for resources topbar
-* guid demo app (with crash demo)
+* gui demo app (with crash demo)
 * web browser: navigation controls (back/reload/home)
 * file editor + "fake" filesystem
 

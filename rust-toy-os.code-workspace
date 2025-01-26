@@ -27,6 +27,9 @@
 		{
 			"name": "terminal",
 			"path": "wasm_apps/terminal"
+		},
+		{
+			"path": "wasm_apps/demo"
 		}
 	],
 	"settings": {}

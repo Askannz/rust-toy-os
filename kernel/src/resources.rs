@@ -69,7 +69,7 @@ lazy_static! {
     //
     // WASM apps
 
-    pub static ref APPLICATIONS: [AppDescriptor; 4] = [
+    pub static ref APPLICATIONS: [AppDescriptor; 5] = [
         AppDescriptor {
             data: include_bytes!("../wasm/cube_3d.wasm"),
             name: "3D Demo",
@@ -106,6 +106,17 @@ lazy_static! {
         AppDescriptor {
             data: include_bytes!("../wasm/web_browser.wasm"),
             name: "Web Browser",
+            init_win_rect: Rect {
+                x0: 400,
+                y0: 300,
+                w: 800,
+                h: 600
+            },
+            icon: &WEB_ICON,
+        },
+        AppDescriptor {
+            data: include_bytes!("../wasm/demo.wasm"),
+            name: "UI demo",
             init_win_rect: Rect {
                 x0: 400,
                 y0: 300,

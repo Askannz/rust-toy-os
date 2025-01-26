@@ -22,7 +22,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         dst_rect: &Rect,
         text: &mut T,
         state: &mut TextBoxState,
-        cursor: &mut usize,
+        editable: bool,
         autoscroll: bool,
         allow_newline: bool,
         prelude: Option<&T>,
@@ -34,11 +34,14 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             ..
         } = self;
 
-        let old_cursor = *cursor;
-        text.string_input(input_state, allow_newline, cursor, *uuid_provider);
+        let old_cursor = state.cursor;
+
+        if editable {
+            text.string_input(input_state, allow_newline, &mut state.cursor, *uuid_provider);
+        }
 
         let time_sec = (self.time as u64) / 1000;
-        let cursor_visible = time_sec % 2 == 0 || *cursor != old_cursor;
+        let cursor_visible = editable && (time_sec % 2 == 0 || state.cursor != old_cursor);
 
         // Only used if text is not already a RichText
         let font = self.font_family.get_default();
@@ -76,7 +79,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
         let renderer = TextRenderer { 
             formatted, bg_color: self.stylesheet.colors.element,
-            cursor: *cursor, cursor_visible,
+            cursor: state.cursor, cursor_visible,
             prelude_len,
         };
 
@@ -109,6 +112,7 @@ pub struct TextBoxState {
     pub content_id: Option<ContentId>,
     pub scroll_offsets: (i64, i64),
     pub scroll_dragging: (bool, bool),
+    pub cursor: usize,
 }
 
 impl TextBoxState {
@@ -116,7 +120,8 @@ impl TextBoxState {
         Self { 
             content_id: None,
             scroll_offsets: (0, 0),
-            scroll_dragging: (false, false)
+            scroll_dragging: (false, false),
+            cursor: 0,
         }
     }
 }

@@ -16,7 +16,6 @@ struct AppState {
     textbox_text: TrackedContent<String>,
     textbox_prelude: TrackedContent<String>,
     textbox_state: TextBoxState,
-    textbox_cursor: usize,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -46,7 +45,6 @@ pub fn init() -> () {
         textbox_text,
         textbox_prelude,
         textbox_state: TextBoxState::new(),
-        textbox_cursor: 0,
     };
     unsafe {
         APP_STATE
@@ -79,7 +77,7 @@ pub fn step() {
         &Rect { x0: 0, y0: 0, w: w / 2, h },
         &mut state.textbox_text,
         &mut state.textbox_state,
-        &mut state.textbox_cursor,
+        true,
         true,
         true,
         Some(&state.textbox_prelude)

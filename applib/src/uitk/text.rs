@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 
 use crate::content::TrackedContent;
 use crate::drawing::primitives::draw_rect;
-use crate::drawing::text::{draw_rich_slice, draw_str, Font, FormattedRichText};
+use crate::drawing::text::{draw_rich_slice, draw_str, Font, FormattedRichText, RichText};
 use crate::input::{InputEvent, InputState};
 use crate::input::{Keycode, CHARMAP};
 use crate::uitk::{ContentId, UiContext, CachedTile};
@@ -15,8 +15,8 @@ use crate::{Color, FbViewMut, Rect};
 
 use super::UuidProvider;
 
-pub fn string_input(
-    buffer: &mut TrackedContent<String>,
+pub fn string_input<T: EditableText>(
+    buffer: &mut TrackedContent<T>,
     input_state: &InputState,
     allow_newline: bool,
     cursor: &mut usize,
@@ -97,6 +97,48 @@ pub fn string_input(
                 }
             }
         }
+    }
+}
+
+pub trait EditableText {
+    fn len(&self) -> usize;
+    fn insert(&mut self, pos: usize, c: char);
+    fn remove(&mut self, pos: usize);
+}
+
+pub struct EditableRichText<'a> {
+    font: &'static Font,
+    color: Color,
+    rich_text: &'a mut RichText
+}
+
+impl<'a> EditableText for EditableRichText<'a> {
+
+    fn len(&self) -> usize {
+        self.rich_text.len()
+    }
+
+    fn insert(&mut self, pos: usize, c: char) {
+        self.rich_text.insert(pos, c, self.color, self.font);
+    }
+
+    fn remove(&mut self, pos: usize) {
+        self.rich_text.remove(pos);
+    }
+}
+
+impl EditableText for String {
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn insert(&mut self, pos: usize, c: char) {
+        self.insert(pos, c);
+    }
+
+    fn remove(&mut self, pos: usize) {
+        self.remove(pos);
     }
 }
 

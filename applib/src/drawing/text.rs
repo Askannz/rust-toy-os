@@ -208,6 +208,14 @@ impl RichText {
         RichText(Vec::new())
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
     pub fn add_part(
         &mut self,
         s: &str,
@@ -219,6 +227,24 @@ impl RichText {
             color,
             font,
         }));
+    }
+
+    pub fn insert(
+        &mut self,
+        pos: usize,
+        c: char,
+        color: Color,
+        font: &'static Font,
+    ) {
+        self.0.insert(pos, RichChar {
+            c,
+            color,
+            font,
+        });
+    }
+
+    pub fn remove(&mut self, pos: usize,) {
+        self.0.remove(pos);
     }
 
     pub fn from_str(s: &str, color: Color, font: &'static Font) -> Self {

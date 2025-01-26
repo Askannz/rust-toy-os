@@ -274,27 +274,60 @@ pub struct FormattedRichText {
 
 impl FormattedRichText {
 
-    pub fn index_to_xy(&self, index: usize) -> (i64, i64, &RichChar) {
+    pub fn index_to_xy(&self, index: usize) -> (i64, i64) {
 
-        let mut y = 0;
+        if self.lines.is_empty() { return (0, 0); }
+
+        // OK because we checked lines was not empty
+        let last_line = self.lines.last().unwrap();
+
+        // OK because a single line cannot be empty
+        let last_char = last_line .chars.last().unwrap().c;
+
         let mut i = 0;
-
-        let (line, y, remainder) = self.lines.iter()
-            .find_map(|line| {
-                if index <= i + line.chars.len() { 
-                    Some((line, y, index - i))
+        let search_res = self.lines.iter()
+            .enumerate()
+            .find_map(|(line_i, line)| {
+                if index < i + line.chars.len() { 
+                    Some((line_i, index - i))
                 } else {
-                    y += line.h;
                     i += line.chars.len();
                     None
                 }
-            })
-            .expect("Index out of bounds for FormattedRichText");
+            });
 
-        let x = line.chars[0..remainder].iter().map(|c| c.font.char_w).sum::<usize>();
-        let c = &line.chars[if remainder == 0 { 0 } else { remainder - 1 }];
+        let get_line_pos = |line_i: usize, line_char_i: usize| -> (u32, u32) {
+            let line = &self.lines[line_i];
+            let left_chars = &line.chars[0..line_char_i];
+            let x = left_chars.iter().map(|c| c.font.char_w as u32).sum::<u32>();
+            let y = self.lines[..line_i].iter().map(|l| l.h).sum::<u32>();
+            (x, y)
+        };
 
-        (x as i64, y as i64, c)
+        let (x, y) = match search_res {
+
+            Some((line_i, line_char_i)) => get_line_pos(line_i, line_char_i),
+
+            None if last_char == '\n' => {
+                let y = self.lines.iter().map(|l| l.h).sum::<u32>();
+                (0, y)
+            },
+
+            None => {
+                let line_i = self.lines.len() - 1;
+                let line_char_i = last_line.chars.len();
+                get_line_pos(line_i, line_char_i)
+            }
+        };
+
+        (x as i64, y as i64)
+    }
+}
+
+impl FormattedRichLine {
+
+    pub fn to_string(&self) -> String {
+        self.chars.iter().map(|rc| rc.c).collect()
     }
 
 }
@@ -308,22 +341,23 @@ pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
         .flat_map(|explicit_line| {
             let mut segments = Vec::new();
             let mut x = 0;
-            let mut i = 0;
+            let mut i1 = 0;
+            let mut i2 = 0;
             loop {
 
-                let ended = i == explicit_line.len();
+                let ended = i2 == explicit_line.len();
 
                 let push_line = {
                     if ended {
                         true
                     } else {
-                        let rc = &explicit_line[i];
+                        let rc = &explicit_line[i2];
                         let char_w = rc.width();
                         if x + char_w > max_w {
                             true
                         } else {
                             x += char_w;
-                            i += 1;
+                            i2 += 1;
                             false
                         }
                     }
@@ -331,7 +365,7 @@ pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
 
                 if push_line {
 
-                    let s = &explicit_line[..i];
+                    let s = &explicit_line[i1..i2];
                     let line_w = s.iter().map(|rc| rc.width()).sum();
                     let line_h = s.iter().map(|rc| rc.height()).max().unwrap();
                     segments.push(FormattedRichLine {
@@ -340,6 +374,7 @@ pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
                         h: line_h,
                     });
 
+                    i1 = i2;
                     x = 0;
                 }
 
@@ -350,7 +385,7 @@ pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
         })
         .collect();
 
-    let text_w = lines.iter().map(|line| line.w).max().unwrap();
+    let text_w = lines.iter().map(|line| line.w).max().unwrap_or(0);
     let text_h = lines.iter().map(|line| line.h).sum();
 
     FormattedRichText {

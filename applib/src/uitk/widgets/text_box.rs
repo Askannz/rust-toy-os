@@ -225,14 +225,14 @@ impl TileRenderer for TextRenderer {
         // Draw blinking cursor
 
         if self.cursor_visible {
-            let (x, y, c) = self.formatted.as_ref().index_to_xy(self.cursor);
+            let (x, y) = self.formatted.as_ref().index_to_xy(self.cursor);
             let cursor_rect = Rect {
-                x0: x,
-                y0: y,
+                x0: x - ox,
+                y0: y - oy,
                 w: 2,
-                h: c.font.char_h as u32,
+                h: 20, // TODO
             };
-            draw_rect(dst_fb, &cursor_rect, c.color, false);
+            draw_rect(dst_fb, &cursor_rect, Color::WHITE, false);
         }
     }
 }

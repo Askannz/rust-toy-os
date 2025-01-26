@@ -9,6 +9,7 @@ use crate::{BorrowedMutPixels, FbViewMut, FbView, Framebuffer};
 
 use crate::uitk::{CachedTile, TileCache, UiContext};
 
+const DISABLE_CACHING: bool = false;
 const SCROLL_SPEED: u32 = 10;
 const SBAR_OUTER_W: u32 = 16;
 const SBAR_INNER_W: u32 = 12;
@@ -172,7 +173,6 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
     }
 }
 
-
 fn draw_tiles<F: FbViewMut, T: TileRenderer>(
     renderer: &T,
     dst_fb: &mut F,
@@ -195,7 +195,7 @@ fn draw_tiles<F: FbViewMut, T: TileRenderer>(
 
         let tile_content_id = renderer.content_id(&tile_region.tile_rect);
 
-        let tile_fb = tile_cache.fetch_or_create(tile_content_id, time, || {
+        let render_tile = || {
             let mut tile_fb =
                 Framebuffer::new_owned(tile_region.tile_rect.w, tile_region.tile_rect.h);
 
@@ -205,7 +205,12 @@ fn draw_tiles<F: FbViewMut, T: TileRenderer>(
             //draw_tile_border(&mut tile_fb);
 
             tile_fb
-        });
+        };
+
+        let tile_fb = match DISABLE_CACHING {
+            false => tile_cache.fetch_or_create(tile_content_id, time, render_tile),
+            true => &render_tile(),
+        };
 
         let Rect {
             x0: tile_x0,

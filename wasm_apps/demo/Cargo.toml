@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 applib = { path = "../../applib" }
 guestlib = { path = "../../guestlib" }
+log = { version = "0.4.20", default-features = false }
 
 # To avoid error about missing tests
 [[bin]]

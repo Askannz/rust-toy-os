@@ -4,7 +4,7 @@ use alloc::format;
 use applib::drawing::text::{draw_str, DEFAULT_FONT_FAMILY};
 use applib::{Color, FbViewMut};
 use core::cell::OnceCell;
-use guestlib::PixelData;
+use guestlib::{PixelData, WasmLogger};
 use applib::Rect;
 use applib::content::TrackedContent;
 use applib::uitk::{self, UuidProvider, TextBoxState};
@@ -20,13 +20,19 @@ struct AppState {
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
 
+static LOGGER: WasmLogger = WasmLogger;
+const LOGGING_LEVEL: log::LevelFilter = log::LevelFilter::Debug;
+
 fn main() {}
 
 #[no_mangle]
 pub fn init() -> () {
 
+    log::set_max_level(LOGGING_LEVEL);
+    log::set_logger(&LOGGER).unwrap();
+
     let mut uuid_provider = uitk::UuidProvider::new();
-    let textbox_text = TrackedContent::new("pouet".to_owned(), &mut uuid_provider);
+    let textbox_text = TrackedContent::new("pouet\ntralala".to_owned(), &mut uuid_provider);
 
     let state = AppState {
         pixel_data: PixelData::new(),

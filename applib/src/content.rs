@@ -43,6 +43,11 @@ impl<T> TrackedContent<T> {
     pub fn get_id(&self) -> ContentId {
         self.content_id
     }
+
+    pub fn to_inner(self) -> (T, ContentId) {
+        let Self { inner, content_id } = self;
+        (inner, content_id)
+    }
 }
 
 pub struct UuidProvider {

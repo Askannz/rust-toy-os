@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use alloc::string::String;
 
 use crate::drawing::primitives::draw_rect;
-use crate::drawing::text::{draw_rich_slice, format_rich_lines, Font, FormattedRichText, RichText};
+use crate::drawing::text::{draw_rich_slice, format_rich_lines, Font, FormattedRichText, RichChar, RichText};
 use crate::input::InputEvent;
 use crate::input::{InputState};
 use crate::content::{ContentId, TrackedContent};
@@ -25,6 +25,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         cursor: &mut usize,
         autoscroll: bool,
         allow_newline: bool,
+        prelude: Option<&T>,
     ) {
 
         let UiContext {
@@ -43,10 +44,27 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         let font = self.font_family.get_default();
         let color = self.stylesheet.colors.text;
 
-        let rich_text = text.to_rich_text(color, font);
+        let (rich_text, prelude_len) = match prelude {
+            None => {
+                let rich = text.to_rich_text(color, font);
+                (rich, 0)
+            },
+            Some(prelude) => {
+                let (mut rich_1, cid_1) = prelude.to_rich_text(color, font).to_inner();
+                let (rich_2, cid_2) = text.to_rich_text(color, font).to_inner();
+
+                let prelude_len = rich_1.len();
+                
+                rich_1.concat(rich_2);
+                let cid = ContentId::from_hash((cid_1, cid_2));
+                let rich = TrackedContent::new_with_id(rich_1, cid);
+                
+                (rich, prelude_len)
+            }
+        };
 
         let formatted = {
-            let formatted = format_rich_lines(rich_text.as_ref(), dst_rect.w);
+            let formatted = format_rich_lines(rich_text.as_ref(), dst_rect.w - CURSOR_W);
             let content_id = ContentId::from_hash((
                 rich_text.get_id(),
                 dst_rect.w,
@@ -59,6 +77,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         let renderer = TextRenderer { 
             formatted, bg_color: self.stylesheet.colors.element,
             cursor: *cursor, cursor_visible,
+            prelude_len,
         };
 
         if autoscroll {
@@ -159,28 +178,36 @@ struct TextRenderer {
     formatted: TrackedContent<FormattedRichText>,
     bg_color: Color,
     cursor: usize,
+    prelude_len: usize,
     cursor_visible: bool,
 }
 
+const CURSOR_W: u32 = 2;
+const CURSOR_H: u32 = 20;
+const MIN_TILE_W: u32 = 200;
+const TILE_H: u32 = 200;
 
 impl TileRenderer for TextRenderer {
+
     fn shape(&self) -> (u32, u32) {
+
         let FormattedRichText { w, h, .. } = *self.formatted.as_ref();
-        (w + 10, h)
+        (w + CURSOR_W, h)
     }
 
     fn tile_shape(&self) -> (u32, u32) {
+
         let FormattedRichText { w, .. } = *self.formatted.as_ref();
         (
-            u32::max(w + 10, 200),
-            200
+            u32::max(w + CURSOR_W, MIN_TILE_W),
+            TILE_H
         )
     }
 
     fn content_id(&self, tile_rect: &Rect) -> ContentId {
 
         let FormattedRichText { w, h, .. } = *self.formatted.as_ref();
-        let text_rect = Rect { x0: 0, y0: 0, w, h};
+        let text_rect = Rect { x0: 0, y0: 0, w, h: h + CURSOR_H};
 
         if tile_rect.intersection(&text_rect).is_none() {
             ContentId::from_hash((tile_rect.w, tile_rect.h))
@@ -225,11 +252,11 @@ impl TileRenderer for TextRenderer {
         // Draw blinking cursor
 
         if self.cursor_visible {
-            let (x, y) = self.formatted.as_ref().index_to_xy(self.cursor);
+            let (x, y) = self.formatted.as_ref().index_to_xy(self.prelude_len + self.cursor);
             let cursor_rect = Rect {
                 x0: x - ox,
                 y0: y - oy,
-                w: 2,
+                w: CURSOR_W,
                 h: 20, // TODO
             };
             draw_rect(dst_fb, &cursor_rect, Color::WHITE, false);

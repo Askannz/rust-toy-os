@@ -238,6 +238,10 @@ impl RichText {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub fn concat(&mut self, mut other: Self) {
+        self.0.append(&mut other.0);
+    }
 }
 
 #[derive(Clone)]

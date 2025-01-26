@@ -14,6 +14,7 @@ struct AppState {
     ui_store: uitk::UiStore,
     uuid_provider: UuidProvider,
     textbox_text: TrackedContent<String>,
+    textbox_prelude: TrackedContent<String>,
     textbox_state: TextBoxState,
     textbox_cursor: usize,
 }
@@ -33,12 +34,17 @@ pub fn init() -> () {
 
     let mut uuid_provider = uitk::UuidProvider::new();
     let textbox_text = TrackedContent::new("pouet\ntralala".to_owned(), &mut uuid_provider);
+    let textbox_prelude = TrackedContent::new(
+        "Write text here >>>".to_string(),
+        &mut uuid_provider,
+    );
 
     let state = AppState {
         pixel_data: PixelData::new(),
         ui_store: uitk::UiStore::new(),
         uuid_provider: UuidProvider::new(),
         textbox_text,
+        textbox_prelude,
         textbox_state: TextBoxState::new(),
         textbox_cursor: 0,
     };
@@ -58,6 +64,7 @@ pub fn step() {
     let input_state = guestlib::get_input_state();
     let Rect { w, h, ..} = guestlib::get_win_rect();
 
+
     let mut framebuffer = state.pixel_data.get_framebuffer();
 
     let mut uitk_context = state.ui_store.get_context(
@@ -75,5 +82,6 @@ pub fn step() {
         &mut state.textbox_cursor,
         true,
         true,
+        Some(&state.textbox_prelude)
     );
 }

@@ -109,7 +109,7 @@ pub fn step() {
         color: Color::WHITE
     };
 
-    uitk_context.text_box(
+    uitk_context.editable_text_box(
         &rect_console,
         &mut editable,
         &mut state.textbox_state,

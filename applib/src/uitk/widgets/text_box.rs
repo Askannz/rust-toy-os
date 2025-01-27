@@ -17,7 +17,18 @@ use crate::uitk::text::{string_input, EditableText};
 
 impl<'a, F: FbViewMut> UiContext<'a, F> {
 
-    pub fn text_box<T: FormattableText + EditableText, U: FormattableText>(
+    pub fn text_box<T: FormattableText>(
+        &mut self,
+        dst_rect: &Rect,
+        text: &T,
+        state: &mut TextBoxState,
+        autoscroll: bool,
+    ) {
+        let prelude: Option<&T> = None;
+        self.text_box_inner(dst_rect, text, state, autoscroll, prelude, false);
+    }
+
+    pub fn editable_text_box<T: FormattableText + EditableText, U: FormattableText>(
         &mut self,
         dst_rect: &Rect,
         text: &mut T,
@@ -34,14 +45,28 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             ..
         } = self;
 
-        let old_cursor = state.cursor;
-
         if editable {
             string_input(text, input_state, allow_newline, &mut state.cursor, *uuid_provider);
         }
 
+        self.text_box_inner(dst_rect, text, state, autoscroll, prelude, true);
+
+    }
+
+    fn text_box_inner<T: FormattableText, U: FormattableText>(
+        &mut self,
+        dst_rect: &Rect,
+        text: &T,
+        state: &mut TextBoxState,
+        autoscroll: bool,
+        prelude: Option<&U>,
+        cursor_enabled: bool,
+    ) {
+
+        let old_cursor = state.cursor;
+
         let time_sec = (self.time as u64) / 1000;
-        let cursor_visible = editable && (time_sec % 2 == 0 || state.cursor != old_cursor);
+        let cursor_visible = cursor_enabled && (time_sec % 2 == 0 || state.cursor != old_cursor);
 
         // Only used if text is not already a RichText
         let font = self.font_family.get_default();

@@ -15,7 +15,8 @@ struct AppState {
     uuid_provider: UuidProvider,
     textbox_text: TrackedContent<String>,
     textbox_prelude: TrackedContent<String>,
-    textbox_state: TextBoxState,
+    textbox_1_state: TextBoxState,
+    textbox_2_state: TextBoxState,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -44,7 +45,8 @@ pub fn init() -> () {
         uuid_provider: UuidProvider::new(),
         textbox_text,
         textbox_prelude,
-        textbox_state: TextBoxState::new(),
+        textbox_1_state: TextBoxState::new(),
+        textbox_2_state: TextBoxState::new(),
     };
     unsafe {
         APP_STATE
@@ -73,13 +75,20 @@ pub fn step() {
         time
     );
 
-    uitk_context.text_box(
+    uitk_context.editable_text_box(
         &Rect { x0: 0, y0: 0, w: w / 2, h },
         &mut state.textbox_text,
-        &mut state.textbox_state,
+        &mut state.textbox_1_state,
         true,
         true,
         true,
         Some(&state.textbox_prelude)
+    );
+
+    uitk_context.text_box(
+        &Rect { x0: (w / 2) as i64, y0: 0, w: w / 2, h },
+        &state.textbox_text,
+        &mut state.textbox_2_state,
+        true
     );
 }

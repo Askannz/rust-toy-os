@@ -16,13 +16,13 @@ use crate::{Color, FbViewMut, Rect};
 use super::UuidProvider;
 
 pub fn string_input<T: EditableText>(
-    buffer: &mut TrackedContent<T>,
+    buffer: &mut T,
     input_state: &InputState,
     allow_newline: bool,
     cursor: &mut usize,
     uuid_provider: &mut UuidProvider,
 ) {
-    let buf_len = buffer.as_ref().len();
+    let buf_len = buffer.len();
     *cursor = usize::min(buf_len, *cursor);
 
     enum TextUpdate {
@@ -78,21 +78,20 @@ pub fn string_input<T: EditableText>(
     }
 
     if !updates.is_empty() {
-        let buffer = buffer.mutate(uuid_provider);
         for update in updates {
             match update {
                 TextUpdate::Newline => {
-                    buffer.insert(*cursor, '\n');
+                    buffer.insert(uuid_provider, *cursor, '\n');
                     *cursor += 1;
                 }
                 TextUpdate::Backspace => {
                     if *cursor > 0 {
-                        buffer.remove(*cursor - 1);
+                        buffer.remove(uuid_provider, *cursor - 1);
                         *cursor -= 1;
                     }
                 }
                 TextUpdate::Char(c) => {
-                    buffer.insert(*cursor, c);
+                    buffer.insert(uuid_provider, *cursor, c);
                     *cursor += 1;
                 }
             }
@@ -102,43 +101,22 @@ pub fn string_input<T: EditableText>(
 
 pub trait EditableText {
     fn len(&self) -> usize;
-    fn insert(&mut self, pos: usize, c: char);
-    fn remove(&mut self, pos: usize);
+    fn insert(&mut self, uuid_provider: &mut UuidProvider, pos: usize, c: char);
+    fn remove(&mut self, uuid_provider: &mut UuidProvider, pos: usize);
 }
 
-pub struct EditableRichText<'a> {
-    font: &'static Font,
-    color: Color,
-    rich_text: &'a mut RichText
-}
-
-impl<'a> EditableText for EditableRichText<'a> {
+impl EditableText for TrackedContent<String> {
 
     fn len(&self) -> usize {
-        self.rich_text.len()
+        self.as_ref().len()
     }
 
-    fn insert(&mut self, pos: usize, c: char) {
-        self.rich_text.insert(pos, c, self.color, self.font);
+    fn insert(&mut self, uuid_provider: &mut UuidProvider, pos: usize, c: char) {
+        self.mutate(uuid_provider).insert(pos, c);
     }
 
-    fn remove(&mut self, pos: usize) {
-        self.rich_text.remove(pos);
-    }
-}
-
-impl EditableText for String {
-
-    fn len(&self) -> usize {
-        self.len()
-    }
-
-    fn insert(&mut self, pos: usize, c: char) {
-        self.insert(pos, c);
-    }
-
-    fn remove(&mut self, pos: usize) {
-        self.remove(pos);
+    fn remove(&mut self, uuid_provider: &mut UuidProvider, pos: usize) {
+        self.mutate(uuid_provider).remove(pos);
     }
 }
 

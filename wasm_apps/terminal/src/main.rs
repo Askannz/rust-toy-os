@@ -11,7 +11,7 @@ use applib::drawing::text::{
 };
 use applib::input::InputEvent;
 use applib::input::{InputState, Keycode};
-use applib::uitk::{self, UiStore, UuidProvider, TextBoxState};
+use applib::uitk::{self, UiStore, UuidProvider, TextBoxState, EditableRichText};
 use applib::{Color, FbViewMut, Rect, StyleSheet};
 use core::cell::OnceCell;
 use guestlib::PixelData;
@@ -101,11 +101,19 @@ pub fn step() {
         h: win_h,
     };
 
+    let font = DEFAULT_FONT_FAMILY.get_default();
+
+    let mut editable = EditableRichText { 
+        rich_text: &mut state.input_buffer,
+        font,
+        color: Color::WHITE
+    };
+
     uitk_context.text_box(
         &rect_console,
-        &mut state.input_buffer,
+        &mut editable,
         &mut state.textbox_state,
-        false,
+        true,
         true,
         false,
         Some(&rich_text_prelude),

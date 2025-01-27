@@ -10,7 +10,7 @@ impl ContentId {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TrackedContent<T> {
     inner: T,
     content_id: ContentId,

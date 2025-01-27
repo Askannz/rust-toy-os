@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use alloc::string::String;
 
 use crate::drawing::primitives::draw_rect;
-use crate::drawing::text::{draw_rich_slice, format_rich_lines, Font, FormattedRichText, RichChar, RichText};
+use crate::drawing::text::{draw_rich_slice, format_rich_lines, Font, FormattedRichText, RichChar, RichText,};
 use crate::input::InputEvent;
 use crate::input::{InputState};
 use crate::content::{ContentId, TrackedContent};
@@ -13,11 +13,11 @@ use crate::{BorrowedMutPixels, FbViewMut, FbView, Framebuffer};
 use crate::uitk::{CachedTile, TileCache, TileRenderer, UiContext};
 
 use crate::uitk::UuidProvider;
-use crate::uitk::text::string_input;
+use crate::uitk::text::{string_input, EditableText};
 
 impl<'a, F: FbViewMut> UiContext<'a, F> {
 
-    pub fn text_box<T: FormattableText>(
+    pub fn text_box<T: FormattableText + EditableText, U: FormattableText>(
         &mut self,
         dst_rect: &Rect,
         text: &mut T,
@@ -25,7 +25,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         editable: bool,
         autoscroll: bool,
         allow_newline: bool,
-        prelude: Option<&T>,
+        prelude: Option<&U>,
     ) {
 
         let UiContext {
@@ -37,7 +37,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         let old_cursor = state.cursor;
 
         if editable {
-            text.string_input(input_state, allow_newline, &mut state.cursor, *uuid_provider);
+            string_input(text, input_state, allow_newline, &mut state.cursor, *uuid_provider);
         }
 
         let time_sec = (self.time as u64) / 1000;
@@ -128,13 +128,6 @@ impl TextBoxState {
 
 pub trait FormattableText {
     fn to_rich_text(&self, color: Color, font: &'static Font) -> TrackedContent<RichText>;
-    fn string_input(
-        &mut self,
-        input_state: &InputState,
-        allow_newline: bool,
-        cursor: &mut usize,
-        uuid_provider: &mut UuidProvider,
-    );
 }
 
 impl FormattableText for TrackedContent<String> {
@@ -147,17 +140,6 @@ impl FormattableText for TrackedContent<String> {
         ));
         TrackedContent::new_with_id(rich_text, new_id)
     }
-
-    fn string_input(
-            &mut self,
-            input_state: &InputState,
-            allow_newline: bool,
-            cursor: &mut usize,
-            uuid_provider: &mut UuidProvider,
-        ) {
-        
-        string_input(self, input_state, allow_newline, cursor, uuid_provider);
-    }
 }
 
 impl FormattableText for TrackedContent<RichText> {
@@ -166,16 +148,33 @@ impl FormattableText for TrackedContent<RichText> {
         let rich_text = self.as_ref().clone();
         TrackedContent::new_with_id(rich_text, content_id)
     }
+}
 
-    fn string_input(
-        &mut self,
-        _input_state: &InputState,
-        _allow_newline: bool,
-        _cursor: &mut usize,
-        _uuid_provider: &mut UuidProvider,
-    ) {
-    
-        unimplemented!("string_input() not implemented for RichText");
+pub struct EditableRichText<'a> {
+    pub font: &'static Font,
+    pub color: Color,
+    pub rich_text: &'a mut TrackedContent<RichText>
+}
+
+impl<'a> EditableText for EditableRichText<'a> {
+
+    fn len(&self) -> usize {
+        self.rich_text.as_ref().len()
+    }
+
+    fn insert(&mut self, uuid_provider: &mut UuidProvider, pos: usize, c: char) {
+        self.rich_text.mutate(uuid_provider).insert(pos, c, self.color, self.font);
+    }
+
+    fn remove(&mut self, uuid_provider: &mut UuidProvider, pos: usize) {
+        self.rich_text.mutate(uuid_provider).remove(pos);
+    }
+}
+
+
+impl<'a> FormattableText for EditableRichText<'a> {
+    fn to_rich_text(&self, _color: Color, _font: &'static Font) -> TrackedContent<RichText> {
+        self.rich_text.clone()
     }
 }
 

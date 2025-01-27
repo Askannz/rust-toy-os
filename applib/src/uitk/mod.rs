@@ -7,11 +7,9 @@ mod text;
 pub use widgets::button::ButtonConfig;
 pub use widgets::dynamic_canvas::TileRenderer;
 pub use widgets::progress_bar::ProgressBarConfig;
-pub use widgets::editable_text::EditableTextConfig;
 pub use widgets::static_canvas::set_autoscroll;
 pub use widgets::graph::{GraphConfig, GraphSeries, GraphAggMode};
 pub use widgets::horiz_bar::{BarValue, HorizBarConfig};
-pub use widgets::scrollable_text::ScrollableTextState;
 pub use widgets::text_box::{FormattableText, TextBoxState, EditableRichText};
 pub use text::{render_rich_text, string_input};
 

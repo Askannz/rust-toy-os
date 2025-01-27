@@ -11,7 +11,7 @@ use crate::stats::SystemStats;
 use applib::drawing::primitives::draw_rect;
 use applib::drawing::text::{draw_line_in_rect, draw_rich_slice, draw_str, format_rich_lines, Font, RichText, TextJustification};
 use applib::geometry::{Point2D, Vec2D};
-use applib::uitk::{self, GraphSeries, UiContext, ScrollableTextState};
+use applib::uitk::{self, GraphSeries, UiContext, TextBoxState};
 use applib::{input::InputState, Color, FbViewMut, Framebuffer, OwnedPixels, Rect};
 use applib::content::{TrackedContent, UuidProvider};
 
@@ -90,7 +90,7 @@ pub enum AppState {
 
 pub enum AppAuditMode {
     Disabled,
-    Enabled { scrollable_text_state: ScrollableTextState },
+    Enabled { scrollable_text_state: TextBoxState },
 }
 
 impl AppAuditMode {
@@ -334,7 +334,7 @@ pub fn run_apps<F: FbViewMut>(
                 },
                 Some("Open audit") => if let AppState::Active { audit_mode, .. } = &mut app.app_state {
                     *audit_mode = AppAuditMode::Enabled { 
-                        scrollable_text_state: ScrollableTextState::new()
+                        scrollable_text_state: TextBoxState::new()
                     };
                     *is = AppsInteractionState::Idle;
                 },
@@ -528,7 +528,7 @@ fn app_audit_window<F: FbViewMut>(
     deco: &AppDecorations,
     stats: &SystemStats,
     console_log: &TrackedContent<String>,
-    scrollable_text_state: &mut ScrollableTextState,
+    scrollable_text_state: &mut TextBoxState,
 ) {
 
     const ROW_H: u32 = 50;
@@ -647,13 +647,12 @@ fn app_audit_window<F: FbViewMut>(
         i64::max(y + MIN_AUDIT_WIN_H as i64, win_y - deco.handle_h as i64 - 1),
     ]);
 
-    uitk_context.scrollable_text(
+    uitk_context.text_box(
         &console_rect,
         console_log,
         scrollable_text_state,
-        true,
+        true
     );
-
 }
 
 

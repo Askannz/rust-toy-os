@@ -17,7 +17,7 @@ use guestlib::{PixelData, WasmLogger};
 use applib::content::TrackedContent;
 use applib::input::Keycode;
 use applib::input::{InputEvent, InputState};
-use applib::uitk::{self, ButtonConfig, UuidProvider};
+use applib::uitk::{self, ButtonConfig, UuidProvider, TextBoxState};
 use applib::{Framebuffer, OwnedPixels};
 
 mod dns;
@@ -49,7 +49,7 @@ struct AppState {
     pixel_data: PixelData,
 
     url_text: TrackedContent<String>,
-    url_cursor: usize,
+    url_textbox_state: TextBoxState,
 
     buffer: Vec<u8>,
 
@@ -175,7 +175,7 @@ pub fn init() -> () {
     let state = AppState {
         pixel_data: PixelData::new(),
         url_text: TrackedContent::new(url_text, &mut uuid_provider),
-        url_cursor: url_len,
+        url_textbox_state: TextBoxState::new(),
 
         buffer: vec![0u8; BUFFER_SIZE],
         ui_store: uitk::UiStore::new(),
@@ -231,13 +231,14 @@ pub fn step() {
         ..Default::default()
     });
 
-    uitk_context.editable_text(
-        &uitk::EditableTextConfig {
-            rect: ui_layout.url_bar_rect.clone(),
-            ..Default::default()
-        },
+    uitk_context.editable_text_box(
+        &ui_layout.url_bar_rect,
         &mut state.url_text,
-        &mut state.url_cursor,
+        &mut state.url_textbox_state,
+        true,
+        false,
+        false,
+        None::<&TrackedContent<String>>,
     );
 
     let (progress_val, progress_str) = get_progress_repr(&state.request_state);

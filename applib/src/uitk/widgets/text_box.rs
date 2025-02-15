@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use alloc::string::String;
 
 use crate::drawing::primitives::draw_rect;
-use crate::drawing::text::{draw_rich_slice, format_rich_lines, Font, FormattedRichText, RichChar, RichText,};
+use crate::drawing::text::{draw_rich_slice, format_rich_lines, Font, FormattedRichText, RichChar, RichText, TextJustification};
 use crate::input::InputEvent;
 use crate::input::{InputState};
 use crate::content::{ContentId, TrackedContent};
@@ -92,7 +92,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         };
 
         let formatted = {
-            let formatted = format_rich_lines(rich_text.as_ref(), dst_rect.w - CURSOR_W);
+            let formatted = format_rich_lines(rich_text.as_ref(), dst_rect.w - CURSOR_W, state.justif);
             let content_id = ContentId::from_hash((
                 rich_text.get_id(),
                 dst_rect.w,
@@ -138,6 +138,7 @@ pub struct TextBoxState {
     pub scroll_offsets: (i64, i64),
     pub scroll_dragging: (bool, bool),
     pub cursor: usize,
+    pub justif: TextJustification,
 }
 
 impl TextBoxState {
@@ -147,6 +148,7 @@ impl TextBoxState {
             scroll_offsets: (0, 0),
             scroll_dragging: (false, false),
             cursor: 0,
+            justif: TextJustification::Left,
         }
     }
 }
@@ -262,16 +264,19 @@ impl TileRenderer for TextRenderer {
 
         let mut y = 0;
         for line in self.formatted.as_ref().lines.iter() {
+
+            let line_x0 = line.x_offset as i64;
+
             // Bounding box of line in source
             let line_rect = Rect {
-                x0: 0,
+                x0: line_x0,
                 y0: y,
                 w: line.w,
                 h: line.h,
             };
 
             if tile_rect.intersection(&line_rect).is_some() {
-                draw_rich_slice(dst_fb, &line.chars, 0, y - oy);
+                draw_rich_slice(dst_fb, &line.chars, line_x0, y - oy);
             }
 
             y += line.h as i64;

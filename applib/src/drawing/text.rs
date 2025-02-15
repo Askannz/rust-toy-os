@@ -295,11 +295,13 @@ pub struct FormattedRichLine {
     pub chars: Vec<RichChar>,
     pub w: u32,
     pub h: u32,
+    pub x_offset: u32,
 }
 pub struct FormattedRichText {
     pub lines: Vec<FormattedRichLine>,
     pub w: u32,
     pub h: u32,
+    justif: TextJustification,
 }
 
 impl FormattedRichText {
@@ -328,10 +330,11 @@ impl FormattedRichText {
 
         let get_line_pos = |line_i: usize, line_char_i: usize| -> (u32, u32) {
             let line = &self.lines[line_i];
+            let x_offset = line.x_offset;
             let left_chars = &line.chars[0..line_char_i];
             let x = left_chars.iter().map(|c| c.font.char_w as u32).sum::<u32>();
             let y = self.lines[..line_i].iter().map(|l| l.h).sum::<u32>();
-            (x, y)
+            (x + x_offset, y)
         };
 
         let (x, y) = match search_res {
@@ -340,7 +343,12 @@ impl FormattedRichText {
 
             None if last_char == '\n' => {
                 let y = self.lines.iter().map(|l| l.h).sum::<u32>();
-                (0, y)
+                let x = match self.justif {
+                    TextJustification::Left => 0,
+                    TextJustification::Center => self.w / 2,
+                    TextJustification::Right => self.w
+                };
+                (x, y)
             },
 
             None => {
@@ -362,7 +370,7 @@ impl FormattedRichLine {
 
 }
 
-pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
+pub fn format_rich_lines(text: &RichText, max_w: u32, justif: TextJustification) -> FormattedRichText {
 
     let RichText(chars) = text;
 
@@ -398,10 +406,18 @@ pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
                     let s = &explicit_line[i1..i2];
                     let line_w = s.iter().map(|rc| rc.width()).sum();
                     let line_h = s.iter().map(|rc| rc.height()).max().unwrap();
+
+                    let x_offset = match justif {
+                        TextJustification::Left => 0,
+                        TextJustification::Center => (max_w - line_w) / 2,
+                        TextJustification::Right => max_w - line_w
+                    };
+
                     segments.push(FormattedRichLine {
                         chars: s.to_vec(),
                         w: line_w,
                         h: line_h,
+                        x_offset
                     });
 
                     i1 = i2;
@@ -415,13 +431,13 @@ pub fn format_rich_lines(text: &RichText, max_w: u32) -> FormattedRichText {
         })
         .collect();
 
-    let text_w = lines.iter().map(|line| line.w).max().unwrap_or(0);
     let text_h = lines.iter().map(|line| line.h).sum();
 
     FormattedRichText {
         lines,
-        w: text_w,
+        w: max_w,
         h: text_h,
+        justif
     }
 
 }

@@ -2,7 +2,7 @@ use core::hash::Hasher;
 
 use anyhow::anyhow;
 
-use applib::drawing::text::{format_rich_lines, Font, FormattedRichText, RichText, DEFAULT_FONT_FAMILY};
+use applib::drawing::text::{format_rich_lines, Font, FormattedRichText, RichText, DEFAULT_FONT_FAMILY, TextJustification};
 use applib::{Color, Rect};
 
 use super::parsing::{HtmlTree, NodeData as HtmlNodeData, NodeId as HtmlNodeId};
@@ -203,7 +203,7 @@ fn parse_node<'b>(
 
             let text_max_w = i64::max(10, page_max_w as i64 - x0) as u32;
             let rich_text = RichText::from_str(text, color, font);
-            let formatted = format_rich_lines(&rich_text, text_max_w);
+            let formatted = format_rich_lines(&rich_text, text_max_w, TextJustification::Left);
 
             let w = formatted.w + m.left + m.right;
             let h = formatted.h as u32 + m.top + m.bottom;

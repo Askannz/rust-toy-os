@@ -1,25 +1,28 @@
 extern crate alloc;
 
 use alloc::format;
-use applib::drawing::text::{draw_str, DEFAULT_FONT_FAMILY};
+use applib::drawing::primitives::draw_rect;
+use applib::drawing::text::{draw_str, Font, RichText, TextJustification, DEFAULT_FONT_FAMILY};
 use applib::{Color, FbViewMut};
 use core::cell::OnceCell;
 use guestlib::{PixelData, WasmLogger};
 use applib::Rect;
 use applib::content::TrackedContent;
-use applib::uitk::{self, ButtonConfig, ChoiceButtonsConfig, ChoiceConfig, TextBoxState, UuidProvider};
+use applib::uitk::{self, ButtonConfig, ChoiceButtonsConfig, ChoiceConfig, EditableRichText, TextBoxState, UuidProvider};
 
 struct AppState {
     pixel_data: PixelData,
     ui_store: uitk::UiStore,
     uuid_provider: UuidProvider,
-    textbox_text: TrackedContent<String>,
-    textbox_prelude: TrackedContent<String>,
-    textbox_1_state: TextBoxState,
-    textbox_2_state: TextBoxState,
+
+    textbox_text: TrackedContent<RichText>,
+    textbox_prelude: TrackedContent<RichText>,
+    textbox_state: TextBoxState,
 
     button_active: bool,
-    choice_list_selected: Vec<usize>,
+    selected_justif: usize,
+    selected_color: usize,
+    selected_size: usize,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -36,11 +39,30 @@ pub fn init() -> () {
     log::set_logger(&LOGGER).unwrap();
 
     let mut uuid_provider = uitk::UuidProvider::new();
-    let textbox_text = TrackedContent::new("pouet\ntralala".to_owned(), &mut uuid_provider);
-    let textbox_prelude = TrackedContent::new(
-        "Write text here >>>".to_string(),
-        &mut uuid_provider,
-    );
+
+    let selected_justif = 0;
+    let selected_color = 0;
+    let selected_size = 0;
+
+    let textbox_state = {
+        let mut tb_state = TextBoxState::new();
+        tb_state.justif = get_justif(selected_justif);
+        tb_state
+    };
+
+    let color = get_color(selected_color);
+    let font = get_font(selected_size);    
+
+    let textbox_text = {
+        let text = RichText::from_str("pouet\ntralala", color, font);
+        TrackedContent::new(text, &mut uuid_provider)
+    };
+
+    let textbox_prelude = {
+        let text = RichText::from_str("Write text here >>>", color, font);
+        TrackedContent::new(text, &mut uuid_provider)
+    };
+
 
     let state = AppState {
         pixel_data: PixelData::new(),
@@ -48,10 +70,11 @@ pub fn init() -> () {
         uuid_provider: UuidProvider::new(),
         textbox_text,
         textbox_prelude,
-        textbox_1_state: TextBoxState::new(),
-        textbox_2_state: TextBoxState::new(),
+        textbox_state,
         button_active: false,
-        choice_list_selected: Vec::new(),
+        selected_justif,
+        selected_color,
+        selected_size,
     };
     unsafe {
         APP_STATE
@@ -80,42 +103,108 @@ pub fn step() {
         time
     );
 
-    uitk_context.button_toggle(
-        &ButtonConfig{
-            rect: Rect { x0: 0, y0: 0, w: 100, h: 50 },
-            text: "Toggle".to_string(),
-            ..Default::default()
-        },
-        &mut state.button_active,
+    // uitk_context.button_toggle(
+    //     &ButtonConfig{
+    //         rect: Rect { x0: 0, y0: 0, w: 100, h: 50 },
+    //         text: "Toggle".to_string(),
+    //         ..Default::default()
+    //     },
+    //     &mut state.button_active,
+    // );
+
+    draw_rect(
+        uitk_context.fb,
+        &Rect { x0: (w / 2).into(), y0: 0, w: w / 2, h },
+        stylesheet.colors.background,
+        false
     );
 
-    uitk_context.choice_buttons_multi(
+
+    // Justification
+
+    uitk_context.choice_buttons_exclusive(
         &ChoiceButtonsConfig {
-            rect: Rect { x0: 0, y0: 50, w, h: 50 },
+            rect: Rect { x0: (w / 2).into(), y0: 0, w: 100, h: 20 },
             choices: vec![
                 ChoiceConfig {
-                    text: "One".to_owned(),
+                    text: "L".to_owned(),
                     ..Default::default()
                 },
                 ChoiceConfig {
-                    text: "Two".to_owned(),
+                    text: "C".to_owned(),
+                    ..Default::default()
+                },
+                ChoiceConfig {
+                    text: "R".to_owned(),
                     ..Default::default()
                 },
             ]
         },
-        &mut state.choice_list_selected
+        &mut state.selected_justif
     );
 
+    state.textbox_state.justif = get_justif(state.selected_justif);
 
-    let prelude = TrackedContent::new_from_hash("Write text here >>".to_owned());
+
+    // Color
+
+    uitk_context.choice_buttons_exclusive(
+        &ChoiceButtonsConfig {
+            rect: Rect { x0: (w / 2).into(), y0: 20, w: 200, h: 20 },
+            choices: vec![
+                ChoiceConfig {
+                    text: "White".to_owned(),
+                    ..Default::default()
+                },
+                ChoiceConfig {
+                    text: "Blue".to_owned(),
+                    ..Default::default()
+                },
+                ChoiceConfig {
+                    text: "Red".to_owned(),
+                    ..Default::default()
+                },
+            ]
+        },
+        &mut state.selected_color
+    );
+
+    let color = get_color(state.selected_color);
+
+
+    // Font
+
+    uitk_context.choice_buttons_exclusive(
+        &ChoiceButtonsConfig {
+            rect: Rect { x0: (w / 2).into(), y0: 40, w: 60, h: 20 },
+            choices: vec![
+                ChoiceConfig {
+                    text: "18".to_owned(),
+                    ..Default::default()
+                },
+                ChoiceConfig {
+                    text: "24".to_owned(),
+                    ..Default::default()
+                },
+            ]
+        },
+        &mut state.selected_size
+    );
+
+    let font = get_font(state.selected_size);
+
 
     uitk_context.editable_text_box(
         &Rect { x0: 0, y0: 0, w: w / 2, h },
-        &mut state.textbox_text,
-        &mut state.textbox_1_state,
+        &mut EditableRichText {
+            color,
+            font,
+            rich_text: &mut state.textbox_text
+        },
+        &mut state.textbox_state,
         true,
         true,
-        Some(&prelude)
+        Some(&state.textbox_prelude)
     );
 
     // uitk_context.text_box(
@@ -125,3 +214,29 @@ pub fn step() {
     //     true
     // );
 }
+
+fn get_justif(selected: usize) -> TextJustification {
+    match selected {
+        0 => TextJustification::Left,
+        1 => TextJustification::Center,
+        _ => TextJustification::Right,
+    }
+}
+
+fn get_color(selected: usize) -> Color {
+    match selected {
+        0 => Color::WHITE,
+        1 => Color::BLUE,
+        _ => Color::RED,
+    }
+}
+
+fn get_font(selected: usize) -> &'static Font {
+    let size = match selected {
+        0 => 18,
+        _ => 24,
+    };
+
+    DEFAULT_FONT_FAMILY.by_size.get(&size).unwrap()
+}
+

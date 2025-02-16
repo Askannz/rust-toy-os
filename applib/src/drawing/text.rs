@@ -42,7 +42,7 @@ fn load_font(spec: &FontSpec) -> Font {
 }
 
 pub struct FontFamily {
-    by_size: BTreeMap<usize, Font>
+    pub by_size: BTreeMap<usize, Font>
 }
 
 impl FontFamily {
@@ -92,7 +92,7 @@ lazy_static! {
     ]);
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash)]
 pub enum TextJustification { Left, Center, Right }
 
 pub fn draw_line_in_rect<F: FbViewMut>(

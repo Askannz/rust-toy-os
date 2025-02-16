@@ -109,6 +109,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             let content_id = ContentId::from_hash(&(
                 rich_text.get_id(),
                 dst_rect.w,
+                state.justif,
             ));
             TrackedContent::new_with_id(formatted, content_id)
         };

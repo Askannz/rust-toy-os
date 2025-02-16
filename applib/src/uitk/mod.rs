@@ -11,6 +11,7 @@ pub use widgets::static_canvas::set_autoscroll;
 pub use widgets::graph::{GraphConfig, GraphSeries, GraphAggMode};
 pub use widgets::horiz_bar::{BarValue, HorizBarConfig};
 pub use widgets::text_box::{FormattableText, TextBoxState, EditableRichText};
+pub use widgets::choice_buttons::{ChoiceConfig, ChoiceButtonsConfig};
 pub use text::{render_rich_text, string_input};
 
 pub use crate::content::{ContentId, UuidProvider};

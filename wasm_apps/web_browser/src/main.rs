@@ -431,6 +431,7 @@ fn update_request_state(
                     rect: button_rect,
                     text: fav.link.to_string(),
                     icon: Some(fav.icon),
+                    ..Default::default()
                 });
                 y += (2 * row_h) as i64;
 

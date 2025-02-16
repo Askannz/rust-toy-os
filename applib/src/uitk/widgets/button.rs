@@ -6,20 +6,39 @@ use alloc::borrow::ToOwned;
 use alloc::string::String;
 
 impl<'a, F: FbViewMut> UiContext<'a, F> {
+
     pub fn button(&mut self, config: &ButtonConfig) -> bool {
+        let mut active = false;
+        self.button_inner(config, &mut active);
+        active
+    }
+
+    pub fn button_toggle(&mut self, config: &ButtonConfig, active: &mut bool) {
+        self.button_inner(config, active);
+    }
+
+    fn button_inner(&mut self, config: &ButtonConfig, active: &mut bool) {
 
         let UiContext {
             fb, input_state, stylesheet, font_family, tile_cache, ..
         } = self;
 
         let ps = &input_state.pointer;
+        let hovered = !config.freeze && config.rect.check_contains_point(ps.x, ps.y);
+        let clicked = hovered && ps.left_click_trigger;
 
-        let state = match config.rect.check_contains_point(ps.x, ps.y) {
-            true => match ps.left_click_trigger {
-                true => ButtonState::Clicked,
-                false => ButtonState::Hover,
-            },
-            false => ButtonState::Idle,
+        let state = {
+            if hovered && !clicked {
+                ButtonState::Hover
+            } else {
+                if hovered && clicked {
+                    *active = !(*active);
+                }
+                match *active {
+                    true => ButtonState::Active,
+                    false => ButtonState::Idle,
+                }
+            }
         };
 
         let content_id = ContentId::from_hash((
@@ -35,8 +54,6 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
         let Rect { x0, y0, .. } = config.rect;
         fb.copy_from_fb(button_fb, (x0, y0), false);
-
-        state == ButtonState::Clicked
     }
 }
 
@@ -55,7 +72,7 @@ fn render_button(
     let button_color = match state {
         ButtonState::Idle => colorsheet.element,
         ButtonState::Hover => colorsheet.hover_overlay,
-        ButtonState::Clicked => colorsheet.selected_overlay,
+        ButtonState::Active => colorsheet.selected_overlay,
     };
 
     draw_rect(&mut button_fb, &config.rect, colorsheet.background, false);
@@ -103,7 +120,7 @@ fn render_button(
 enum ButtonState {
     Idle,
     Hover,
-    Clicked,
+    Active,
 }
 
 #[derive(Clone)]
@@ -111,6 +128,7 @@ pub struct ButtonConfig {
     pub rect: Rect,
     pub text: String,
     pub icon: Option<&'static Framebuffer<OwnedPixels>>,
+    pub freeze: bool,
 }
 
 impl Default for ButtonConfig {
@@ -124,6 +142,7 @@ impl Default for ButtonConfig {
             },
             text: "Button".to_owned(),
             icon: None,
+            freeze: false,
         }
     }
 }

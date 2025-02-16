@@ -7,7 +7,7 @@ use core::cell::OnceCell;
 use guestlib::{PixelData, WasmLogger};
 use applib::Rect;
 use applib::content::TrackedContent;
-use applib::uitk::{self, UuidProvider, TextBoxState};
+use applib::uitk::{self, ButtonConfig, ChoiceButtonsConfig, ChoiceConfig, TextBoxState, UuidProvider};
 
 struct AppState {
     pixel_data: PixelData,
@@ -17,6 +17,9 @@ struct AppState {
     textbox_prelude: TrackedContent<String>,
     textbox_1_state: TextBoxState,
     textbox_2_state: TextBoxState,
+
+    button_active: bool,
+    choice_list_selected: Vec<usize>,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -47,6 +50,8 @@ pub fn init() -> () {
         textbox_prelude,
         textbox_1_state: TextBoxState::new(),
         textbox_2_state: TextBoxState::new(),
+        button_active: false,
+        choice_list_selected: Vec::new(),
     };
     unsafe {
         APP_STATE
@@ -75,20 +80,48 @@ pub fn step() {
         time
     );
 
-    uitk_context.editable_text_box(
-        &Rect { x0: 0, y0: 0, w: w / 2, h },
-        &mut state.textbox_text,
-        &mut state.textbox_1_state,
-        true,
-        true,
-        true,
-        Some(&state.textbox_prelude)
+    uitk_context.button_toggle(
+        &ButtonConfig{
+            rect: Rect { x0: 0, y0: 0, w: 100, h: 50 },
+            text: "Toggle".to_string(),
+            ..Default::default()
+        },
+        &mut state.button_active,
     );
 
-    uitk_context.text_box(
-        &Rect { x0: (w / 2) as i64, y0: 0, w: w / 2, h },
-        &state.textbox_text,
-        &mut state.textbox_2_state,
-        true
+    uitk_context.choice_buttons_multi(
+        &ChoiceButtonsConfig {
+            rect: Rect { x0: 0, y0: 50, w, h: 50 },
+            choices: vec![
+                ChoiceConfig {
+                    text: "One".to_owned(),
+                    ..Default::default()
+                },
+                ChoiceConfig {
+                    text: "Two".to_owned(),
+                    ..Default::default()
+                },
+            ]
+        },
+        &mut state.choice_list_selected
     );
+
+    log::debug!("Selected: {:?}", state.choice_list_selected);
+
+    // uitk_context.editable_text_box(
+    //     &Rect { x0: 0, y0: 0, w: w / 2, h },
+    //     &mut state.textbox_text,
+    //     &mut state.textbox_1_state,
+    //     true,
+    //     true,
+    //     true,
+    //     Some(&state.textbox_prelude)
+    // );
+
+    // uitk_context.text_box(
+    //     &Rect { x0: (w / 2) as i64, y0: 0, w: w / 2, h },
+    //     &state.textbox_text,
+    //     &mut state.textbox_2_state,
+    //     true
+    // );
 }

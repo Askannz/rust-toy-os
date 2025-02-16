@@ -106,17 +106,17 @@ pub fn step() {
         &mut state.choice_list_selected
     );
 
-    log::debug!("Selected: {:?}", state.choice_list_selected);
 
-    // uitk_context.editable_text_box(
-    //     &Rect { x0: 0, y0: 0, w: w / 2, h },
-    //     &mut state.textbox_text,
-    //     &mut state.textbox_1_state,
-    //     true,
-    //     true,
-    //     true,
-    //     Some(&state.textbox_prelude)
-    // );
+    let prelude = TrackedContent::new_from_hash("Write text here >>".to_owned());
+
+    uitk_context.editable_text_box(
+        &Rect { x0: 0, y0: 0, w: w / 2, h },
+        &mut state.textbox_text,
+        &mut state.textbox_1_state,
+        true,
+        true,
+        Some(&prelude)
+    );
 
     // uitk_context.text_box(
     //     &Rect { x0: (w / 2) as i64, y0: 0, w: w / 2, h },

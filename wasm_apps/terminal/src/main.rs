@@ -114,7 +114,6 @@ pub fn step() {
         &mut editable,
         &mut state.textbox_state,
         true,
-        true,
         false,
         Some(&rich_text_prelude),
     );

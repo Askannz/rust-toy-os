@@ -85,9 +85,9 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
         let layout_rect = &self.layout.as_ref().rect;
 
         if tile_rect.intersection(layout_rect).is_none() {
-            ContentId::from_hash((tile_rect.w, tile_rect.h))
+            ContentId::from_hash(&(tile_rect.w, tile_rect.h))
         } else {
-            ContentId::from_hash((
+            ContentId::from_hash(&(
                 tile_rect,
                 self.layout.get_id()
             ))

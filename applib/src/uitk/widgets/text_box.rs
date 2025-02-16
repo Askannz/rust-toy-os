@@ -15,6 +15,8 @@ use crate::uitk::{CachedTile, TileCache, TileRenderer, UiContext};
 use crate::uitk::UuidProvider;
 use crate::uitk::text::{string_input, EditableText};
 
+const CURSOR_BLINK_PERIOD: u64 = 1;
+
 impl<'a, F: FbViewMut> UiContext<'a, F> {
 
     pub fn text_box<T: FormattableText>(
@@ -25,7 +27,8 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         autoscroll: bool,
     ) {
         let prelude: Option<&T> = None;
-        self.text_box_inner(dst_rect, text, state, autoscroll, prelude, false);
+        let bg_color = self.stylesheet.colors.element;
+        self.text_box_inner(dst_rect, text, bg_color, state, autoscroll, false, prelude, false);
     }
 
     pub fn editable_text_box<T: FormattableText + EditableText, U: FormattableText>(
@@ -33,7 +36,6 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         dst_rect: &Rect,
         text: &mut T,
         state: &mut TextBoxState,
-        editable: bool,
         autoscroll: bool,
         allow_newline: bool,
         prelude: Option<&U>,
@@ -45,11 +47,13 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             ..
         } = self;
 
-        if editable {
-            string_input(text, input_state, allow_newline, &mut state.cursor, *uuid_provider);
-        }
+        let bg_color = self.stylesheet.colors.editable;
 
-        self.text_box_inner(dst_rect, text, state, autoscroll, prelude, true);
+        let old_cursor = state.cursor;
+        string_input(text, input_state, allow_newline, &mut state.cursor, *uuid_provider);
+        let cursor_changed = state.cursor != old_cursor;
+
+        self.text_box_inner(dst_rect, text, bg_color, state, cursor_changed, autoscroll, prelude, true);
 
     }
 
@@ -57,16 +61,25 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         &mut self,
         dst_rect: &Rect,
         text: &T,
+        bg_color: Color,
         state: &mut TextBoxState,
+        cursor_changed: bool,
         autoscroll: bool,
         prelude: Option<&U>,
         cursor_enabled: bool,
     ) {
 
-        let old_cursor = state.cursor;
-
         let time_sec = (self.time as u64) / 1000;
-        let cursor_visible = cursor_enabled && (time_sec % 2 == 0 || state.cursor != old_cursor);
+
+        if !cursor_enabled {
+            state.cursor_visible = false;
+        } else if cursor_changed {
+            state.last_blink_t = time_sec;
+            state.cursor_visible = true;
+        } else if time_sec - state.last_blink_t > CURSOR_BLINK_PERIOD {
+            state.last_blink_t = time_sec;
+            state.cursor_visible = !state.cursor_visible;
+        }
 
         // Only used if text is not already a RichText
         let font = self.font_family.get_default();
@@ -84,7 +97,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
                 let prelude_len = rich_1.len();
                 
                 rich_1.concat(rich_2);
-                let cid = ContentId::from_hash((cid_1, cid_2));
+                let cid = ContentId::from_hash(&(cid_1, cid_2));
                 let rich = TrackedContent::new_with_id(rich_1, cid);
                 
                 (rich, prelude_len)
@@ -93,7 +106,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
         let formatted = {
             let formatted = format_rich_lines(rich_text.as_ref(), dst_rect.w - CURSOR_W, state.justif);
-            let content_id = ContentId::from_hash((
+            let content_id = ContentId::from_hash(&(
                 rich_text.get_id(),
                 dst_rect.w,
             ));
@@ -103,8 +116,9 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
         let formatted_content_id = formatted.get_id();
 
         let renderer = TextRenderer { 
-            formatted, bg_color: self.stylesheet.colors.element,
-            cursor: state.cursor, cursor_visible,
+            formatted, bg_color,
+            cursor: state.cursor,
+            cursor_visible: state.cursor_visible,
             prelude_len,
         };
 
@@ -139,6 +153,9 @@ pub struct TextBoxState {
     pub scroll_dragging: (bool, bool),
     pub cursor: usize,
     pub justif: TextJustification,
+
+    cursor_visible: bool,
+    last_blink_t: u64,
 }
 
 impl TextBoxState {
@@ -149,6 +166,8 @@ impl TextBoxState {
             scroll_dragging: (false, false),
             cursor: 0,
             justif: TextJustification::Left,
+            cursor_visible: true,
+            last_blink_t: 0,
         }
     }
 }
@@ -160,7 +179,7 @@ pub trait FormattableText {
 impl FormattableText for TrackedContent<String> {
     fn to_rich_text(&self, color: Color, font: &'static Font) -> TrackedContent<RichText> {
         let rich_text = RichText::from_str(self.as_ref(), color, font);
-        let new_id = ContentId::from_hash((
+        let new_id = ContentId::from_hash(&(
             self.get_id(),
             color,
             font.name,
@@ -241,9 +260,9 @@ impl TileRenderer for TextRenderer {
         let text_rect = Rect { x0: 0, y0: 0, w, h: h + CURSOR_H};
 
         if tile_rect.intersection(&text_rect).is_none() {
-            ContentId::from_hash((tile_rect.w, tile_rect.h))
+            ContentId::from_hash(&(tile_rect.w, tile_rect.h))
         } else {
-            ContentId::from_hash((
+            ContentId::from_hash(&(
                 tile_rect,
                 self.formatted.get_id(),
                 self.cursor,

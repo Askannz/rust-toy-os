@@ -235,7 +235,6 @@ pub fn step() {
         &ui_layout.url_bar_rect,
         &mut state.url_text,
         &mut state.url_textbox_state,
-        true,
         false,
         false,
         None::<&TrackedContent<String>>,

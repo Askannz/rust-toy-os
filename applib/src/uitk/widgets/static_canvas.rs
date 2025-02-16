@@ -20,7 +20,7 @@ impl<'a, F1: FbView> TileRenderer for BufferCopyRenderer<'a, F1> {
     }
 
     fn content_id(&self, viewport_rect: &Rect) -> ContentId {
-        ContentId::from_hash((
+        ContentId::from_hash(&(
             self.src_fb.get_id(),
             viewport_rect,
         ))

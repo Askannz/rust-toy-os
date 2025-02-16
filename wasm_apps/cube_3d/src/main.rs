@@ -110,7 +110,7 @@ impl<'a> TileRenderer for SceneRenderer<'a> {
         let is_scene_tile = x0 == 0 && y0 == 0;
 
         // Technically depends on the scene too, but we assume it doesn´t change
-        ContentId::from_hash((
+        ContentId::from_hash(&(
             is_scene_tile,
             self.pointer.x,
             self.pointer.y,

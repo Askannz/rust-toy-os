@@ -5,7 +5,7 @@ use core::hash::Hash;
 pub struct ContentId(pub u64);
 
 impl ContentId {
-    pub fn from_hash<T: Hash>(val: T) -> Self {
+    pub fn from_hash<T: Hash>(val: &T) -> Self {
         Self(compute_hash(val))
     }
 }
@@ -48,6 +48,20 @@ impl<T> TrackedContent<T> {
         let Self { inner, content_id } = self;
         (inner, content_id)
     }
+}
+
+impl<T: Hash> TrackedContent<T> {
+
+    pub fn new_from_hash(inner: T) -> Self {
+
+        let cid = ContentId::from_hash(&inner);
+
+        Self {
+            inner,
+            content_id: cid
+        }
+    }
+
 }
 
 pub struct UuidProvider {

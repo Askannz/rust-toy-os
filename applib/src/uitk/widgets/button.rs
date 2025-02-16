@@ -41,7 +41,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             }
         };
 
-        let content_id = ContentId::from_hash((
+        let content_id = ContentId::from_hash(&(
             state,
             &config.rect,
             &config.text,

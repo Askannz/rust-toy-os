@@ -30,5 +30,17 @@
   "web.png": {
     "link": "https://www.flaticon.com/free-icon/website_10398263",
     "author": "Iamkikirizky"
+  },
+  "justif_left.png": {
+    "link": "https://www.flaticon.com/free-icon/format_3906754",
+    "author": "ahmedagrma"
+  },
+  "justif_center.png": {
+    "link": "https://www.flaticon.com/free-icon/format_3906752",
+    "author": "ahmedagrma"
+  },
+  "justif_right.png": {
+    "link": "https://www.flaticon.com/free-icon/format_3906755",
+    "author": "ahmedagrma"
   }
 }

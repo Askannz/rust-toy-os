@@ -1,25 +1,35 @@
 extern crate alloc;
 
-use alloc::format;
+use alloc::collections::BTreeMap;
 use applib::drawing::primitives::draw_rect;
 use applib::drawing::text::{draw_str, Font, RichText, TextJustification, DEFAULT_FONT_FAMILY};
-use applib::{Color, FbViewMut};
+use applib::{Color, FbViewMut, Framebuffer, OwnedPixels};
 use core::cell::OnceCell;
 use guestlib::{PixelData, WasmLogger};
 use applib::Rect;
 use applib::content::TrackedContent;
-use applib::uitk::{self, ButtonConfig, ChoiceButtonsConfig, ChoiceConfig, EditableRichText, TextBoxState, UuidProvider};
+use applib::uitk::{self, IconStore, ButtonConfig, ChoiceButtonsConfig, ChoiceConfig, EditableRichText, TextBoxState, UuidProvider};
+
+
+
+const ICONS_PNG_DATA: [(&'static str, &[u8]); 3] = [
+    ("justif_left", include_bytes!("../icons/justif_left.png")),
+    ("justif_center", include_bytes!("../icons/justif_center.png")),
+    ("justif_right", include_bytes!("../icons/justif_right.png")),
+];
+
+
 
 struct AppState {
     pixel_data: PixelData,
     ui_store: uitk::UiStore,
     uuid_provider: UuidProvider,
+    icon_store: IconStore,
 
     textbox_text: TrackedContent<RichText>,
     textbox_prelude: TrackedContent<RichText>,
     textbox_state: TextBoxState,
 
-    button_active: bool,
     selected_justif: usize,
     selected_color: usize,
     selected_size: usize,
@@ -68,10 +78,13 @@ pub fn init() -> () {
         pixel_data: PixelData::new(),
         ui_store: uitk::UiStore::new(),
         uuid_provider: UuidProvider::new(),
+
+        icon_store: IconStore::new(&ICONS_PNG_DATA),
+
+
         textbox_text,
         textbox_prelude,
         textbox_state,
-        button_active: false,
         selected_justif,
         selected_color,
         selected_size,
@@ -103,15 +116,6 @@ pub fn step() {
         time
     );
 
-    // uitk_context.button_toggle(
-    //     &ButtonConfig{
-    //         rect: Rect { x0: 0, y0: 0, w: 100, h: 50 },
-    //         text: "Toggle".to_string(),
-    //         ..Default::default()
-    //     },
-    //     &mut state.button_active,
-    // );
-
     draw_rect(
         uitk_context.fb,
         &Rect { x0: (w / 2).into(), y0: 0, w: w / 2, h },
@@ -119,24 +123,26 @@ pub fn step() {
         false
     );
 
+    let mut y = 0;
+    let row_h = 40;
 
     // Justification
 
     uitk_context.choice_buttons_exclusive(
         &ChoiceButtonsConfig {
-            rect: Rect { x0: (w / 2).into(), y0: 0, w: 100, h: 20 },
+            rect: Rect { x0: (w / 2).into(), y0: y, w: 128, h: row_h },
             choices: vec![
                 ChoiceConfig {
-                    text: "L".to_owned(),
-                    ..Default::default()
+                    text: "".to_owned(),
+                    icon: Some(state.icon_store.get("justif_left")),
                 },
                 ChoiceConfig {
-                    text: "C".to_owned(),
-                    ..Default::default()
+                    text: "".to_owned(),
+                    icon: Some(state.icon_store.get("justif_center")),
                 },
                 ChoiceConfig {
-                    text: "R".to_owned(),
-                    ..Default::default()
+                    text: "".to_owned(),
+                    icon: Some(state.icon_store.get("justif_right")),
                 },
             ]
         },
@@ -145,12 +151,13 @@ pub fn step() {
 
     state.textbox_state.justif = get_justif(state.selected_justif);
 
+    y += row_h as i64;
 
     // Color
 
     uitk_context.choice_buttons_exclusive(
         &ChoiceButtonsConfig {
-            rect: Rect { x0: (w / 2).into(), y0: 20, w: 200, h: 20 },
+            rect: Rect { x0: (w / 2).into(), y0: y, w: 200, h: row_h },
             choices: vec![
                 ChoiceConfig {
                     text: "White".to_owned(),
@@ -171,12 +178,13 @@ pub fn step() {
 
     let color = get_color(state.selected_color);
 
+    y += row_h as i64;
 
     // Font
 
     uitk_context.choice_buttons_exclusive(
         &ChoiceButtonsConfig {
-            rect: Rect { x0: (w / 2).into(), y0: 40, w: 60, h: 20 },
+            rect: Rect { x0: (w / 2).into(), y0: y, w: 60, h: row_h },
             choices: vec![
                 ChoiceConfig {
                     text: "18".to_owned(),

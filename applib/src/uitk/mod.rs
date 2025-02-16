@@ -134,3 +134,26 @@ impl UiStore {
         }
     }
 }
+
+pub struct IconStore {
+    icons: BTreeMap<&'static str, Framebuffer<OwnedPixels>>
+}
+
+impl IconStore {
+
+    pub fn new(png_data: &[(&'static str, &[u8])]) -> Self {
+        Self { 
+            icons: png_data
+                .iter()
+                .map(|(name, png_bytes)| {
+                    (*name, Framebuffer::from_png(png_bytes))
+                })
+                .collect()
+        }
+    }
+
+    pub fn get(&self, name: &str) -> &Framebuffer<OwnedPixels> {
+        self.icons.get(name).expect("Icon not found")
+    }
+
+}

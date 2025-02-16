@@ -17,33 +17,33 @@ lazy_static! {
     // App icons
 
     pub static ref CUBE_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/cube.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/cube.png"));
     pub static ref CHRONO_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/chronometer.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/chronometer.png"));
     pub static ref TERMINAL_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/terminal.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/terminal.png"));
     pub static ref CLOSE_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/close.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/close.png"));
     pub static ref RELOAD_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/reload.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/reload.png"));
     pub static ref MOVE_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/move.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/move.png"));
     pub static ref PLAY_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/play.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/play.png"));
     pub static ref PAUSE_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/pause.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/pause.png"));
     pub static ref INSPECT_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/inspect.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/inspect.png"));
     pub static ref SPEEDOMETER_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/speedometer.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/speedometer.png"));
     pub static ref CHIP_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/chip.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/chip.png"));
     pub static ref NETWORK_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/network.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/network.png"));
     pub static ref WEB_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/web.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/web.png"));
     pub static ref PYTHON_ICON: Framebuffer<OwnedPixels> =
-        Framebuffer::from_png(include_bytes!("../icons/python.png"));
+        Framebuffer::from_png(include_bytes!("../../icons/png/python.png"));
     pub static ref BLANK_ICON: Framebuffer<OwnedPixels> = Framebuffer::new_owned(32, 32);
 
     //

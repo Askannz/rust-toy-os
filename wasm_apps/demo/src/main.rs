@@ -33,6 +33,8 @@ struct AppState {
     selected_justif: usize,
     selected_color: usize,
     selected_size: usize,
+
+    editing_enabled: bool,
 }
 
 static mut APP_STATE: OnceCell<AppState> = OnceCell::new();
@@ -88,6 +90,8 @@ pub fn init() -> () {
         selected_justif,
         selected_color,
         selected_size,
+
+        editing_enabled: true,
     };
     unsafe {
         APP_STATE
@@ -130,7 +134,7 @@ pub fn step() {
 
     uitk_context.choice_buttons_exclusive(
         &ChoiceButtonsConfig {
-            rect: Rect { x0: (w / 2).into(), y0: y, w: 128, h: row_h },
+            rect: Rect { x0: (w / 2).into(), y0: y, w: 200, h: row_h },
             choices: vec![
                 ChoiceConfig {
                     text: "".to_owned(),
@@ -157,7 +161,7 @@ pub fn step() {
 
     uitk_context.choice_buttons_exclusive(
         &ChoiceButtonsConfig {
-            rect: Rect { x0: (w / 2).into(), y0: y, w: 200, h: row_h },
+            rect: Rect { x0: (w / 2).into(), y0: y, w: 250, h: row_h },
             choices: vec![
                 ChoiceConfig {
                     text: "White".to_owned(),
@@ -184,7 +188,7 @@ pub fn step() {
 
     uitk_context.choice_buttons_exclusive(
         &ChoiceButtonsConfig {
-            rect: Rect { x0: (w / 2).into(), y0: y, w: 60, h: row_h },
+            rect: Rect { x0: (w / 2).into(), y0: y, w: 80, h: row_h },
             choices: vec![
                 ChoiceConfig {
                     text: "18".to_owned(),
@@ -201,19 +205,41 @@ pub fn step() {
 
     let font = get_font(state.selected_size);
 
+    y += row_h as i64;
 
-    uitk_context.editable_text_box(
-        &Rect { x0: 0, y0: 0, w: w / 2, h },
-        &mut EditableRichText {
-            color,
-            font,
-            rich_text: &mut state.textbox_text
+    uitk_context.button_toggle(
+        &ButtonConfig{
+            rect: Rect { x0: (w / 2).into(), y0: y, w: 100, h: row_h },
+            text: "Enable".to_string(),
+            ..Default::default()
         },
-        &mut state.textbox_state,
-        true,
-        true,
-        Some(&state.textbox_prelude)
+        &mut state.editing_enabled,
     );
+
+    let text_box_rect = Rect { x0: 0, y0: 0, w: w / 2, h };
+
+    if state.editing_enabled {
+        uitk_context.editable_text_box(
+            &text_box_rect,
+            &mut EditableRichText {
+                color,
+                font,
+                rich_text: &mut state.textbox_text
+            },
+            &mut state.textbox_state,
+            true,
+            true,
+            Some(&state.textbox_prelude)
+        );
+    } else {
+        uitk_context.text_box(
+            &text_box_rect,
+            &state.textbox_text,
+            &mut state.textbox_state,
+            true
+        );
+    }
+
 
     // uitk_context.text_box(
     //     &Rect { x0: (w / 2) as i64, y0: 0, w: w / 2, h },

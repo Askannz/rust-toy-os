@@ -51,7 +51,7 @@ lazy_static! {
 
     pub static ref STYLESHEET: StyleSheet = StyleSheet {
         colors: StyleSheetColors {
-            background: Color::rgb(0x44, 0x44, 0x44),
+            background: Color::rgb(68, 68, 68),
             blue: Color::rgb(0, 0, 150),
             purple: Color::rgb(100, 10, 210),
             element: Color::rgb(100, 100, 100),

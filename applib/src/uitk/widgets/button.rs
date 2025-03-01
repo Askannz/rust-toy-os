@@ -9,15 +9,15 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
     pub fn button(&mut self, config: &ButtonConfig) -> bool {
         let mut active = false;
-        self.button_inner(config, &mut active);
+        self.button_inner(config, &mut active, false);
         active
     }
 
     pub fn button_toggle(&mut self, config: &ButtonConfig, active: &mut bool) {
-        self.button_inner(config, active);
+        self.button_inner(config, active, true);
     }
 
-    fn button_inner(&mut self, config: &ButtonConfig, active: &mut bool) {
+    fn button_inner(&mut self, config: &ButtonConfig, active: &mut bool, indicator_visible: bool) {
 
         let UiContext {
             fb, input_state, stylesheet, font_family, tile_cache, ..
@@ -35,7 +35,7 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
                     *active = !(*active);
                 }
                 match *active {
-                    true => ButtonState::Active,
+                    true => ButtonState::Clicked,
                     false => ButtonState::Idle,
                 }
             }
@@ -45,11 +45,12 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
             state,
             &config.rect,
             &config.text,
+            *active,
             // TODO: icon hash
         ));
 
         let button_fb = tile_cache.fetch_or_create(content_id, self.time, || {
-            render_button(stylesheet, font_family, config, state)
+            render_button(stylesheet, font_family, config, state, *active, indicator_visible)
         });
 
         let Rect { x0, y0, .. } = config.rect;
@@ -61,48 +62,66 @@ fn render_button(
     stylesheet: &StyleSheet,
     font_family: &FontFamily,
     config: &ButtonConfig,
-    state: ButtonState
+    state: ButtonState,
+    active: bool,
+    indicator_visible: bool
 ) -> Framebuffer<OwnedPixels> {
 
-    let Rect { w, h, .. } = config.rect;
+    let rect = config.rect.zero_origin();
+
+    let Rect { w, h, .. } = rect;
     let mut button_fb = Framebuffer::new_owned(w, h);
 
     let colorsheet = &stylesheet.colors;
 
-    let button_color = match state {
-        ButtonState::Idle => colorsheet.element,
-        ButtonState::Hover => colorsheet.hover_overlay,
-        ButtonState::Active => colorsheet.selected_overlay,
-    };
-
-    draw_rect(&mut button_fb, &config.rect, colorsheet.background, false);
+    draw_rect(&mut button_fb, &rect, colorsheet.background, false);
 
     let button_rect = {
         let m = stylesheet.margin as i64;
-        let [x0, y0, x1, y1] = config.rect.zero_origin().as_xyxy();
+        let [x0, y0, x1, y1] = rect.as_xyxy();
         Rect::from_xyxy([x0+m, y0+m, x1-m, y1-m])
     };
 
-    draw_rect(&mut button_fb, &button_rect, button_color, false);
+    draw_rect(&mut button_fb, &button_rect, colorsheet.element, false);
 
-    let text_x0 = match &config.icon {
-        None => button_rect.x0,
-        Some(icon) => {
-            let (icon_w, icon_h) = icon.shape();
-            let m = i64::max(0, (button_rect.h - icon_h) as i64 / 2);
+    let mut x = button_rect.x0;
 
-            let icon_x0 = m;
-            let icon_y0 = m;
+    if indicator_visible {
 
-            button_fb.copy_from_fb(*icon, (icon_x0, icon_y0), true);
+        let indicator_h = 3 * button_rect.h / 4;
+        let indicator_w = 10;
+        let margin = (button_rect.h - indicator_h) / 2;
 
-            icon_x0 + icon_w as i64
-        }
-    };
+        x += margin as i64;
 
-    let text_rect = {
-        let [_x0, y0, x1, y1] = button_rect.as_xyxy();
-        Rect::from_xyxy([text_x0, y0, x1, y1])
+        let indicator_rect = Rect {
+            x0: x, y0: button_rect.y0 + margin as i64,
+            w: indicator_w, h: indicator_h
+        };
+        let color = match active {
+            true => colorsheet.green,
+            false => colorsheet.background
+        };
+        draw_rect(&mut button_fb, &indicator_rect, color, false);
+
+        x += (indicator_w + margin) as i64;
+    }
+
+    if let Some(icon) = &config.icon {
+        let (icon_w, icon_h) = icon.shape();
+        let m = i64::max(0, (button_rect.h - icon_h) as i64 / 2);
+
+        let icon_x0 = x;
+        let icon_y0 = button_rect.y0 + m;
+
+        button_fb.copy_from_fb(*icon, (icon_x0, icon_y0), true);
+
+        x += icon_w as i64
+    }
+
+    let text_rect = Rect {
+        x0: x, y0: button_rect.y0,
+        w: button_rect.w, h: button_rect.h,
     };
 
     let font = font_family.get_default();
@@ -113,6 +132,10 @@ fn render_button(
         TextJustification::Left
     );
 
+    if state == ButtonState::Hover {
+        draw_rect(&mut button_fb, &button_rect, colorsheet.hover_overlay, true);
+    }
+
     button_fb
 }
 
@@ -120,7 +143,7 @@ fn render_button(
 enum ButtonState {
     Idle,
     Hover,
-    Active,
+    Clicked,
 }
 
 #[derive(Clone)]

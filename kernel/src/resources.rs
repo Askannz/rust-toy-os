@@ -63,6 +63,7 @@ lazy_static! {
             text: Color::WHITE,
             accent: Color::rgb(122, 0, 255),
             editable: Color::BLACK,
+            outline: Color::rgb(25, 25, 25),
         },
         margin: 2,
     };

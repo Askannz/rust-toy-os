@@ -128,29 +128,37 @@ pub fn step() {
     );
 
     let mut y = 0;
-    let row_h = 40;
+    let row_h = 100;
 
     // Justification
 
-    uitk_context.choice_buttons_exclusive(
-        &ChoiceButtonsConfig {
-            rect: Rect { x0: (w / 2).into(), y0: y, w: 200, h: row_h },
-            choices: vec![
-                ChoiceConfig {
-                    text: "".to_owned(),
-                    icon: Some(state.icon_store.get("justif_left")),
+    uitk_context.section(
+        &Rect { x0: (w / 2).into(), y0: y, w: w / 2, h: row_h },
+        "Justification",
+        |context, inner_rect| context.layout_box(
+            inner_rect,
+            0.0, 0.0, 0.4, 0.0,
+            |context, inner_rect|         context.choice_buttons_exclusive(
+                &ChoiceButtonsConfig {
+                    rect: inner_rect.clone(),
+                    choices: vec![
+                        ChoiceConfig {
+                            text: "".to_owned(),
+                            icon: Some(state.icon_store.get("justif_left")),
+                        },
+                        ChoiceConfig {
+                            text: "".to_owned(),
+                            icon: Some(state.icon_store.get("justif_center")),
+                        },
+                        ChoiceConfig {
+                            text: "".to_owned(),
+                            icon: Some(state.icon_store.get("justif_right")),
+                        },
+                    ]
                 },
-                ChoiceConfig {
-                    text: "".to_owned(),
-                    icon: Some(state.icon_store.get("justif_center")),
-                },
-                ChoiceConfig {
-                    text: "".to_owned(),
-                    icon: Some(state.icon_store.get("justif_right")),
-                },
-            ]
-        },
-        &mut state.selected_justif
+                &mut state.selected_justif
+            )
+        )
     );
 
     state.textbox_state.justif = get_justif(state.selected_justif);
@@ -159,25 +167,33 @@ pub fn step() {
 
     // Color
 
-    uitk_context.choice_buttons_exclusive(
-        &ChoiceButtonsConfig {
-            rect: Rect { x0: (w / 2).into(), y0: y, w: 250, h: row_h },
-            choices: vec![
-                ChoiceConfig {
-                    text: "White".to_owned(),
-                    ..Default::default()
-                },
-                ChoiceConfig {
-                    text: "Blue".to_owned(),
-                    ..Default::default()
-                },
-                ChoiceConfig {
-                    text: "Red".to_owned(),
-                    ..Default::default()
-                },
-            ]
-        },
-        &mut state.selected_color
+    uitk_context.section(
+        &Rect { x0: (w / 2).into(), y0: y, w: w / 2, h: row_h },
+        "Color",
+        |context, inner_rect| context.choice_buttons_exclusive(
+            &ChoiceButtonsConfig {
+                rect: inner_rect.clone(),
+                choices: vec![
+                    ChoiceConfig {
+                        text: "White".to_owned(),
+                        ..Default::default()
+                    },
+                    ChoiceConfig {
+                        text: "Blue".to_owned(),
+                        ..Default::default()
+                    },
+                    ChoiceConfig {
+                        text: "Red".to_owned(),
+                        ..Default::default()
+                    },
+                    ChoiceConfig {
+                        text: "Green".to_owned(),
+                        ..Default::default()
+                    },
+                ]
+            },
+            &mut state.selected_color
+        )
     );
 
     let color = get_color(state.selected_color);
@@ -186,35 +202,45 @@ pub fn step() {
 
     // Font
 
-    uitk_context.choice_buttons_exclusive(
-        &ChoiceButtonsConfig {
-            rect: Rect { x0: (w / 2).into(), y0: y, w: 80, h: row_h },
-            choices: vec![
-                ChoiceConfig {
-                    text: "18".to_owned(),
-                    ..Default::default()
-                },
-                ChoiceConfig {
-                    text: "24".to_owned(),
-                    ..Default::default()
-                },
-            ]
-        },
-        &mut state.selected_size
+    uitk_context.section(
+        &Rect { x0: (w / 2).into(), y0: y, w: w / 2, h: row_h },
+        "Font",
+        |context, inner_rect| context.choice_buttons_exclusive(
+            &ChoiceButtonsConfig {
+                rect: inner_rect.clone(),
+                choices: vec![
+                    ChoiceConfig {
+                        text: "18".to_owned(),
+                        ..Default::default()
+                    },
+                    ChoiceConfig {
+                        text: "24".to_owned(),
+                        ..Default::default()
+                    },
+                ]
+            },
+            &mut state.selected_size
+        )
     );
 
     let font = get_font(state.selected_size);
 
     y += row_h as i64;
 
-    uitk_context.button_toggle(
-        &ButtonConfig{
-            rect: Rect { x0: (w / 2).into(), y0: y, w: 100, h: row_h },
-            text: "Enable".to_string(),
-            ..Default::default()
-        },
-        &mut state.editing_enabled,
-    );
+    let section_rect = Rect { x0: (w / 2).into(), y0: y, w: w / 2, h: row_h };
+
+    uitk_context.section(&section_rect, "Section", |context, inner_rect| {
+        context.button_toggle(
+            &ButtonConfig{
+                rect: inner_rect.clone(),
+                text: "Enable".to_string(),
+                ..Default::default()
+            },
+            &mut state.editing_enabled,
+        );
+    });
+
+
 
     let text_box_rect = Rect { x0: 0, y0: 0, w: w / 2, h };
 

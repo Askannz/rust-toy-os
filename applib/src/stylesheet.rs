@@ -22,4 +22,5 @@ pub struct StyleSheetColors {
     pub text: Color,
     pub accent: Color,
     pub editable: Color,
+    pub outline: Color,
 }

@@ -192,3 +192,22 @@ pub fn draw_rect<F: FbViewMut>(fb: &mut F, rect: &Rect, color: Color, blend: boo
         }
     }
 }
+
+pub fn draw_rect_outline<F: FbViewMut>(fb: &mut F, rect: &Rect, color: Color, blend: bool, thickness: u32) {
+
+    let t = thickness;
+
+    let Rect { x0, y0, w, h } = *rect;
+
+    let top_rect = Rect { x0, y0, w, h: t };
+    draw_rect(fb, &top_rect, color, blend);
+
+    let bottom_rect = Rect { x0, y0: y0 + (h - t) as i64, w, h: t };
+    draw_rect(fb, &bottom_rect, color, blend);
+
+    let left_rect = Rect { x0, y0: y0 + t as i64, w: t, h: h - t};
+    draw_rect(fb, &left_rect, color, blend);
+
+    let right_rect = Rect { x0: x0 + (w - t) as i64, y0: y0 + t as i64, w: t, h: h - t};
+    draw_rect(fb, &right_rect, color, blend);
+}

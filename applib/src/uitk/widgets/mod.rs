@@ -7,3 +7,4 @@ pub mod horiz_bar;
 pub mod tooltip;
 pub mod text_box;
 pub mod choice_buttons;
+pub mod section;

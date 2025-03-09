@@ -1,5 +1,5 @@
-use crate::drawing::primitives::draw_rect;
-use crate::drawing::text::{draw_line_in_rect, draw_str, Font, FontFamily, TextJustification};
+use crate::drawing::primitives::{draw_rect, draw_rect_outline};
+use crate::drawing::text::{self, draw_line_in_rect, draw_str, Font, FontFamily, TextJustification};
 use crate::uitk::{ContentId, UiContext};
 use crate::{Color, FbView, FbViewMut, Framebuffer, OwnedPixels, Rect, StyleSheet};
 use alloc::borrow::ToOwned;
@@ -74,13 +74,9 @@ fn render_button(
 
     let colorsheet = &stylesheet.colors;
 
-    draw_rect(&mut button_fb, &rect, colorsheet.background, false);
+    draw_rect_outline(&mut button_fb, &rect, colorsheet.outline, false, stylesheet.margin);
 
-    let button_rect = {
-        let m = stylesheet.margin as i64;
-        let [x0, y0, x1, y1] = rect.as_xyxy();
-        Rect::from_xyxy([x0+m, y0+m, x1-m, y1-m])
-    };
+    let button_rect = rect.offset(-(stylesheet.margin as i64));
 
     draw_rect(&mut button_fb, &button_rect, colorsheet.element, false);
 
@@ -99,22 +95,32 @@ fn render_button(
             w: indicator_w, h: indicator_h
         };
         let color = match active {
-            true => colorsheet.green,
+            true => colorsheet.accent,
             false => colorsheet.background
         };
         draw_rect(&mut button_fb, &indicator_rect, color, false);
 
-        x += (indicator_w + margin) as i64;
+        x += indicator_w  as i64;
     }
+
+    let content_rect = {
+        let [_, y0, x1, y1] = button_rect.as_xyxy();
+        Rect::from_xyxy([x, y0, x1, y1])
+    };
 
     if let Some(icon) = &config.icon {
         let (icon_w, icon_h) = icon.shape();
-        let m = i64::max(0, (button_rect.h - icon_h) as i64 / 2);
 
-        let icon_x0 = x;
-        let icon_y0 = button_rect.y0 + m;
+        let mut icon_rect = Rect {
+            x0: content_rect.x0, y0: content_rect.y0,
+            w: icon_w, h: icon_h,
+        }.align_to_rect_vert(&content_rect);
 
-        button_fb.copy_from_fb(*icon, (icon_x0, icon_y0), true);
+        if config.text.is_empty() {
+            icon_rect = icon_rect.align_to_rect_horiz(&content_rect);
+        }
+
+        button_fb.copy_from_fb(*icon, (icon_rect.x0, icon_rect.y0), true);
 
         x += icon_w as i64
     }

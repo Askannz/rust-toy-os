@@ -102,7 +102,7 @@ pub fn draw_line_in_rect<F: FbViewMut>(
     font: &Font,
     color: Color,
     justif: TextJustification
-) {
+) -> (i64, i64) {
 
     let text_w = (font.char_w * s.len()) as i64;
     let (xc, yc) = rect.center();
@@ -120,6 +120,10 @@ pub fn draw_line_in_rect<F: FbViewMut>(
     };
 
     draw_str(fb, s, text_x0, text_y0, font, color, None);
+
+    let text_x1 = text_x0 + (font.char_w * s.len()) as i64;
+
+    (text_x0, text_x1)
 }
 
 pub fn draw_str<F: FbViewMut>(

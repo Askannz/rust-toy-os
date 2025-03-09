@@ -85,6 +85,11 @@ impl Rect {
         }
     }
 
+    pub fn offset(&self, o: i64) -> Self {
+        let [x0, y0, x1, y1] = self.as_xyxy();
+        Rect::from_xyxy([x0-o, y0-o, x1+o, y1+o])
+    }
+
     pub fn align_to_rect(&self, other: &Rect) -> Rect {
         let (x1c, y1c) = other.center();
         Self::from_center(x1c, y1c, self.w, self.h)

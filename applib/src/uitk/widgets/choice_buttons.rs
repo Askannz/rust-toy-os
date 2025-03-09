@@ -11,18 +11,16 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
 
     pub fn choice_buttons_exclusive(&mut self, config: &ChoiceButtonsConfig, selected: &mut usize) {
 
-        let Rect { x0: mut x, y0, w, h } = config.rect;
-        let button_w = w / (config.choices.len() as u32);
-
         let mut new_selected = *selected;
 
-        for (i, choice) in config.choices.iter().enumerate() {
+        let func = |context: &mut Self, i: usize, button_rect: &Rect| {
 
+            let choice: &ChoiceConfig = &config.choices[i];
             let mut active = i == *selected;
 
-            self.button_toggle(
+            context.button_toggle(
                 &ButtonConfig {
-                    rect: Rect { x0: x, y0, w: button_w, h },
+                    rect: button_rect.clone(),
                     text: choice.text.clone(),
                     icon: choice.icon,
                     freeze: i == *selected,
@@ -30,12 +28,13 @@ impl<'a, F: FbViewMut> UiContext<'a, F> {
                 &mut active
             );
 
-            x += button_w as i64;
-
             if active && i != *selected {
                 new_selected = i;
             }
-        }
+        };
+
+        
+        self.layout_horiz(&config.rect, config.choices.len(), func);
 
         *selected = new_selected;
     }

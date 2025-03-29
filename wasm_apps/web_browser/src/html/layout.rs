@@ -5,7 +5,8 @@ use anyhow::anyhow;
 use applib::drawing::text::{format_rich_lines, Font, FormattedRichText, RichText, DEFAULT_FONT_FAMILY, TextJustification};
 use applib::{Color, Rect};
 
-use super::parsing::{HtmlTree, NodeData as HtmlNodeData, NodeId as HtmlNodeId};
+use super::tree::{Tree, NodeId as HtmlNodeId};
+use super::parsing::{NodeData as HtmlNodeData};
 
 pub struct LayoutNode {
     pub id: u64,
@@ -41,7 +42,7 @@ struct Margins {
     bottom: u32,
 }
 
-pub fn compute_layout(html_tree: &HtmlTree, page_max_w: u32) -> anyhow::Result<LayoutNode> {
+pub fn compute_layout(html_tree: &Tree<HtmlNodeData>, page_max_w: u32) -> anyhow::Result<LayoutNode> {
     let mut next_node_id = 0u64;
     parse_node(&mut next_node_id, &html_tree, HtmlNodeId(0), 0, 0, false, page_max_w)
         .ok_or(anyhow!("Error computing HTML layout"))
@@ -55,7 +56,7 @@ fn make_node_id(next_node_id: &mut u64) -> u64 {
 
 fn parse_node<'b>(
     next_node_id: &mut u64,
-    tree: &HtmlTree,
+    tree: &Tree<HtmlNodeData>,
     html_node_id: HtmlNodeId,
     mut x0: i64,
     mut y0: i64,

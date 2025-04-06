@@ -8,6 +8,9 @@ use super::render_list::RenderItem;
 
 pub fn render_html2<F: FbViewMut>(dst_fb: &mut F, render_list: &[RenderItem], src_rect: &Rect) {
 
+    // Assuming tiles are horizontal slices
+    if src_rect.x0 != 0 { return; }
+
     for render_item in render_list.iter().rev() {
         match render_item {
             RenderItem::Text { formatted, origin } => {
@@ -17,7 +20,8 @@ pub fn render_html2<F: FbViewMut>(dst_fb: &mut F, render_list: &[RenderItem], sr
                 // DEBUG
                 //draw_rect_outline(dst_fb, &draw_rect, Color::RED, false, 1);
 
-                render_rich_text(dst_fb, &draw_rect, formatted, (src_rect.x0, src_rect.y0));
+                let offset_origin = (x0 - src_rect.x0, y0 - src_rect.y0);
+                render_rich_text(dst_fb, offset_origin, formatted);
             }
 
             RenderItem::Block { rect, color } => {
@@ -35,51 +39,51 @@ pub fn render_html2<F: FbViewMut>(dst_fb: &mut F, render_list: &[RenderItem], sr
 }
 
 
-pub fn render_html<F: FbViewMut>(dst_fb: &mut F, layout: &LayoutNode, src_rect: &Rect) {
-    let first_node = layout;
-    draw_node(dst_fb, first_node, src_rect)
-}
+// pub fn render_html<F: FbViewMut>(dst_fb: &mut F, layout: &LayoutNode, src_rect: &Rect) {
+//     let first_node = layout;
+//     draw_node(dst_fb, first_node, src_rect)
+// }
 
-fn draw_node<F: FbViewMut>(dst_fb: &mut F, node: &LayoutNode, src_rect: &Rect) {
-    let Rect { x0: ox, y0: oy, .. } = *src_rect;
+// fn draw_node<F: FbViewMut>(dst_fb: &mut F, node: &LayoutNode, src_rect: &Rect) {
+//     let Rect { x0: ox, y0: oy, .. } = *src_rect;
 
-    let node_rect = &node.rect;
+//     let node_rect = &node.rect;
 
-    let inter_rect = match node_rect.intersection(src_rect) {
-        None => return,
-        Some(rect) => rect,
-    };
+//     let inter_rect = match node_rect.intersection(src_rect) {
+//         None => return,
+//         Some(rect) => rect,
+//     };
 
-    let abs_rect = Rect {
-        x0: inter_rect.x0 - ox,
-        y0: inter_rect.y0 - oy,
-        w: inter_rect.w,
-        h: inter_rect.h,
-    };
+//     let abs_rect = Rect {
+//         x0: inter_rect.x0 - ox,
+//         y0: inter_rect.y0 - oy,
+//         w: inter_rect.w,
+//         h: inter_rect.h,
+//     };
 
-    match &node.data {
-        NodeData::Text {
-            text, ..
-        } => {
+//     match &node.data {
+//         NodeData::Text {
+//             text, ..
+//         } => {
 
-            let draw_x0 = node_rect.x0 - ox;
-            let draw_y0 = node_rect.y0 - oy;
+//             let draw_x0 = node_rect.x0 - ox;
+//             let draw_y0 = node_rect.y0 - oy;
 
-            let draw_rect = Rect { x0: draw_x0, y0: draw_y0, w: text.w, h: text.h };
+//             let draw_rect = Rect { x0: draw_x0, y0: draw_y0, w: text.w, h: text.h };
 
-            render_rich_text(dst_fb, &draw_rect, text, (0, 0));
-        }
-        NodeData::Image => (),
-        NodeData::Container {
-            children, bg_color, ..
-        } => {
-            if let &Some(bg_color) = bg_color {
-                draw_rect(dst_fb, &abs_rect, bg_color, false);
-            }
+//             render_rich_text(dst_fb, &draw_rect, text, (0, 0));
+//         }
+//         NodeData::Image => (),
+//         NodeData::Container {
+//             children, bg_color, ..
+//         } => {
+//             if let &Some(bg_color) = bg_color {
+//                 draw_rect(dst_fb, &abs_rect, bg_color, false);
+//             }
 
-            for child in children.iter() {
-                draw_node(dst_fb, child, src_rect);
-            }
-        }
-    }
-}
+//             for child in children.iter() {
+//                 draw_node(dst_fb, child, src_rect);
+//             }
+//         }
+//     }
+// }

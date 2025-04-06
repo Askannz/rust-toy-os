@@ -457,10 +457,11 @@ pub fn format_rich_lines(text: &RichText, max_w: u32, justif: TextJustification)
         .collect();
 
     let text_h = lines.iter().map(|line| line.h).sum();
+    let text_w = lines.iter().map(|line| line.w).max().unwrap_or(0);
 
     FormattedRichText {
         lines,
-        w: max_w,
+        w: text_w,
         h: text_h,
         justif
     }

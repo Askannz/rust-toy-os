@@ -103,7 +103,7 @@ impl<'a> uitk::TileRenderer for HtmlRenderer<'a> {
         dst_fb.fill(Color::WHITE);
 
         // DEBUG
-        draw_rect_outline(dst_fb, tile_rect, Color::GREEN, false, 1);
+        // draw_rect_outline(dst_fb, tile_rect, Color::GREEN, false, 1);
 
         render_html2(dst_fb, self.render_list.as_ref(), tile_rect);
     }

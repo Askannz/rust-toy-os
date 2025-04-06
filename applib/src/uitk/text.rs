@@ -11,7 +11,8 @@ use crate::input::{InputEvent, InputState};
 use crate::input::{Keycode, CHARMAP};
 use crate::uitk::{ContentId, UiContext, CachedTile};
 use crate::Rect;
-use crate::{Color, FbViewMut};
+use crate::{Color, FbViewMut, FbView};
+
 
 use super::UuidProvider;
 
@@ -122,33 +123,26 @@ impl EditableText for TrackedContent<String> {
 
 pub fn render_rich_text<F: FbViewMut>(
     dst_fb: &mut F,
-    dst_rect: &Rect,
+    origin: (i64, i64),
     formatted: &FormattedRichText,
-    offsets: (i64, i64),
 ) {
-    let Rect {
-        x0: dst_x0,
-        y0: dst_y0,
-        h: dst_h,
-        w: dst_w,
-    } = *dst_rect;
-    let (ox, oy) = offsets;
 
-    let src_rect = Rect {
-        x0: ox,
-        y0: oy,
-        w: dst_w,
-        h: dst_h,
-    };
+    let (x0, y0) = origin;
+    let rect = Rect { x0, y0, w: formatted.w, h: formatted.h };
+
+    let mut dst_fb = dst_fb.subregion_mut(&rect);
+    let fb_shape = dst_fb.shape_as_rect();
 
     let mut y = 0;
     for line in formatted.lines.iter() {
-        let line_rect = Rect { x0: line.x_offset as i64, y0: y, w: line.w, h: line.h };
-        //if y >= src_rect.y0 && y + (line.h as i64) <= src_rect.y0 + (src_rect.h as i64) {
-        //if true { // DEBUG
-        //if line_rect.intersection(&src_rect).is_some() {
-        if line_rect.intersection(&Rect { x0: 0, y0: 0, w: 1000, h: 1000 }).is_some() {
-            draw_rich_slice(dst_fb, &line.chars, dst_x0, dst_y0 + y - oy);
+        let line_draw_rect = Rect {
+            x0: 0,
+            y0: y,
+            w: line.w, h: line.h
+
+        };
+        if line_draw_rect.intersection(&fb_shape).is_some() {
+            draw_rich_slice(&mut dst_fb, &line.chars, 0, y);
         }
 
         y += line.h as i64;

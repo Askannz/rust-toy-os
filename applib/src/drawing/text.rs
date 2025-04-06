@@ -207,6 +207,12 @@ pub fn draw_char<F: FbViewMut>(
 #[derive(Clone)]
 pub struct RichText(Vec<RichChar>);
 
+impl alloc::fmt::Debug for RichText {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
+        write!(f, "RichText [{}]", self.as_string())
+    }
+}
+
 impl RichText {
     pub fn new() -> Self {
         RichText(Vec::new())
@@ -363,6 +369,21 @@ impl FormattedRichText {
         };
 
         (x as i64, y as i64)
+    }
+}
+
+impl alloc::fmt::Debug for FormattedRichText {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
+
+        let mut s = String::new();
+        for line in self.lines.iter() {
+            for rc in line.chars.iter() {
+                s.push(rc.c);
+            }
+            s.push_str(" / ");
+        }
+
+        write!(f, "FormattedRichText [{}]", s)
     }
 }
 

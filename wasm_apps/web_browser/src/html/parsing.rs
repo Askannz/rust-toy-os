@@ -4,7 +4,7 @@ use anyhow::anyhow;
 
 use super::tree::Tree;
 
-pub fn parse_html(html: &str) -> anyhow::Result<Tree<NodeData>> {
+pub fn parse_html(html: &str) -> anyhow::Result<Tree<HtmlNode>> {
     let mut tree = Tree::new();
     let mut parent_id = None;
 
@@ -13,7 +13,7 @@ pub fn parse_html(html: &str) -> anyhow::Result<Tree<NodeData>> {
             ChunkType::Text => {
                 if tree.len() > 0 {
                     let text = html_escape::decode_html_entities(chunk.s).to_string();
-                    let data = NodeData::Text { text };
+                    let data = HtmlNode::Text { text };
                     tree.add_node(parent_id, data)?;
                 }
             }
@@ -26,7 +26,7 @@ pub fn parse_html(html: &str) -> anyhow::Result<Tree<NodeData>> {
                     attrs,
                     is_void,
                 } => {
-                    let data = NodeData::Tag { name, attrs };
+                    let data = HtmlNode::Tag { name, attrs };
                     let new_id = Some(tree.add_node(parent_id, data)?);
                     if !is_void {
                         parent_id = new_id;
@@ -47,7 +47,7 @@ pub fn parse_html(html: &str) -> anyhow::Result<Tree<NodeData>> {
 
                         Some(p_id) => {
                             let curr_tag_name = match &tree.get_node(p_id).unwrap().data {
-                                NodeData::Tag { name, .. } => name,
+                                HtmlNode::Tag { name, .. } => name,
                                 _ => {
                                     return Err(anyhow!(
                                         "line {} col {}: parent node is Text, should not happen",
@@ -265,7 +265,7 @@ enum ChunkType {
 }
 
 #[derive(Debug)]
-pub enum NodeData {
+pub enum HtmlNode {
     Tag {
         name: String,
         attrs: BTreeMap<String, String>,

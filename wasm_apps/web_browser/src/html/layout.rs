@@ -6,7 +6,7 @@ use applib::drawing::text::{format_rich_lines, Font, FormattedRichText, RichText
 use applib::{Color, Rect};
 
 use super::tree::{Tree, NodeId as HtmlNodeId};
-use super::parsing::{NodeData as HtmlNodeData};
+use super::parsing::HtmlNode;
 
 pub struct LayoutNode {
     pub id: u64,
@@ -42,7 +42,7 @@ struct Margins {
     bottom: u32,
 }
 
-pub fn compute_layout(html_tree: &Tree<HtmlNodeData>, page_max_w: u32) -> anyhow::Result<LayoutNode> {
+pub fn compute_layout(html_tree: &Tree<HtmlNode>, page_max_w: u32) -> anyhow::Result<LayoutNode> {
     let mut next_node_id = 0u64;
     parse_node(&mut next_node_id, &html_tree, HtmlNodeId(0), 0, 0, false, page_max_w)
         .ok_or(anyhow!("Error computing HTML layout"))
@@ -56,7 +56,7 @@ fn make_node_id(next_node_id: &mut u64) -> u64 {
 
 fn parse_node<'b>(
     next_node_id: &mut u64,
-    tree: &Tree<HtmlNodeData>,
+    tree: &Tree<HtmlNode>,
     html_node_id: HtmlNodeId,
     mut x0: i64,
     mut y0: i64,
@@ -70,9 +70,9 @@ fn parse_node<'b>(
     let node = tree.get_node(html_node_id)?;
 
     match &node.data {
-        HtmlNodeData::Tag { name, .. } if *name == "head" => None,
+        HtmlNode::Tag { name, .. } if *name == "head" => None,
 
-        HtmlNodeData::Tag { name, attrs, .. } if *name == "img" => {
+        HtmlNode::Tag { name, attrs, .. } if *name == "img" => {
             let parse_dim = |attr: &str| -> u32 {
                 attrs
                     .get(attr)
@@ -89,7 +89,7 @@ fn parse_node<'b>(
             })
         }
 
-        HtmlNodeData::Tag { name, attrs, .. } => {
+        HtmlNode::Tag { name, attrs, .. } => {
             let bg_color = match attrs.get("bgcolor") {
                 Some(hex_str) => Some(parse_hexcolor(hex_str)),
                 _ => None,
@@ -193,9 +193,9 @@ fn parse_node<'b>(
             }
         }
 
-        HtmlNodeData::Text { text } if check_is_whitespace(&text) => None,
+        HtmlNode::Text { text } if check_is_whitespace(&text) => None,
 
-        HtmlNodeData::Text { text } => {
+        HtmlNode::Text { text } => {
             let m = ZERO_M;
 
             let text = core::str::from_utf8(text.as_bytes()).expect("Not UTF-8");
@@ -246,9 +246,9 @@ fn check_is_whitespace(s: &str) -> bool {
     s.chars().map(|c| char::is_whitespace(c)).all(|x| x)
 }
 
-fn check_is_block_element(node_data: &HtmlNodeData) -> bool {
+fn check_is_block_element(node_data: &HtmlNode) -> bool {
     match node_data {
-        HtmlNodeData::Tag { name, .. } => match name.as_str() {
+        HtmlNode::Tag { name, .. } => match name.as_str() {
             "p" => true,
             _ => false,
         },

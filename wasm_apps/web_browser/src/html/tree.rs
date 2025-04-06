@@ -23,7 +23,7 @@ impl<T: Debug> Tree<T> {
         self.nodes.get(node_id.0)
     }
 
-    pub fn get_node_mut(&mut self, node_id: NodeId) -> Option<&mut T> {
+    pub fn get_node_data_mut(&mut self, node_id: NodeId) -> Option<&mut T> {
         self.nodes.get_mut(node_id.0).map(|node| &mut node.data)
     }
 
@@ -61,6 +61,13 @@ impl<T: Debug> Tree<T> {
             .get(node_id.0)
             .ok_or(anyhow!("No such parent ID"))?;
         Ok(parent_node.parent)
+    }
+
+    pub fn iter_children(&self, node_id: NodeId) -> impl Iterator<Item = (NodeId, &Node<T>)> {
+        self.nodes[node_id.0].children.iter().map(|child_id| (
+            *child_id,
+            &self.nodes[child_id.0]
+        ))
     }
 
     pub fn len(&self) -> usize {

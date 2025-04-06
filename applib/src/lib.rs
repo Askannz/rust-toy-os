@@ -20,7 +20,7 @@ use input::InputState;
 
 pub use stylesheet::{StyleSheet, StyleSheetColors};
 
-#[derive(Clone, Copy, Hash)]
+#[derive(Clone, Copy, Hash, Debug)]
 #[repr(transparent)]
 pub struct Color(pub [u8; 4]);
 

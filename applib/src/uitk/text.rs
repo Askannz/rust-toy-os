@@ -10,8 +10,8 @@ use crate::drawing::text::{draw_rich_slice, draw_str, Font, FormattedRichText, R
 use crate::input::{InputEvent, InputState};
 use crate::input::{Keycode, CHARMAP};
 use crate::uitk::{ContentId, UiContext, CachedTile};
-use crate::Framebuffer;
-use crate::{Color, FbViewMut, Rect};
+use crate::Rect;
+use crate::{Color, FbViewMut};
 
 use super::UuidProvider;
 
@@ -143,7 +143,11 @@ pub fn render_rich_text<F: FbViewMut>(
 
     let mut y = 0;
     for line in formatted.lines.iter() {
-        if y >= src_rect.y0 && y + (line.h as i64) <= src_rect.y0 + (src_rect.h as i64) {
+        let line_rect = Rect { x0: line.x_offset as i64, y0: y, w: line.w, h: line.h };
+        //if y >= src_rect.y0 && y + (line.h as i64) <= src_rect.y0 + (src_rect.h as i64) {
+        //if true { // DEBUG
+        //if line_rect.intersection(&src_rect).is_some() {
+        if line_rect.intersection(&Rect { x0: 0, y0: 0, w: 1000, h: 1000 }).is_some() {
             draw_rich_slice(dst_fb, &line.chars, dst_x0, dst_y0 + y - oy);
         }
 

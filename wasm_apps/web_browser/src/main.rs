@@ -9,8 +9,9 @@ use std::fmt::Debug;
 use alloc::collections::BTreeMap;
 use alloc::format;
 use anyhow::Context;
+use html::render_list::RenderItem;
 use lazy_static::lazy_static;
-use applib::{Color, Rect, StyleSheet};
+use applib::{Color, FbView, FbViewMut, Rect, StyleSheet};
 use core::cell::OnceCell;
 use guestlib::{PixelData, WasmLogger};
 
@@ -29,6 +30,9 @@ use html::canvas::html_canvas;
 use html::{
     layout::{compute_layout, LayoutNode},
     parsing::parse_html,
+    block_layout::{compute_block_layout},
+    render_list::compute_render_list,
+    render::render_html2,
 };
 use socket::Socket;
 use tls::TlsClient;
@@ -81,6 +85,7 @@ enum RequestState {
     Idle {
         http_target: Option<HttpTarget>,
         layout: TrackedContent<LayoutNode>,
+        render_list: TrackedContent<Vec<RenderItem>>,
     },
     Dns {
         http_target: HttpTarget,
@@ -392,6 +397,7 @@ fn update_request_state(
                     icon: &MF_WEBSITE_ICON
                 },
                 Favorite {
+                    //link: "https://news.ycombinator.com/item?id=43535688",
                     link: "https://news.ycombinator.com",
                     icon: &HN_ICON
                 },
@@ -454,8 +460,16 @@ fn update_request_state(
         RequestState::Idle {
             http_target,
             layout,
+            render_list,
         } => {
             let mut framebuffer = state.pixel_data.get_framebuffer();
+
+            // let link_hover: Option<&str> = None;
+            // let mut dst_fb = framebuffer.subregion_mut(&ui_layout.canvas_rect);
+            // let r = dst_fb.shape_as_rect();
+            // dst_fb.fill(Color::WHITE);
+            // render_html2(&mut dst_fb, render_list, &r);
+
             let mut uitk_context = state.ui_store.get_context(
                 &mut framebuffer,
                 &stylesheet,
@@ -466,7 +480,7 @@ fn update_request_state(
 
             let link_hover = html_canvas(
                 &mut uitk_context,
-                &layout,
+                &render_list,
                 &ui_layout.canvas_rect,
                 &mut state.webview_scroll_offsets,
                 &mut state.webview_scroll_dragging,
@@ -623,14 +637,28 @@ fn update_request_state(
         },
 
         RequestState::Render { http_target, html } => {
+
             let html_tree = parse_html(html)?;
+            //log::debug!("{}", html_tree.plot());
+
+            let block_layout_tree = compute_block_layout(&html_tree);
+            //log::debug!("{}", block_layout_tree.plot());
+
             let page_max_w = ui_layout.canvas_rect.w;
+
+            let render_list = compute_render_list(&block_layout_tree, page_max_w);
+            // for render_item in render_list.iter() {
+            //     log::debug!("{:?}", render_item);
+            // }
+
+            
             let layout = compute_layout(&html_tree, page_max_w)?;
 
             //log::debug!("Layout: {:?}", layout.rect);
             state.request_state = RequestState::Idle {
                 http_target: http_target.clone(),
                 layout: TrackedContent::new(layout, &mut state.uuid_provider),
+                render_list: TrackedContent::new(render_list, &mut state.uuid_provider),
             };
         }
     };
